@@ -135,3 +135,32 @@ dialog { border: 1px solid var(--border); border-radius: var(--radius); backgrou
 dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 20; max-width: calc(100vw - 32px); }
 @media (min-width: 760px) { .toast { bottom: 24px; } }
+
+/* Marché : ligne entière cliquable, détail sur toute la largeur */
+.list > li.mk { display: block; }
+summary.row { display: flex; gap: 12px; align-items: center; }
+summary.row::after { content: "›"; color: var(--muted); font-size: 1.3rem; transition: transform .15s; }
+details[open] > summary.row::after { transform: rotate(90deg); }
+.why p { margin: .3rem 0; }
+.spark { display: block; margin-left: auto; overflow: visible; }
+.spark polyline { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+/* Analyse financière */
+.fin { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; color: var(--text); }
+.fin-head { display: flex; gap: 10px; align-items: center; }
+.grade { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; font-weight: 800; font-size: 1.1rem;
+  background: var(--surface-2); color: var(--text); flex: none; }
+.grade.sm { width: 22px; height: 22px; font-size: .75rem; border-radius: 6px; vertical-align: 1px; margin-left: 4px; }
+.grade.g-A, .grade.g-B { background: var(--accent-soft); color: var(--good); }
+.grade.g-C { background: var(--warn-bg); color: var(--warn); }
+.grade.g-D, .grade.g-E { background: var(--bad-bg); color: var(--bad); }
+.fam { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.fam li { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.fam li > span:first-child { font-weight: 600; }
+.tbl { overflow-x: auto; margin: 8px 0; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.tbl caption { text-align: left; padding-bottom: 4px; }
+.tbl th, .tbl td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.tbl th:first-child { text-align: left; }
+.ratios > summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 6px 0; }
+.ratios .right .chip { margin-top: 2px; }

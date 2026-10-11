@@ -35,6 +35,38 @@
     const k = BUY.includes(d) ? "buy" : /VENDRE|ÉVITER|RACHETER/.test(d) ? "sell" : /ALLÉGER|SURVEILLER/.test(d) ? "warn" : "";
     return `<span class="chip ${k}">${esc(d)}</span>`;
   };
+  function spark(c, w = 96, h = 30) {
+    const pts = c?.points;
+    if (!pts || pts.length < 2) return "";
+    const lo = Math.min(...pts), hi = Math.max(...pts), span = hi - lo || 1;
+    const xy = pts.map((v, i) => `${((i / (pts.length - 1)) * (w - 2) + 1).toFixed(1)},${(h - 1 - ((v - lo) / span) * (h - 2)).toFixed(1)}`);
+    const chg = pts[pts.length - 1] / pts[0] - 1;
+    return `<svg class="spark ${chg >= 0 ? "good" : "bad"}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
+      aria-label="Cours sur un an (${D(c.debut)} – ${D(c.fin)}) : ${P(chg)}"><polyline points="${xy.join(" ")}"/></svg>`;
+  }
+  const APPR = { Bon: "buy", Moyen: "warn", Faible: "sell" };
+  const appr = (a) => (a ? `<span class="chip ${APPR[a] || ""}">${esc(a)}</span>` : "");
+  function analyse(a) {
+    if (!a) return `<p class="small muted">Analyse financière indisponible (états financiers non publiés ou illisibles).</p>`;
+    const m = (v) => (ok(v) ? nf0.format(Math.round(v)) : "–");
+    const pc = (v) => (ok(v) ? nf1.format(v * 100) + " %" : "–");
+    let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Note financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
+      <div><b>Analyse financière : ${esc(a.recommandation || "–")}</b><div class="sub">Note ${esc(a.note || "–")}${ok(a.score) ? ` (${N(a.score)}/100)` : ""} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
+    if (a.proposition) h += `<p>${esc(a.proposition)}</p>`;
+    if (a.verdict) h += `<p class="small">${esc(a.verdict)}</p>`;
+    for (const al of a.alertes || []) h += `<div class="notice small">⚠ ${esc(al)}</div>`;
+    if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
+      <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
+    const yrs = (a.annees || []).filter((y) => ok(y.rev) || ok(y.ni));
+    if (yrs.length) h += `<div class="tbl" role="region" aria-label="Chiffres clés" tabindex="0"><table><caption class="small muted">Chiffres clés (millions de F)</caption>
+      <thead><tr><th scope="col">Exercice</th><th scope="col">${a.banque ? "PNB" : "Chiffre d'affaires"}</th><th scope="col">Résultat net</th><th scope="col">Marge nette</th></tr></thead>
+      <tbody>${yrs.map((y) => `<tr><th scope="row">${esc(y.year)}</th><td>${m(y.rev)}</td><td class="${cls(y.ni)}">${m(y.ni)}</td><td>${pc(y.margin)}</td></tr>`).join("")}</tbody></table></div>`;
+    if (a.ratios?.length) h += `<details class="ratios"><summary>Voir les ${a.ratios.length} ratios détaillés</summary><ul class="list">
+      ${a.ratios.map((r) => `<li><div class="main"><div>${esc(r.libelle)}</div>${r.aide ? `<div class="sub">${esc(r.aide)}</div>` : ""}</div>
+        <div class="right num"><b>${esc(r.valeur ?? "–")}</b>${r.precedent ? `<div class="sub">avant ${esc(r.precedent)}</div>` : ""}${appr(r.appreciation)}</div></li>`).join("")}</ul></details>`;
+    return h + `</div>`;
+  }
+
   function toast(msg) {
     const t = $("#toast");
     t.textContent = msg; t.hidden = false;
@@ -277,9 +309,10 @@
       h += `<ul class="list">`;
       for (const p of L.positions) {
         const d = S.decisions?.get(p.code);
-        h += `<li><div class="main"><div class="name">${esc(S.names.get(p.code) || p.code)}</div>
+        const act = S.actions?.get(p.code);
+        h += `<li><div class="main"><div class="name">${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} × PRU ${F(p.pru)} ${chip(d)}</div></div>
-          <div class="right num"><b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
+          <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}, net des frais de vente estimés.</p>`;
     }
@@ -316,14 +349,15 @@
           <option value="all"${u.mkFilter === "all" ? " selected" : ""}>Tous</option>
         </select>
       </div>
-      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.seance?.date)} · touchez une ligne pour le détail</p>
+      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "l'analyse financière" : "le détail"}</p>
       <div class="card"><ul class="list">`;
     for (const r of list.slice(0, u.mkShow)) {
       let px, det;
       if (u.mkTab === "actions") {
-        px = `${F(r.cours)}<div class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</div>`;
-        det = `Achat limite ${F(r.limite_achat)} · stop ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
-          + (r.note_fondamentale ? ` · note financière ${esc(r.note_fondamentale)}` : "") + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "");
+        px = `${spark(r.courbe)}<div>${F(r.cours)} <span class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</span></div>`;
+        det = `<p>Achat limite ${F(r.limite_achat)} · stop ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
+          + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>` + (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "")
+          + analyse(r.analyse);
       } else if (u.mkTab === "obligations") {
         px = `${P(r.rendement_actuariel, false)}<div class="sub">${F(r.prix)}</div>`;
         det = `${esc(r.emetteur || "")} · échéance ${D(r.echeance)} · duration ${ok(r.duration) ? nf1.format(r.duration) + " ans" : "–"} · coupon ${P(r.taux_coupon, false)}`;
@@ -331,10 +365,12 @@
         px = `${F(r.vl)}<div class="sub">VL du ${D(r.date_vl)}</div>`;
         det = `${esc(r.gestionnaire || "")} · ${esc(CLASSES[r.classe] || r.classe || "")} · volatilité ${P(r.volatilite, false)} · rendement attendu ${P(r.rendement_attendu, false)}`;
       }
-      h += `<li><details class="item main"><summary><div class="name">${esc(r.nom || r.code)}</div>
-          <div class="sub">${esc(r.code)} · score ${N(r.score)} ${chip(r.decision)}</div></summary>
-          <div class="why">${det}${r.raisons ? "<br>" + esc(r.raisons) : ""}</div></details>
-        <div class="right num">${px}</div></li>`;
+      const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Note financière">${esc(r.analyse.note)}</span>` : "";
+      if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
+      h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${esc(r.nom || r.code)}${note}</div>
+          <div class="sub">${esc(r.code)} · score ${N(r.score)} ${chip(r.decision)}</div></div>
+          <div class="right num">${px}</div></summary>
+          <div class="why">${det}</div></details></li>`;
     }
     h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
       <p class="small muted">Score de 0 à 100 calculé par l'outil (technique, fondamentaux, dividende, valorisation, liquidité).
@@ -489,6 +525,7 @@
       S.mk = { actions: a || [], obligations: o || [], opcvm: f || [] };
       S.cibles = c || [];
       S.prices = new Map(); S.names = new Map(); S.classes = new Map(); S.decisions = new Map();
+      S.actions = new Map(S.mk.actions.map((r) => [r.code, r]));
       for (const r of S.mk.actions) { S.prices.set(r.code, r.cours); S.names.set(r.code, r.nom); S.classes.set(r.code, "actions"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.obligations) { S.prices.set(r.code, r.prix); S.names.set(r.code, r.nom); S.classes.set(r.code, "obligations"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.opcvm) { S.prices.set(r.code, r.vl); S.names.set(r.code, r.nom); S.classes.set(r.code, r.classe); S.decisions.set(r.code, r.decision); }
