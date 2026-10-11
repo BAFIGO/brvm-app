@@ -560,13 +560,31 @@
       ev.preventDefault();
       const email = fl.email.value.trim(), m = $(".msg", fl);
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { m.textContent = "Adresse e-mail invalide."; return; }
-      fl.querySelector("button").disabled = true;
+      const btn = fl.querySelector("button");
+      btn.disabled = true;
+      let wait = 0;
       try {
         await api.login(email);
         m.textContent = "C'est envoyé : ouvrez l'e-mail et touchez le lien (pensez aux courriers indésirables).";
         fc.hidden = false;
-      } catch (e) { m.textContent = "Envoi impossible : " + e.message; }
-      fl.querySelector("button").disabled = false;
+        wait = 60;                                   // évite les demandes répétées (limite d'envoi)
+      } catch (e) {
+        const msg = String(e.message || e);
+        if (/rate limit|too many|429|security purposes/i.test(msg)) {
+          m.textContent = "Trop de demandes de connexion en peu de temps. Si vous avez déjà reçu un lien ou un code, "
+            + "utilisez-le ; sinon réessayez dans quelques minutes.";
+          fc.hidden = false;
+          wait = 60;
+        } else m.textContent = "Envoi impossible : " + msg;
+      }
+      if (!wait) { btn.disabled = false; return; }
+      const label = btn.textContent;
+      const tick = () => {
+        if (wait <= 0) { btn.disabled = false; btn.textContent = label; return; }
+        btn.textContent = `Nouvel envoi possible dans ${wait--} s`;
+        setTimeout(tick, 1000);
+      };
+      tick();
     });
     fc.addEventListener("submit", async (ev) => {
       ev.preventDefault();
