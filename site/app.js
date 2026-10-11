@@ -431,7 +431,7 @@
     fop.querySelectorAll('[data-for="titre"]').forEach((e) => (e.hidden = !titre));
     fop.querySelectorAll('[data-for="montant"]').forEach((e) => (e.hidden = !montant));
     fop.querySelectorAll('[data-for="titre"] input[name="quantite"], [data-for="titre"] input[name="prix"], [data-for="titre"] input[name="frais"]')
-      .forEach((e) => (e.closest("label").hidden = t === "DIVIDENDE"));
+      .forEach((e) => (e.closest("label").hidden = !titre || t === "DIVIDENDE"));
   }
   function openOp(pre = {}) {
     fop.reset();
