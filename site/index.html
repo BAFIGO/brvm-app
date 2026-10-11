@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>BRVM Portefeuille</title>
+  <meta name="description" content="Votre portefeuille BRVM : proposition du soir, ordres, suivi et analyses du marché.">
+  <meta name="theme-color" content="#0f5c4d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Aller au contenu</a>
+
+  <header class="topbar">
+    <div class="brand"><img src="icon.svg" alt="" width="28" height="28"><span>BRVM Portefeuille</span></div>
+    <span id="badge-demo" class="chip warn" hidden>Démo</span>
+    <nav class="tabs-top" aria-label="Navigation principale" hidden>
+      <a href="#aujourdhui" data-tab="aujourdhui">Aujourd'hui</a>
+      <a href="#portefeuille" data-tab="portefeuille">Portefeuille</a>
+      <a href="#marche" data-tab="marche">Marché</a>
+      <a href="#profil" data-tab="profil">Profil</a>
+    </nav>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <!-- Connexion -->
+    <section id="v-connexion" class="view" hidden>
+      <div class="card narrow">
+        <h1>Bienvenue</h1>
+        <p>Recevez chaque soir, après la séance de la BRVM, une proposition de portefeuille adaptée à votre budget
+          et à votre profil, et suivez vos placements.</p>
+        <form id="f-login" novalidate>
+          <label for="email">Votre adresse e-mail</label>
+          <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
+          <button class="btn primary" type="submit">Recevoir mon lien de connexion</button>
+          <p class="msg" role="status" aria-live="polite"></p>
+        </form>
+        <form id="f-code" novalidate hidden>
+          <label for="code">Ou saisissez le code reçu par e-mail</label>
+          <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}">
+          <button class="btn" type="submit">Valider le code</button>
+          <p class="msg" role="status" aria-live="polite"></p>
+        </form>
+        <p class="small muted">Pas de mot de passe : un lien vous est envoyé à chaque connexion.
+          <a href="?demo=1">Essayer la démo</a> sans compte (données fictives).</p>
+      </div>
+    </section>
+
+    <section id="v-aujourdhui" class="view" hidden aria-labelledby="h-auj"></section>
+    <section id="v-portefeuille" class="view" hidden aria-labelledby="h-pf"></section>
+    <section id="v-marche" class="view" hidden aria-labelledby="h-mk"></section>
+    <section id="v-profil" class="view" hidden aria-labelledby="h-pr"></section>
+
+    <p id="loading" class="center muted" role="status">Chargement…</p>
+  </main>
+
+  <nav class="tabs-bottom" aria-label="Navigation principale" hidden>
+    <a href="#aujourdhui" data-tab="aujourdhui"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Aujourd'hui</a>
+    <a href="#portefeuille" data-tab="portefeuille"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM8 7V5h8v2M4 12h16"/></svg>Portefeuille</a>
+    <a href="#marche" data-tab="marche"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>Marché</a>
+    <a href="#profil" data-tab="profil"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Profil</a>
+  </nav>
+
+  <dialog id="dlg-op" aria-labelledby="dlg-op-title">
+    <form id="f-op" method="dialog" novalidate>
+      <h2 id="dlg-op-title">Nouvelle opération</h2>
+      <div class="grid2">
+        <label>Type
+          <select name="type" required>
+            <option value="ACHAT">Achat</option><option value="VENTE">Vente</option>
+            <option value="DEPOT">Dépôt d'espèces</option><option value="RETRAIT">Retrait d'espèces</option>
+            <option value="DIVIDENDE">Dividende / coupon reçu</option><option value="FRAIS">Frais</option>
+            <option value="SOLDE">Solde relevé chez ma SGI</option>
+          </select>
+        </label>
+        <label>Date <input name="date" type="date" required></label>
+      </div>
+      <label data-for="titre">Code du titre
+        <input name="ticker" list="codes" autocapitalize="characters" autocomplete="off" placeholder="ex. SNTS">
+      </label>
+      <datalist id="codes"></datalist>
+      <div class="grid2" data-for="titre">
+        <label>Quantité <input name="quantite" type="number" min="0" step="any" inputmode="decimal"></label>
+        <label>Prix unitaire (F) <input name="prix" type="number" min="0" step="any" inputmode="decimal"></label>
+      </div>
+      <label data-for="titre">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
+        <input name="frais" type="number" min="0" step="any" inputmode="decimal">
+      </label>
+      <label data-for="montant">Montant (F) <input name="montant" type="number" min="0" step="any" inputmode="decimal"></label>
+      <label>Note <input name="note" maxlength="200"></label>
+      <p class="msg err" role="alert"></p>
+      <div class="actions">
+        <button class="btn" value="annuler" formnovalidate>Annuler</button>
+        <button class="btn primary" value="ok">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

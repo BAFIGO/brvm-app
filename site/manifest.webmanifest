@@ -1,0 +1,12 @@
+{
+  "name": "BRVM Portefeuille",
+  "short_name": "BRVM",
+  "description": "Proposition de portefeuille BRVM chaque soir et suivi de vos placements.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4ef",
+  "theme_color": "#0f5c4d",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
