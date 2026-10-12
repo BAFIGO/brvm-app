@@ -189,6 +189,51 @@
     return { lines, invest, reliquat: budget - invest, rdt: invest ? rdt / (invest / (1 + FEES)) : null };
   }
 
+  // Le journal a-t-il changé depuis le calcul du soir ? (trésorerie ou positions différentes)
+  function journalChanged(L, c) {
+    if (!c) return true;
+    if (Math.abs((+c.tresorerie || 0) - L.cash) > 1) return true;
+    const key = (arr) => arr.map((p) => `${p.code}:${Math.round(+p.quantite * 1000)}`).sort().join("|");
+    return key(c.positions || []) !== key(L.positions);
+  }
+
+  // Ordres recalculés sur le téléphone (même logique que le calcul du soir, en plus simple) :
+  // cible du profil appliquée à la valeur actuelle, moins ce qui est déjà détenu ; ventes d'abord,
+  // achats limités à la trésorerie disponible ; écarts < 2 % de la valeur ignorés (frais).
+  const KEEP = ["CONSERVER", "ACHAT", "ACHAT FORT", "SOUSCRIRE"];
+  function instantOrders(L) {
+    const value = L.valeur;
+    if (!(value > 0)) return { ordres: [], cible: [] };
+    const cible = estimate(value).lines;
+    const want = new Map(cible.map((l) => [l.code, l]));
+    const held = new Map(L.positions.map((p) => [p.code, p]));
+    const minTrade = 0.02 * value;
+    const sells = [], buys = [];
+    for (const p of L.positions) {
+      const w = want.get(p.code);
+      const px = ok(p.cours) ? p.cours : null;
+      if (!px) continue;
+      if (!w) {
+        if (KEEP.includes(S.decisions?.get(p.code))) continue;      // hors cible mais encore bien noté : on garde
+        sells.push({ sens: "VENTE", code: p.code, libelle: S.names.get(p.code), quantite: p.quantite, prix_limite: px, motif: "sortie de la cible" });
+      } else if (p.quantite - w.quantite > 0 && (p.quantite - w.quantite) * px >= minTrade) {
+        sells.push({ sens: "VENTE", code: p.code, libelle: w.libelle, quantite: p.quantite - w.quantite, prix_limite: px, motif: "alléger" });
+      }
+    }
+    let cash = L.cash + sells.reduce((s, o) => s + o.quantite * o.prix_limite * (1 - FEES), 0);
+    const gaps = cible.map((l) => ({ l, q: l.quantite - (held.get(l.code)?.quantite || 0) }))
+      .filter((g) => g.q > 0 && (g.q * g.l.prix >= minTrade || !held.has(g.l.code)))
+      .sort((a, b) => b.q * b.l.prix - a.q * a.l.prix);
+    for (const { l, q } of gaps) {
+      const n = Math.min(q, Math.floor(cash / (l.prix * (1 + FEES))));
+      if (n <= 0) continue;
+      cash -= n * l.prix * (1 + FEES);
+      buys.push({ sens: "ACHAT", code: l.code, libelle: l.libelle, quantite: n, prix_limite: l.prix,
+                  motif: held.has(l.code) ? "renforcer" : "nouvelle ligne" });
+    }
+    return { ordres: [...sells, ...buys], cible };
+  }
+
   function classBar(lines) {
     const tot = {};
     let all = 0;
@@ -218,31 +263,40 @@
     for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
 
     if (hasPf) {
-      const perf = c?.performance || {};
+      const changed = !fresh || journalChanged(L, c);
+      const perf = changed ? {} : c?.performance || {};       // performance du soir : valable pour ce journal-là
       h += `<div class="card kpis">
         <div class="kpi"><div class="lbl">Valeur du portefeuille</div><div class="val num">${F(L.valeur)}</div></div>
         <div class="kpi"><div class="lbl">Trésorerie</div><div class="val num">${F(L.cash)}</div></div>
         <div class="kpi"><div class="lbl">Performance</div><div class="val num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
-          <div class="small muted">indice ${P(perf.bench_total)}</div></div></div>`;
-      const ordres = fresh ? c?.ordres || [] : [];
+          <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div></div>`;
+      const inst = changed ? instantOrders(L) : null;
+      const ordres = changed ? inst.ordres : c?.ordres || [];
+      S.ordres = ordres;
+      const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
       h += `<div class="card"><h2>Ordres proposés</h2>`;
-      if (!S.prop) h += `<p class="muted">Votre première proposition sera calculée ce soir, après la séance.</p>`;
-      else if (!fresh) h += `<p class="muted">La proposition de ce soir n'est pas encore calculée (dernière : ${D(S.prop.date)}).</p>`;
-      else if (!ordres.length) h += `<p>Rien à faire ce soir : votre portefeuille est proche de sa cible.</p>`;
-      else {
-        h += `<p class="small muted">Pour rejoindre votre portefeuille cible (${esc(PROFILS[c.profil]?.t || c.profil)}). Prix limites indicatifs.</p><ul class="list">`;
+      if (!ordres.length) {
+        h += investi < 0.5 && L.cash > MIN_LINE
+          ? `<p>Aucun ordre calculable pour l'instant avec votre trésorerie de ${F(L.cash)}. Vérifiez votre budget et votre profil, ou revenez après le calcul du soir.</p>`
+          : `<p>Rien à faire pour l'instant : votre portefeuille est proche de sa cible.</p>`;
+      } else {
+        h += `<p class="small muted">Pour rejoindre votre portefeuille cible (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p><ul class="list">`;
         ordres.forEach((o, i) => {
           h += `<li><div class="main"><div class="name">${esc(o.libelle || o.code)}</div>
             <div class="sub">${chip(o.sens)} ${esc(o.code)} · ${esc(o.motif || "")}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
             <div class="right num"><b>${N(o.quantite)}</b><div class="sub">limite ${F(o.prix_limite)}</div>
             <button class="btn small" data-ordre="${i}">J'ai passé l'ordre</button></div></li>`;
         });
-        h += `</ul><p class="small muted">Calculés avec votre journal au soir du ${D(S.prop.date)}.</p>`;
+        h += `</ul>`;
       }
+      h += changed
+        ? `<p class="small muted">Recalculés à l'instant avec votre journal à jour (estimation). Le calcul détaillé, qui tient compte de la liquidité de chaque titre, est refait ce soir après la séance.</p>`
+        : `<p class="small muted">Calculés avec votre journal au soir du ${D(S.prop.date)}.</p>`;
       h += `</div>`;
-      if (fresh && c?.proposition?.lignes?.length)
-        h += `<div class="card"><h2>Votre portefeuille cible</h2>${classBar(c.proposition.lignes)}
-          <p class="small muted">Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.</p></div>`;
+      const lignes = changed ? inst.cible : c?.proposition?.lignes || [];
+      if (lignes.length)
+        h += `<div class="card"><h2>Votre portefeuille cible</h2>${classBar(lignes)}
+          <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}</p></div>`;
     } else {
       const budget = +S.profil?.budget || 0;
       const nightly = fresh && c?.proposition && !c.positions?.length && Math.round(c.proposition.base) === Math.round(budget)
@@ -484,7 +538,7 @@
     if (!b) return;
     if (b.dataset.op !== undefined) openOp(b.dataset.op ? { type: b.dataset.op } : {});
     else if (b.dataset.ordre !== undefined) {
-      const o = S.prop.contenu.ordres[+b.dataset.ordre];
+      const o = S.ordres[+b.dataset.ordre];
       openOp({ type: o.sens, ticker: o.code, quantite: String(o.quantite), prix: String(o.prix_limite) });
     } else if (b.dataset.ligne !== undefined) {
       const l = S.lines[+b.dataset.ligne];
