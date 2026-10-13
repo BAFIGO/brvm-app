@@ -1,0 +1,48 @@
+/* Console d'administration : complète ../styles.css (mêmes jetons de couleur, thème clair et sombre) */
+body.admin { padding-bottom: 24px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.who { margin-left: auto; min-width: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.admin-shell { display: grid; grid-template-columns: 220px 1fr; max-width: 1280px; margin: 0 auto; }
+.admin-shell main { max-width: none; width: 100%; min-width: 0; }
+.admin-nav { position: sticky; top: 60px; align-self: start; display: flex; flex-direction: column; gap: 2px; padding: 16px 8px; }
+.admin-nav a { position: relative; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: var(--muted); font-weight: 600; }
+.admin-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--text); }
+@media (max-width: 899px) {
+  .admin-shell { grid-template-columns: minmax(0, 1fr); }
+  .admin-nav { min-width: 0; }
+  .admin-nav { position: static; flex-direction: row; overflow-x: auto; padding: 8px 16px 0; scrollbar-width: none; }
+  .admin-nav a { flex: none; }
+  .who #who-email { display: none; }
+}
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.tile .lbl { font-size: .8rem; color: var(--muted); }
+.tile .val { white-space: nowrap; font-size: 1.45rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.tile .sub { font-size: .8rem; color: var(--muted); }
+.status { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; }
+.status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.status.ok { color: var(--good); } .status.ko { color: var(--bad); } .status.att { color: var(--warn); }
+
+.dtable { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
+.dtable th, .dtable td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.dtable th { font-size: .78rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.dtable td.num, .dtable th.num { text-align: right; }
+.dtable tr:hover td { background: var(--surface-2); }
+.scroll-x { overflow-x: auto; }
+.row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.matrix td, .matrix th { text-align: center; }
+.matrix td:first-child, .matrix th:first-child { text-align: left; }
+.matrix .mod td { background: var(--surface-2); font-weight: 700; text-align: left; }
+.matrix .yes { color: var(--good); font-weight: 800; }
+.matrix .no { color: var(--muted); }
+.mfa { display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: start; }
+.mfa img { width: 200px; height: 200px; background: #fff; border-radius: 8px; padding: 8px; }
+.secret { font-family: ui-monospace, monospace; word-break: break-all; background: var(--surface-2); padding: 6px 8px; border-radius: 6px; }
+@media (max-width: 599px) { .mfa { grid-template-columns: 1fr; } }
+pre.json { max-height: 420px; overflow: auto; background: var(--surface-2); padding: 10px; border-radius: 8px; font-size: .8rem; }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.primary.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.grid-role { display: grid; grid-template-columns: 2fr 1.4fr 1fr; gap: 0 12px; align-items: end; margin-top: 12px; border-top: 1px solid var(--border); }
+.grid-role h3, .grid-role .actions { grid-column: 1 / -1; }
+@media (max-width: 699px) { .grid-role { grid-template-columns: 1fr; } }
