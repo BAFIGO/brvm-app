@@ -28,14 +28,23 @@
     <nav class="admin-nav" id="nav" aria-label="Administration" hidden>
       <a href="#tableau" data-tab="tableau" data-perm="dashboard.read">Tableau de bord</a>
       <a href="#utilisateurs" data-tab="utilisateurs" data-perm="users.read">Utilisateurs</a>
+      <a href="#donnees" data-tab="donnees" data-perm="market.read">Données de marché</a>
+      <a href="#traitements" data-tab="traitements" data-perm="batch.read">Traitements</a>
+      <a href="#moteur" data-tab="moteur" data-perm="engine.params">Moteur</a>
+      <a href="#communication" data-tab="communication" data-perm="comms.manage">Communication</a>
+      <a href="#conformite" data-tab="conformite" data-perm="compliance.manage">Conformité</a>
       <a href="#habilitations" data-tab="habilitations" data-perm="roles.read">Habilitations</a>
       <a href="#audit" data-tab="audit" data-perm="audit.read">Journal d'audit</a>
-      <a href="https://github.com/BAFIGO/brvm-portefeuille/actions" target="_blank" rel="noopener" data-perm="batch.read">Traitements ↗<span class="sr-only"> (GitHub, nouvel onglet)</span></a>
     </nav>
     <main id="main" tabindex="-1">
       <section id="gate" class="view" aria-live="polite"><p class="center muted">Chargement…</p></section>
       <section id="v-tableau" class="view" hidden aria-labelledby="h-tableau"></section>
       <section id="v-utilisateurs" class="view" hidden aria-labelledby="h-utilisateurs"></section>
+      <section id="v-donnees" class="view" hidden aria-labelledby="h-donnees"></section>
+      <section id="v-traitements" class="view" hidden aria-labelledby="h-traitements"></section>
+      <section id="v-moteur" class="view" hidden aria-labelledby="h-moteur"></section>
+      <section id="v-communication" class="view" hidden aria-labelledby="h-communication"></section>
+      <section id="v-conformite" class="view" hidden aria-labelledby="h-conformite"></section>
       <section id="v-habilitations" class="view" hidden aria-labelledby="h-habilitations"></section>
       <section id="v-audit" class="view" hidden aria-labelledby="h-audit"></section>
     </main>

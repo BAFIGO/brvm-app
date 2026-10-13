@@ -26,6 +26,8 @@
     </nav>
   </header>
 
+  <div id="annonce" class="annonce" role="status" hidden></div>
+
   <main id="main" tabindex="-1">
     <!-- Connexion -->
     <section id="v-connexion" class="view" hidden>
@@ -99,6 +101,16 @@
         <button class="btn" value="annuler" formnovalidate>Annuler</button>
         <button class="btn primary" value="ok">Enregistrer</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-cgu" aria-labelledby="dlg-cgu-title">
+    <form method="dialog">
+      <h2 id="dlg-cgu-title"></h2>
+      <p class="small muted" id="dlg-cgu-sub"></p>
+      <div id="dlg-cgu-texte" class="doc-texte small" tabindex="0"></div>
+      <p class="msg err" role="alert"></p>
+      <div class="actions"></div>
     </form>
   </dialog>
 

@@ -192,3 +192,10 @@ details[open] > summary.row::after { transform: rotate(90deg); }
 .seg.scroll button { flex: none; padding: 8px 10px; }
 #v-performance .tbl th, #v-performance .tbl td { padding: 6px 3px; }
 .chart { max-width: 640px; }
+
+/* Bannière publiée depuis la console d'administration, textes légaux */
+.annonce { max-width: 960px; margin: 12px auto 0; padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--warn-bg); color: var(--text); font-size: .9rem; }
+.annonce.info { background: var(--accent-soft); }
+.annonce.maintenance { background: var(--bad-bg); }
+@media (max-width: 991px) { .annonce { margin: 12px 16px 0; } }
+.doc-texte { white-space: pre-wrap; max-height: 50vh; overflow: auto; background: var(--surface-2); padding: 10px 12px; border-radius: 8px; }

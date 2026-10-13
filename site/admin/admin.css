@@ -46,3 +46,10 @@ pre.json { max-height: 420px; overflow: auto; background: var(--surface-2); padd
 .grid-role { display: grid; grid-template-columns: 2fr 1.4fr 1fr; gap: 0 12px; align-items: end; margin-top: 12px; border-top: 1px solid var(--border); }
 .grid-role h3, .grid-role .actions { grid-column: 1 / -1; }
 @media (max-width: 699px) { .grid-role { grid-template-columns: 1fr; } }
+textarea { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; font: inherit; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); resize: vertical; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.doc-texte { white-space: pre-wrap; margin-top: 8px; max-height: 320px; overflow: auto; background: var(--surface-2); padding: 10px; border-radius: 8px; }
+.demo-role { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.demo-role select { width: auto; min-height: 36px; margin: 0; padding: 4px 8px; }
+.toolbar label select { margin-top: 0; }
+@media (max-width: 599px) { .demo-role-l { display: none; } .demo-role select { max-width: 150px; } }

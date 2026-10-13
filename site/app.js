@@ -100,6 +100,8 @@
       table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
       cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
       indices: async () => r(await sb.from("indices").select("date,code,cloture,variation").order("date").limit(3000)),
+      annonce: async () => r(await sb.from("annonces").select("message,niveau").order("cree_le", { ascending: false }).limit(1))[0] || null,
+      documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
   }
 
@@ -126,6 +128,8 @@
       table: async (name) => (await load())[names[name]],
       cibles: async (_d, profil) => (await load()).cibles.filter((c) => c.profil === profil),
       indices: async () => (await load()).indices || [],
+      annonce: async () => (await load()).annonce || null,
+      documents: async () => (await load()).documents || [],
     };
   }
 
@@ -461,8 +465,11 @@
         <h2>À propos</h2>
         <p class="small">Chaque soir de séance, l'outil analyse les actions, obligations et OPCVM cotés à la BRVM, puis calcule
           pour vous un portefeuille cible et les ordres pour le rejoindre, à partir de votre budget, de votre profil et de votre journal.</p>
-        <p class="small muted">Outil d'aide à la décision : ce n'est pas un conseil en investissement. Les performances passées ne préjugent
-          pas des performances futures. Vos données (profil, journal) ne sont visibles que par vous.</p>
+        ${S.docs?.avertissement ? `<div class="doc-texte small muted">${esc(S.docs.avertissement.texte)}</div>`
+          : `<p class="small muted">Outil d'aide à la décision : ce n'est pas un conseil en investissement. Les performances passées ne préjugent
+          pas des performances futures. Vos données (profil, journal) ne sont visibles que par vous.</p>`}
+        ${S.docs?.cgu ? `<p class="small"><button class="btn link" type="button" id="voir-cgu">${esc(S.docs.cgu.titre)} (version ${esc(S.docs.cgu.version)})</button>
+          ${p.cgu_acceptee_le ? `<span class="muted">acceptée le ${new Date(p.cgu_acceptee_le).toLocaleDateString("fr-FR")}</span>` : ""}</p>` : ""}
         <div class="actions"><button class="btn" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button></div>
       </div>`;
     const f = $("#f-profil", v);
@@ -478,6 +485,7 @@
       } catch (err) { toast("Enregistrement impossible : " + err.message); }
     });
     $("#logout", v).addEventListener("click", () => api.logout());
+    $("#voir-cgu", v)?.addEventListener("click", () => showCgu(S.docs.cgu, false));
   }
 
   // ---------------------------------------------------------------- performance quotidienne
@@ -677,6 +685,11 @@
   // ---------------------------------------------------------------- démarrage
   async function loadAll() {
     const uid = S.user.id;
+    try {                                                              // versions les plus récentes de chaque texte
+      const docs = await api.documents();
+      S.docs = {};
+      for (const d of docs || []) if (!S.docs[d.type]) S.docs[d.type] = d;
+    } catch (e) { S.docs = {}; }                                       // table pas encore créée
     const [profil, seance, prop, ops] = await Promise.all([api.profil(uid), api.seance(), api.proposition(uid), api.operations(uid)]);
     S.profil = profil || { id: uid, email: S.user.email, budget: 0, profil: "equilibre", recevoir_email: true };
     Object.assign(S, { seance, prop, ops: ops || [] });
@@ -709,9 +722,48 @@
       return;
     }
     $("#loading").hidden = true;
+    const cgu = S.docs?.cgu;
+    if (cgu && (+S.profil.cgu_version || 0) < cgu.version && !(await showCgu(cgu, true))) return;
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
     if (!TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
     render();
+  }
+
+  // Conditions d'utilisation : lecture seule, ou acceptation obligatoire d'une nouvelle version (true si acceptée)
+  function showCgu(doc, accept) {
+    return new Promise((resolve) => {
+      const d = $("#dlg-cgu"), f = $("form", d), msg = $(".msg", f);
+      $("#dlg-cgu-title").textContent = doc.titre;
+      $("#dlg-cgu-sub").textContent = `Version ${doc.version} du ${new Date(doc.publie_le).toLocaleDateString("fr-FR")}`
+        + (accept ? (S.profil.cgu_version ? " : les conditions ont changé, merci de les relire." : " : merci de les lire avant de continuer.") : "");
+      $("#dlg-cgu-texte").textContent = doc.texte;
+      msg.textContent = "";
+      $(".actions", f).innerHTML = accept
+        ? `<button class="btn" type="button" data-non>Me déconnecter</button><button class="btn primary" type="button" data-oui>J'accepte</button>`
+        : `<button class="btn primary" value="ok">Fermer</button>`;
+      d.oncancel = accept ? (e) => e.preventDefault() : null;           // acceptation : pas de fermeture par Échap
+      if (accept) {
+        $("[data-non]", f).addEventListener("click", () => api.logout());
+        $("[data-oui]", f).addEventListener("click", async () => {
+          const upd = { cgu_version: doc.version, cgu_acceptee_le: new Date().toISOString() };
+          try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); d.close(); resolve(true); }
+          catch (e) { msg.textContent = "Enregistrement impossible : " + e.message; }
+        });
+      } else d.addEventListener("close", () => resolve(false), { once: true });
+      d.showModal();
+    });
+  }
+
+  async function showAnnonce() {
+    try {
+      const a = await api.annonce();
+      const el = $("#annonce");
+      if (!a) { el.hidden = true; return; }
+      el.className = "annonce " + (a.niveau || "info");
+      const lbl = { maintenance: "Maintenance", attention: "Attention" }[a.niveau];
+      el.innerHTML = (lbl ? `<b>${lbl}</b> · ` : "") + esc(a.message);
+      el.hidden = false;
+    } catch (e) { /* table pas encore créée : pas de bannière */ }
   }
 
   function showLogin() {
@@ -759,6 +811,7 @@
   async function init() {
     $("#badge-demo").hidden = !DEMO;
     if (DEMO) document.title = "Démo – BRVM Portefeuille";
+    showAnnonce();
     try {
       api.onAuth((s) => { if (s?.user) start(s.user); });
       const s = await api.session();
