@@ -8,7 +8,7 @@
   const DEMO = new URLSearchParams(location.search).has("demo");
   const FEES = CFG.fraisCourtage;
   const MIN_LINE = 50000;                                  // même seuil que l'outil (MIN_LINE_FCFA)
-  const TABS = ["aujourdhui", "portefeuille", "marche", "profil"];
+  const TABS = ["aujourdhui", "portefeuille", "performance", "marche", "profil"];
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
     equilibre: { t: "Équilibré", d: "Un tiers à la moitié en actions, le reste en obligations et fonds. Le choix par défaut." },
@@ -27,6 +27,9 @@
   const F = (v) => (ok(v) ? nf0.format(Math.round(+v)) + " F" : "–");
   const N = (v) => (ok(v) ? nf0.format(+v) : "–");
   const P = (v, sign = true) => (ok(v) ? (sign && +v > 0 ? "+" : "") + nf1.format(+v * 100) + " %" : "–");
+  const nf2 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const P2 = (v) => (ok(v) ? (+v > 0 ? "+" : "") + nf2.format(+v * 100) + " %" : "–");
+  const Dc = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "–");
   const D = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR") : "–");
   const today = () => new Date().toISOString().slice(0, 10);
   const cls = (v) => (ok(v) ? (+v > 0 ? "good" : +v < 0 ? "bad" : "") : "");
@@ -96,6 +99,7 @@
       deleteOperation: async (id) => r(await sb.from("operations").delete().eq("id", id)),
       table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
       cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
+      indices: async () => r(await sb.from("indices").select("date,code,cloture,variation").order("date").limit(3000)),
     };
   }
 
@@ -121,13 +125,14 @@
       deleteOperation: async (id) => { const d = await load(); d.operations = d.operations.filter((o) => o.id !== id); },
       table: async (name) => (await load())[names[name]],
       cibles: async (_d, profil) => (await load()).cibles.filter((c) => c.profil === profil),
+      indices: async () => (await load()).indices || [],
     };
   }
 
   const api = DEMO ? demoApi() : supaApi();
   const S = { user: null, profil: null, seance: null, prop: null, ops: [], mk: { actions: [], obligations: [], opcvm: [] },
               cibles: [], prices: new Map(), names: new Map(), classes: new Map(),
-              ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30 } };
+              ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30, perf: 1 } };
 
   // ---------------------------------------------------------------- journal → positions (même méthode que l'outil)
   function replay(ops) {
@@ -475,7 +480,109 @@
     $("#logout", v).addEventListener("click", () => api.logout());
   }
 
-  const VIEWS = { aujourdhui: vAujourdhui, portefeuille: vPortefeuille, marche: vMarche, profil: vProfil };
+  // ---------------------------------------------------------------- performance quotidienne
+  const PERIODES = [[1, "Séance"], [5, "5 séances"], [21, "1 mois"], [63, "3 mois"], [0, "Depuis le début"]];
+  const SERIES = [["pf", "Portefeuille", "var(--s1)"], ["BRVM30", "BRVM 30", "var(--s2)"], ["BRVMC", "BRVM Composite", "var(--s3)"]];
+  const cumul = (rs) => (rs.some(ok) ? rs.reduce((a, r) => (ok(r) ? a * (1 + +r) : a), 1) - 1 : null);   // null si aucune donnée
+
+  function perfChart(rows, ix) {
+    // indices de performance cumulée (base 0 % la veille de la première séance), un seul axe en %
+    const pts = { pf: [0], BRVM30: [0], BRVMC: [0] };
+    const acc = { pf: 1, BRVM30: 1, BRVMC: 1 };
+    for (const r of rows) {
+      if (ok(r.pct)) acc.pf *= 1 + r.pct;
+      for (const k of ["BRVM30", "BRVMC"]) { const v = ix[k]?.get(r.date)?.variation; if (ok(v)) acc[k] *= 1 + +v; }
+      for (const k in acc) pts[k].push(acc[k] - 1);
+    }
+    const dates = [null, ...rows.map((r) => r.date)];
+    const Wd = 360, Ht = 210, L = 42, R = 58, T = 10, B = 22;
+    const all = Object.values(pts).flat();
+    let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+    const pad = (hi - lo || 0.01) * 0.12; lo -= pad; hi += pad;
+    const x = (i) => L + (i / (dates.length - 1)) * (Wd - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (Ht - T - B);
+    const ticks = []; const step = (hi - lo) / 4;
+    for (let k = 0; k <= 4; k++) ticks.push(lo + k * step);
+    let g = `<g class="grid">${ticks.map((t) => `<line x1="${L}" x2="${Wd - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${P(t)}</text>`).join("")}</g>`;
+    g += `<line class="zero" x1="${L}" x2="${Wd - R}" y1="${y(0)}" y2="${y(0)}"/>`;
+    g += `<g class="axis"><text x="${x(1)}" y="${Ht - 6}" text-anchor="start">${D(dates[1])}</text><text x="${x(dates.length - 1)}" y="${Ht - 6}" text-anchor="end">${D(dates[dates.length - 1])}</text></g>`;
+    // étiquettes de fin espacées pour ne pas se chevaucher
+    const has = { pf: true, BRVM30: rows.some((r) => ok(ix.BRVM30?.get(r.date)?.variation)), BRVMC: rows.some((r) => ok(ix.BRVMC?.get(r.date)?.variation)) };
+    const ends = SERIES.filter(([k]) => has[k]).map(([k, n, col]) => ({ k, n, col, v: pts[k][pts[k].length - 1], yy: y(pts[k][pts[k].length - 1]) })).sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) ends[i].yy = Math.max(ends[i].yy, ends[i - 1].yy + 14);
+    for (const [k, , col] of SERIES.filter(([k2]) => has[k2]))
+      g += `<path class="line" stroke="${col}" d="${pts[k].map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("")}"/>`;
+    g += `<g class="end">${ends.map((e) => `<text x="${Wd - R + 6}" y="${e.yy + 4}"><tspan fill="${e.col}">●</tspan> ${P(e.v)}</text>`).join("")}</g>`;
+    g += `<g class="hover" visibility="hidden"><line class="cross" y1="${T}" y2="${Ht - B}"/>${SERIES.filter(([k]) => has[k]).map(([k, , col]) => `<circle class="dot" r="4" fill="${col}" data-k="${k}"/>`).join("")}</g>`;
+    const label = `Performance cumulée du ${D(dates[1])} au ${D(dates[dates.length - 1])} : ` + SERIES.filter(([k]) => has[k]).map(([k, n]) => `${n} ${P(pts[k][pts[k].length - 1])}`).join(", ");
+    return { html: `<div class="chart"><svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(label)}">${g}<rect class="hit" x="${L}" y="${T}" width="${Wd - L - R}" height="${Ht - T - B}" fill="transparent"/></svg><div class="tip" hidden></div></div>`,
+             pts, dates, x, y, Wd, has };
+  }
+
+  function vPerformance() {
+    const v = $("#v-performance");
+    const hist = (S.prop?.contenu?.historique || []).filter((r) => r.date);
+    const ix = {};
+    for (const r of S.indices || []) (ix[r.code] ||= new Map()).set(r.date, r);
+    let h = `<h1 id="h-perf">Performance</h1>`;
+    if (!hist.length) {
+      v.innerHTML = h + `<div class="notice info">Le gain ou la perte de chaque séance est calculé chaque soir à partir de votre journal.
+        Enregistrez vos opérations : les premiers chiffres apparaîtront après le prochain calcul.</div>`;
+      return;
+    }
+    const n = S.ui.perf, rows = n ? hist.slice(-n) : hist.slice();
+    const last = hist[hist.length - 1];
+    const gain = rows.reduce((a, r) => a + (+r.gain || 0), 0);
+    const pf = cumul(rows.map((r) => r.pct));
+    const idx = (k) => cumul(rows.map((r) => ix[k]?.get(r.date)?.variation));
+    const b30 = idx("BRVM30"), bc = idx("BRVMC");
+    const per = n === 1 ? `la séance du ${D(last.date)}` : `${D(rows[0].date)} → ${D(last.date)}`;
+    h += `<div class="seg scroll" role="group" aria-label="Période">${PERIODES.map(([k, t]) => `<button type="button" data-perf="${k}" aria-pressed="${S.ui.perf === k}">${t}</button>`).join("")}</div>
+      <div class="card"><p class="small muted">Sur ${per}</p>
+        <div class="kpi"><div class="lbl">Gain ou perte du portefeuille</div>
+          <div class="val num ${cls(gain)}">${gain > 0 ? "+" : ""}${F(gain)}</div></div>
+        <div class="cmp" style="margin-top:10px">
+          ${[["Portefeuille", pf, "var(--s1)"], ["BRVM 30", b30, "var(--s2)"], ["BRVM Composite", bc, "var(--s3)"]].map(([t, val, col]) =>
+            `<div class="kpi"><div class="lbl"><i style="background:${col}"></i>${t}</div><div class="val num ${cls(val)}">${n === 1 ? P2(val) : P(val)}</div></div>`).join("")}
+        </div>
+        <p class="small" style="margin-top:10px">${ok(pf) && ok(b30) ? `Écart avec le BRVM 30 : <b class="${cls(pf - b30)}">${(pf - b30 > 0 ? "+" : "") + nf1.format((pf - b30) * 100)} points</b>` + (pf >= b30 ? " — vous faites mieux que le marché." : " — le marché fait mieux sur cette période.") : ""}</p>
+        ${!ok(b30) || !ok(bc) ? `<p class="small muted">« – » : indice pas encore disponible pour ces séances.</p>` : ""}
+        <p class="small muted">Hors dépôts et retraits : seule l'évolution des cours, des dividendes et des frais compte.</p></div>`;
+    const chartRows = rows.length >= 5 ? rows : hist.slice(-21);
+    const ch = perfChart(chartRows, ix);
+    h += `<div class="card"><h2>Évolution comparée</h2>
+      <div class="legend">${SERIES.map(([, n2, col]) => `<span><i class="s" style="background:${col}"></i>${n2}</span>`).join("")}</div>${ch.html}
+      <p class="small muted">Performance cumulée${chartRows === rows ? "" : " sur le dernier mois"}, en partant de 0 %. Touchez le graphique pour le détail d'un jour.</p></div>`;
+    const nTab = S.ui.perfRows || 10, tab = hist.slice(-nTab).reverse();
+    h += `<div class="card"><h2>Jour par jour</h2><div class="tbl" role="region" aria-label="Gain par séance" tabindex="0"><table>
+      <thead><tr><th scope="col">Séance</th><th scope="col">Gain (F)</th><th scope="col">Portef.</th><th scope="col">BRVM 30</th><th scope="col">Compos.</th></tr></thead>
+      <tbody>${tab.map((r) => { const a = ix.BRVM30?.get(r.date)?.variation, c2 = ix.BRVMC?.get(r.date)?.variation;
+        return `<tr><th scope="row">${Dc(r.date)}</th><td class="${cls(r.gain)}">${ok(r.gain) ? (r.gain > 0 ? "+" : "") + N(r.gain) : "–"}</td><td class="${cls(r.pct)}">${P2(r.pct)}</td><td>${P2(a)}</td><td>${P2(c2)}</td></tr>`; }).join("")}</tbody></table></div>
+      ${hist.length > nTab ? `<div class="actions"><button class="btn small" id="perf-more">Afficher plus de séances</button></div>` : ""}
+      <p class="small muted">Calculé chaque soir avec votre journal ; une opération enregistrée aujourd'hui apparaît après le calcul du soir.</p></div>`;
+    v.innerHTML = h;
+    v.querySelectorAll("[data-perf]").forEach((b) => b.addEventListener("click", () => { S.ui.perf = +b.dataset.perf; vPerformance(); }));
+    $("#perf-more", v)?.addEventListener("click", () => { S.ui.perfRows = (S.ui.perfRows || 10) + 20; vPerformance(); });
+    // info-bulle : le jour le plus proche du doigt ou de la souris
+    const svg = $(".chart svg", v), tip = $(".chart .tip", v), hov = $(".hover", svg);
+    const show = (ev) => {
+      const bb = svg.getBoundingClientRect(), sx = ((ev.clientX - bb.left) / bb.width) * ch.Wd;
+      let i = 1, best = Infinity;
+      for (let k = 1; k < ch.dates.length; k++) { const d = Math.abs(ch.x(k) - sx); if (d < best) { best = d; i = k; } }
+      hov.setAttribute("visibility", "visible");
+      $(".cross", hov).setAttribute("x1", ch.x(i)); $(".cross", hov).setAttribute("x2", ch.x(i));
+      hov.querySelectorAll(".dot").forEach((c) => { c.setAttribute("cx", ch.x(i)); c.setAttribute("cy", ch.y(ch.pts[c.dataset.k][i])); });
+      tip.innerHTML = `<b>${D(ch.dates[i])}</b>` + SERIES.filter(([k]) => ch.has[k]).map(([k, n2, col]) => `<span style="color:${col}">●</span> ${n2} ${P(ch.pts[k][i])}`).join("<br>");
+      tip.hidden = false;
+      const px = (ch.x(i) / ch.Wd) * bb.width;
+      tip.style.left = Math.min(Math.max(px - tip.offsetWidth / 2, 0), bb.width - tip.offsetWidth) + "px";
+    };
+    svg.addEventListener("pointermove", show);
+    svg.addEventListener("pointerdown", show);
+    svg.addEventListener("pointerleave", () => { hov.setAttribute("visibility", "hidden"); tip.hidden = true; });
+  }
+
+  const VIEWS = { aujourdhui: vAujourdhui, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
   // ---------------------------------------------------------------- saisie d'une opération
   const dlg = $("#dlg-op"), fop = $("#f-op");
@@ -578,6 +685,7 @@
         api.table("opcvm_analyse", seance.date), api.cibles(seance.date, S.profil.profil)]);
       S.mk = { actions: a || [], obligations: o || [], opcvm: f || [] };
       S.cibles = c || [];
+      try { S.indices = await api.indices(); } catch (e) { S.indices = []; }   // table pas encore créée
       S.prices = new Map(); S.names = new Map(); S.classes = new Map(); S.decisions = new Map();
       S.actions = new Map(S.mk.actions.map((r) => [r.code, r]));
       for (const r of S.mk.actions) { S.prices.set(r.code, r.cours); S.names.set(r.code, r.nom); S.classes.set(r.code, "actions"); S.decisions.set(r.code, r.decision); }
