@@ -308,20 +308,52 @@ a.brand { color: inherit; text-decoration: none; }
 .trophees { list-style: none; margin: 8px 0 0; padding: 0 0 4px; display: flex; gap: 14px; overflow-x: auto; scrollbar-width: none; }
 .trophees li { flex: none; width: 76px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; font-size: .75rem; font-weight: 600; line-height: 1.2; }
 .trophees li.verrou { color: var(--muted); }
-.medaille { width: 44px; height: 53px; color: #fff; }
-.medaille.gros { width: 96px; height: 116px; }
-.medaille .ruban { fill: var(--s3); }
-.medaille .disque { fill: var(--s2); }
-.medaille text { fill: #fff; font-family: inherit; }
-.medaille.verrou { color: var(--muted); }
-.medaille.verrou .ruban, .medaille.verrou .disque { fill: var(--surface-2); }
-.medaille.verrou text { fill: var(--muted); }
+.defs-medailles { position: absolute; width: 0; height: 0; overflow: hidden; }
+.medaille { width: 46px; height: 60px; overflow: visible; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .18)); }
+.medaille.gros { width: 112px; height: 147px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .25)); }
+.medaille text { font-family: inherit; font-weight: 800; letter-spacing: -.02em; }
+.medaille text.ombre { fill: rgba(255, 255, 255, .45) !important; }
+.medaille .cran { stroke: rgba(0, 0, 0, .22); stroke-width: 1.6; }
+.medaille .grav { stroke: rgba(255, 255, 255, .5); stroke-width: 1; }
+.medaille .ruban-a { fill: #1F5FA8; } .medaille .ruban-b { fill: #17487F; } .medaille .ruban-l { fill: rgba(255, 255, 255, .55); }
+.m-or .ruban-a { fill: #B3261E; } .m-or .ruban-b { fill: #861A14; }
+.m-argent .ruban-a { fill: #2F4FA8; } .m-argent .ruban-b { fill: #213A7E; }
+.m-bronze .ruban-a { fill: #2D7A6B; } .m-bronze .ruban-b { fill: #1F5A4E; }
+.m-platine .ruban-a, .m-diamant .ruban-a { fill: #2B2F45; } .m-platine .ruban-b, .m-diamant .ruban-b { fill: #1A1D2D; }
+.m-legende .ruban-a { fill: #D4A11E; } .m-legende .ruban-b { fill: #A67C10; }
+.m-emeraude .ruban-a, .m-saphir .ruban-a, .m-rubis .ruban-a { fill: #E4B43A; } .m-emeraude .ruban-b, .m-saphir .ruban-b, .m-rubis .ruban-b { fill: #B88A1A; }
+.m-bronze text { fill: #4A2310; } .r-bronze { color: #7A3F18; }
+.m-argent text { fill: #3B434D; } .r-argent { color: #5E6A77; }
+.m-or text { fill: #5A3B00; } .r-or { color: #A8740D; }
+.m-platine text { fill: #22343F; } .r-platine { color: #5E6A77; }
+.m-diamant text { fill: #0B2E47; } .r-diamant { color: #2A6E9E; }
+.m-legende text { fill: #FFFFFF; } .r-legende { color: #5B1F7A; }
+.m-emeraude text { fill: #04301F; } .r-emeraude { color: #0B5E43; }
+.m-saphir text { fill: #FFFFFF; } .r-saphir { color: #1C3E86; }
+.m-rubis text { fill: #FFFFFF; } .r-rubis { color: #7E1622; }
+.medaille.verrou { filter: grayscale(1); opacity: .38; }
+.trophees li { width: 82px; }
+.trophees .rang { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.trophees li.verrou .rang { color: var(--muted); }
+#bravo-medaille { position: relative; display: grid; place-items: center; height: 170px; }
+#bravo-medaille .medaille { position: relative; }
+.halo { position: absolute; width: 200px; height: 200px; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--halo) 0 10deg, transparent 10deg 20deg);
+  -webkit-mask: radial-gradient(circle, #000 20%, transparent 70%); mask: radial-gradient(circle, #000 20%, transparent 70%); opacity: .55; }
+.h-bronze { --halo: #E9A06A; } .h-argent { --halo: #B9C2CC; } .h-or { --halo: #F5C542; } .h-platine { --halo: #A9C3D1; }
+.h-diamant { --halo: #7CCBF0; } .h-legende { --halo: #C77DE8; } .h-emeraude { --halo: #5ACB98; } .h-saphir { --halo: #7DA3EC; } .h-rubis { --halo: #EE7A85; }
+.bravo-rang { margin: 0; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  dialog.bravo[open] .halo { animation: halo-in .6s ease-out both, halo-tourne 14s linear infinite; }
+  @keyframes halo-tourne { to { transform: rotate(360deg); } }
+  @keyframes halo-in { from { opacity: 0; transform: scale(.4); } }
+}
 dialog.bravo { text-align: center; max-width: 360px; }
 dialog.bravo h2 { font-size: 1.35rem; margin: 6px 0; }
 dialog.bravo .actions { justify-content: center; }
 .confettis { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
 @media (prefers-reduced-motion: no-preference) {
-  dialog.bravo[open] .medaille { animation: medaille-in .7s cubic-bezier(.2, 1.4, .4, 1) both; }
+  dialog.bravo[open] .medaille.gros { animation: medaille-in .8s cubic-bezier(.2, 1.4, .4, 1) both; }
   @keyframes medaille-in { from { transform: scale(.3) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
   .fab.fab-ok { animation: fab-ok 1.2s ease-out; }
   @keyframes fab-ok { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(23, 134, 111, .55); } 30% { transform: scale(1.15); } 100% { transform: scale(1); box-shadow: 0 0 0 22px rgba(23, 134, 111, 0); } }

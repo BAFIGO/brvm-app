@@ -365,32 +365,42 @@
   // ---------------------------------------------------------------- encourager la régularité (trophées, félicitations)
   // On félicite l'épargne (versement, régularité, objectif), jamais les achats ou ventes de titres.
   const PALIERS = { quotidien: [3, 7, 14, 30, 60, 100], hebdo: [4, 8, 12, 26, 52], mensuel: [3, 6, 12, 24] };
+  // Rang de chaque médaille : plus l'effort est long, plus le métal est précieux
+  const RANGS = { bronze: "Bronze", argent: "Argent", or: "Or", platine: "Platine", diamant: "Diamant", legende: "Légende", emeraude: "Émeraude", saphir: "Saphir", rubis: "Rubis" };
+  const RANG_SERIE = ["bronze", "argent", "or", "platine", "diamant", "legende"];
+  const RANG_OBJECTIF = { 25: "bronze", 50: "argent", 75: "or", 100: "platine" };
   function trophees(e) {
     if (!e) return [];
     const r = e.plan?.rythme, u = e.unite || "jour", t = [];
-    t.push({ id: "premier", titre: "Premier pas", marque: "1", ok: e.verse > 0, rang: 1,
+    t.push({ id: "premier", titre: "Premier pas", marque: "1", metal: "emeraude", ok: e.verse > 0, rang: 1,
       msg: "Votre coffre est ouvert. Chaque versement compte : revenez au prochain rendez-vous pour lancer votre série." });
-    if (r && e.plan?.montant) for (const n of PALIERS[r]) t.push({ id: `serie-${r}-${n}`, titre: `${pluriel(n, u)} d'affilée`, marque: String(n),
+    if (r && e.plan?.montant) PALIERS[r].forEach((n, i) => t.push({ id: `serie-${r}-${n}`, titre: `${pluriel(n, u)} d'affilée`, marque: String(n), metal: RANG_SERIE[i],
       ok: Math.max(e.serie || 0, e.record || 0) >= n, reste: n - (e.serie || 0), unite: u, rang: 10 + n,
-      msg: `Petit à petit, l'oiseau fait son nid : ${pluriel(n, u)} sans interruption. Continuez sur cette lancée !` });
+      msg: `Petit à petit, l'oiseau fait son nid : ${pluriel(n, u)} sans interruption. Continuez sur cette lancée !` }));
     if (e.objectif) for (const pc of [25, 50, 75, 100]) t.push({ id: `objectif-${e.objectif}-${pc}`, titre: pc === 100 ? "Objectif atteint" : `${pc} % de l'objectif`,
-      marque: pc + "%", ok: e.verse >= (e.objectif * pc) / 100, rang: pc === 100 ? 500 : 200 + pc,
+      marque: pc + "%", metal: RANG_OBJECTIF[pc], ok: e.verse >= (e.objectif * pc) / 100, rang: pc === 100 ? 500 : 200 + pc,
       msg: pc === 100 ? `Vous avez mis de côté ${F(e.verse)} : objectif de ${F(e.objectif)} atteint. Bravo pour votre discipline !`
         : `${F(e.verse)} épargnés sur ${F(e.objectif)}. ${pc === 50 ? "La moitié du chemin est faite !" : "Vous êtes sur la bonne voie."}` });
-    t.push({ id: "seuil", titre: "Prêt à investir", marque: "F", ok: e.solde >= seuil() || e.envoye > 0, rang: 400, action: "transfert",
+    t.push({ id: "seuil", titre: "Prêt à investir", marque: "↑", metal: "saphir", ok: e.solde >= seuil() || e.envoye > 0, rang: 400, action: "transfert",
       msg: `Votre épargne atteint ${F(e.solde)} : elle peut maintenant travailler en bourse. Envoyez-la à votre SGI.` });
-    t.push({ id: "sgi", titre: "Investisseur BRVM", marque: "★", ok: e.envoye > 0, rang: 450,
+    t.push({ id: "sgi", titre: "Investisseur BRVM", marque: "★", metal: "rubis", ok: e.envoye > 0, rang: 450,
       msg: "Premier envoi à votre SGI : vous êtes maintenant investisseur à la BRVM. Votre portefeuille va grandir avec votre épargne." });
     return t;
   }
   const cleFetes = () => "brvm-fetes-" + (S.user?.id || "x");
+  // Étapes déjà fêtées : dans le profil Supabase (profils.fetes, partagé entre appareils) ; à défaut, sur ce téléphone
+  const fetesEnBase = () => !DEMO && S.profil && "fetes" in S.profil;
   function chargerFetes() {
-    let v = null;
-    try { v = JSON.parse(localStorage.getItem(cleFetes()) || "null"); } catch (e) { /* stockage indisponible */ }
+    let v = fetesEnBase() && Array.isArray(S.profil.fetes) ? S.profil.fetes : null;
+    if (!v && !fetesEnBase()) try { v = JSON.parse(localStorage.getItem(cleFetes()) || "null"); } catch (e) { /* stockage indisponible */ }
     S.fetes = new Set(Array.isArray(v) ? v : []);
     if (!v) { trophees(epargne()).filter((t) => t.ok).forEach((t) => S.fetes.add(t.id)); garderFetes(); }   // l'historique ne se fête pas
   }
-  function garderFetes() { try { localStorage.setItem(cleFetes(), JSON.stringify([...S.fetes])); } catch (e) { /* tant pis */ } }
+  function garderFetes() {
+    const liste = [...S.fetes];
+    if (fetesEnBase()) { S.profil.fetes = liste; api.saveProfil(S.user.id, { fetes: liste }).catch(() => { /* réessayé à la prochaine étape */ }); }
+    else try { localStorage.setItem(cleFetes(), JSON.stringify(liste)); } catch (e) { /* tant pis */ }
+  }
   const MSG_JOUR = [
     (m, s, u) => `Bravo ! ${F(m)} de plus. Série : ${pluriel(s, u)}.`,
     (m, s, u) => `C'est noté : ${F(m)} mis de côté. ${pluriel(s, u)} d'affilée !`,
@@ -410,13 +420,24 @@
       setTimeout(() => fab.classList.remove("fab-ok"), 1600);
     }
   }
-  const medaille = (t, gros) => `<svg class="medaille${t.ok ? "" : " verrou"}${gros ? " gros" : ""}" viewBox="0 0 48 58" aria-hidden="true">
-      <path class="ruban" d="M13 2h9l4 15-8 4zM35 2h-9l-4 15 8 4z"/><circle class="disque" cx="24" cy="36" r="18"/>
-      <circle cx="24" cy="36" r="13.5" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="1.5"/>
-      <text x="24" y="${t.marque.length > 2 ? 40 : 41}" text-anchor="middle" font-size="${t.marque.length > 2 ? 11 : 14}" font-weight="800">${esc(t.marque)}</text></svg>`;
+  // Médaille : ruban à deux pans, couronne métallique crantée, face bombée, gravure, reflet ; grisée si pas encore gagnée
+  const medaille = (t, gros) => {
+    const m = t.metal || "bronze", petit = t.marque.length > 2;
+    return `<svg class="medaille m-${m}${t.ok ? "" : " verrou"}${gros ? " gros" : ""}" viewBox="0 0 64 84" aria-hidden="true">
+      <path class="ruban-a" d="M17 0h13l7 25-11 7z"/><path class="ruban-b" d="M47 0H34l-7 25 11 7z"/>
+      <path class="ruban-l" d="M23.5 0h3l6.2 23.5-2.6 1.6zM40.5 0h-3l-6.2 23.5 2.6 1.6z"/>
+      <circle cx="32" cy="55" r="26" fill="url(#m-${m}-rim)"/>
+      <circle cx="32" cy="55" r="26" fill="none" class="cran" stroke-dasharray="2.4 2.1"/>
+      <circle cx="32" cy="55" r="20.5" fill="url(#m-${m}-face)"/>
+      <circle cx="32" cy="55" r="17.2" fill="none" class="grav"/>
+      <path d="M14 46a20 20 0 0 1 22-11" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="32.6" y="${petit ? 60.6 : 61.6}" text-anchor="middle" font-size="${petit ? 12.5 : 17}" class="ombre">${esc(t.marque)}</text>
+      <text x="32" y="${petit ? 60 : 61}" text-anchor="middle" font-size="${petit ? 12.5 : 17}">${esc(t.marque)}</text></svg>`;
+  };
   function bravo(items) {
     const t = items[0], d = $("#dlg-bravo");
-    $("#bravo-medaille").innerHTML = medaille(t, true);
+    $("#bravo-medaille").innerHTML = `<div class="halo h-${t.metal || "bronze"}" aria-hidden="true"></div>${medaille(t, true)}`;
+    $("#bravo-rang").textContent = "Médaille " + (RANGS[t.metal] || "");
     $("#bravo-titre").textContent = t.titre;
     $("#bravo-msg").textContent = t.msg;
     $("#bravo-aussi").innerHTML = items.length > 1 ? "Et aussi : " + items.slice(1).map((x) => `<b>${esc(x.titre)}</b>`).join(", ") : "";
@@ -598,8 +619,8 @@
         ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
     const tr = trophees(ep), gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
     h += `<div class="trophees-tete"><b>Mes trophées</b><span class="small muted">${gagnes.length} / ${tr.length}</span></div>
-      <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)}">${medaille(t)}
-        <span>${esc(t.titre)}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}</li>`).join("")}</ul>`;
+      <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
+        <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}</li>`).join("")}</ul>`;
     const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
     if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
         <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
@@ -770,7 +791,7 @@
           <div class="radios">${Object.entries(PROFILS).map(([k, x]) => `<label><input type="radio" name="profil" value="${k}"${p.profil === k ? " checked" : ""}>
             <span><b>${x.t}</b><br><span class="small muted">${x.d}</span></span></label>`).join("")}</div>
         </fieldset>
-        ${S.coffre ? `<label class="switch" style="margin-top:14px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}>
+        ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:14px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}>
           Animations de félicitations (confettis)</label>` : ""}
         <label class="switch" style="margin-top:14px"><input type="checkbox" name="recevoir_email"${p.recevoir_email ? " checked" : ""}>
           Recevoir ma proposition par e-mail chaque soir de séance</label>
@@ -797,7 +818,7 @@
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const upd = { budget: Math.max(0, +f.budget.value || 0), profil: f.profil.value || "equilibre", recevoir_email: f.recevoir_email.checked };
-      if (S.coffre) { upd.budget_mode = f.budget_mode.value; upd.felicitations = f.felicitations.checked; }
+      if (S.coffre) { upd.budget_mode = f.budget_mode.value; if (f.felicitations) upd.felicitations = f.felicitations.checked; }
       try {
         await api.saveProfil(S.user.id, upd);
         const changed = upd.profil !== S.profil.profil;
@@ -812,8 +833,8 @@
       const tr = trophees(epargne()), e = b.dataset.essai;
       if (e === "jour") { location.hash = "portefeuille"; setTimeout(() => feter(5000), 300); }
       else if (e === "perdue") { S.demoPerdue = true; location.hash = "portefeuille"; setTimeout(() => (S.demoPerdue = false), 800); }
-      else bravo([{ serie: { titre: "7 jours d'affilée", marque: "7", msg: "Petit à petit, l'oiseau fait son nid : 7 jours sans interruption. Continuez sur cette lancée !", ok: true },
-        objectif: { titre: "Objectif atteint", marque: "100%", msg: "Vous avez mis de côté 500 000 F : objectif atteint. Bravo pour votre discipline !", ok: true },
+      else bravo([{ serie: { titre: "7 jours d'affilée", marque: "7", metal: "argent", msg: "Petit à petit, l'oiseau fait son nid : 7 jours sans interruption. Continuez sur cette lancée !", ok: true },
+        objectif: { titre: "Objectif atteint", marque: "100%", metal: "platine", msg: "Vous avez mis de côté 500 000 F : objectif atteint. Bravo pour votre discipline !", ok: true },
         seuil: tr.find((t) => t.id === "seuil") }[e]].map((t) => ({ ...t, ok: true })));
     }));
     f.querySelectorAll('[name="budget_mode"]').forEach((r) => r.addEventListener("change", () => ($("#pr-budget-w", v).hidden = f.budget_mode.value === "auto")));
