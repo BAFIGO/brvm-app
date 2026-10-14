@@ -36,6 +36,9 @@ Démo sans compte (données fictives) : `/app/?demo=1`.
   sans animation. Les chiffres du haut viennent de la fonction publique `stats_publiques()` (dernière séance) ;
   à défaut, ceux de la démonstration, présentés comme un exemple.
 - `site/boot.js` renvoie vers `/app/` un ancien lien de connexion arrivé sur la page d'accueil.
+- Épargne mise de côté (« coffre ») : bouton flottant « J'ai épargné », suivi dans Portefeuille, plan dans
+  Profil. Elle s'appuie sur `supabase/epargne.sql` (dépôt brvm-portefeuille) ; tant que ce fichier n'est pas
+  installé, ces fonctions restent masquées.
 
 ## Mise en service
 

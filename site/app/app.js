@@ -8,7 +8,7 @@
   const DEMO = new URLSearchParams(location.search).has("demo");
   const FEES = CFG.fraisCourtage;
   const MIN_LINE = 50000;                                  // même seuil que l'outil (MIN_LINE_FCFA)
-  const SEUIL = 2 * MIN_LINE;                              // seuil d'investissement : 2 lignes minimum (paramètre moteur à venir)
+  const SEUIL_DEFAUT = 2 * MIN_LINE;                       // seuil d'investissement : 2 lignes minimum (réglable : console → Moteur)
   const RYTHMES = { quotidien: ["par jour", "aujourd'hui"], hebdo: ["par semaine", "cette semaine"], mensuel: ["par mois", "ce mois-ci"] };
   const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
   const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
@@ -106,6 +106,13 @@
       cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
       indices: async () => r(await sb.from("indices").select("date,code,cloture,variation").order("date").limit(3000)),
       annonce: async () => r(await sb.from("annonces").select("message,niveau").order("cree_le", { ascending: false }).limit(1))[0] || null,
+      // Épargne mise de côté (supabase/epargne.sql) : erreur si le fichier n'est pas installé → fonctions masquées
+      coffre: async () => r(await sb.rpc("mon_epargne")),
+      addMouvement: async (m) => r(await sb.rpc("epargne_mouvement", { p_date: m.date, p_type: m.type, p_montant: m.montant,
+                                                                     p_source: m.source || "", p_note: m.note || null })),
+      envoyerSgi: async (date, montant) => r(await sb.rpc("epargne_envoyer_sgi", { p_date: date, p_montant: montant })),
+      savePlan: async (pl) => r(await sb.from("coffre_plans").upsert({ user_id: S.user.id, montant: pl.montant, rythme: pl.rythme,
+                                  jours_ouvres: pl.jours_ouvres, objectif: pl.objectif, debut: pl.debut }, { onConflict: "user_id" })),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
   }
@@ -148,9 +155,15 @@
           const debut = new Date(); debut.setDate(debut.getDate() - 34);
           d.coffre = { plan: { montant: 5000, rythme: "quotidien", jours_ouvres: true, objectif: 500000, debut: iso(debut) }, mouvements: mv, nextId: id };
         }
-        return { plan: d.coffre.plan && { ...d.coffre.plan }, mouvements: d.coffre.mouvements.slice() };
+        return { plan: d.coffre.plan && { ...d.coffre.plan }, mouvements: d.coffre.mouvements.slice(), seuil: 100000 };
       },
       addMouvement: async (m) => { const d = await load(); d.coffre.mouvements.push({ ...m, id: d.coffre.nextId++ }); },
+      envoyerSgi: async (date, montant) => {
+        const d = await load();
+        d.coffre.mouvements.push({ id: d.coffre.nextId++, date, type: "TRANSFERT", montant });
+        d.operations.push({ id: nextId++, date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant, note: "Depuis mon épargne" });
+        d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      },
       savePlan: async (pl) => { (await load()).coffre.plan = { ...pl }; },
       annonce: async () => (await load()).annonce || null,
       documents: async () => (await load()).documents || [],
@@ -298,12 +311,15 @@
     while (plan.jours_ouvres && [0, 6].includes(weekday(d))) d = addDays(d, -1);
     return d;
   }
+  const seuil = () => +S.coffre?.seuil || SEUIL_DEFAUT;
   function epargne() {
     const c = S.coffre;
     if (!c) return null;
     const mv = c.mouvements || [];
+    // totaux depuis le début (calculés par la base) ; à défaut, somme des mouvements chargés
     const sum = (t) => mv.filter((m) => m.type === t).reduce((a, m) => a + (+m.montant || 0), 0);
-    const verse = sum("VERSEMENT"), envoye = sum("TRANSFERT"), retire = sum("RETRAIT");
+    const tt = c.totaux || {};
+    const verse = +(tt.verse ?? sum("VERSEMENT")), envoye = +(tt.envoye ?? sum("TRANSFERT")), retire = +(tt.retire ?? sum("RETRAIT"));
     const e = { solde: verse - envoye - retire, verse, envoye, plan: c.plan, mv };
     const plan = c.plan;
     if (!plan?.montant) return e;
@@ -325,7 +341,7 @@
     const parPeriode = +plan.montant;
     const periodesVers = (montant) => Math.max(0, Math.ceil(montant / parPeriode));
     const enJours = (p) => (r === "quotidien" ? Math.ceil(p * (plan.jours_ouvres ? 7 / 5 : 1)) : r === "hebdo" ? p * 7 : p * 30);
-    if (e.solde < SEUIL) e.seuilDans = enJours(periodesVers(SEUIL - e.solde));
+    if (e.solde < seuil()) e.seuilDans = enJours(periodesVers(seuil() - e.solde));
     if (plan.objectif) {
       e.objectif = +plan.objectif;
       e.reste = Math.max(0, e.objectif - verse);
@@ -355,7 +371,7 @@
     if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
     for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
     const ep = epargne();
-    if (ep && ep.solde >= SEUIL)
+    if (ep && ep.solde >= seuil())
       h += `<div class="notice info"><b>Votre épargne mise de côté atteint ${F(ep.solde)}.</b> C'est assez pour investir :
         envoyez-la à votre SGI, les ordres seront recalculés. <button class="btn link" data-coffre="transfert">J'ai envoyé à ma SGI</button></div>`;
 
@@ -465,8 +481,8 @@
         <div><div class="lbl">Série en cours</div><b class="num">${pluriel(ep.serie, ep.unite)}</b></div>
         <div><div class="lbl">Prochain versement</div><b>${ep.aFaire ? RYTHMES[r][1] : "à jour ✓"}</b></div>
       </div>
-      <p class="small ${ep.solde >= SEUIL ? "good" : "muted"}">${ep.solde >= SEUIL ? `Prêt à investir : envoyez votre épargne à votre SGI.`
-        : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(SEUIL)} mis de côté, pour limiter les frais).`}</p>
+      <p class="small ${ep.solde >= seuil() ? "good" : "muted"}">${ep.solde >= seuil() ? `Prêt à investir : envoyez votre épargne à votre SGI.`
+        : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(seuil())} mis de côté, pour limiter les frais).`}</p>
       <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
         <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
         ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
@@ -988,8 +1004,7 @@
         toast(`${F(montant)} repris de votre épargne.`);
       } else {
         if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour de l'argent venant d'ailleurs, utilisez « Opération chez ma SGI » → Argent versé à ma SGI.`);
-        await api.addMouvement({ date, type: "TRANSFERT", montant });
-        await api.addOperation({ date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant, note: "Depuis mon épargne" });
+        await api.envoyerSgi(date, montant);                     // une seule transaction : épargne et journal ensemble
         S.ops = await api.operations(S.user.id);
         toast(`${F(montant)} envoyés à votre SGI : vos ordres sont recalculés.`);
       }
@@ -1061,7 +1076,7 @@
   // ---------------------------------------------------------------- démarrage
   async function loadAll() {
     const uid = S.user.id;
-    try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }   // épargne (bientôt dans Supabase)
+    try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }   // épargne : absente si epargne.sql n'est pas installé
     try {                                                              // versions les plus récentes de chaque texte
       const docs = await api.documents();
       S.docs = {};
