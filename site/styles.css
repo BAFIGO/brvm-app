@@ -199,3 +199,22 @@ details[open] > summary.row::after { transform: rotate(90deg); }
 .annonce.maintenance { background: var(--bad-bg); }
 @media (max-width: 991px) { .annonce { margin: 12px 16px 0; } }
 .doc-texte { white-space: pre-wrap; max-height: 50vh; overflow: auto; background: var(--surface-2); padding: 10px 12px; border-radius: 8px; }
+
+/* Finitions : écran squelette, transitions douces (désactivées en « mouvement réduit ») */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.skel { max-width: 960px; margin: 0 auto; display: grid; gap: 12px; }
+.skel-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 10px; }
+.skel-card i { display: block; height: 12px; border-radius: 6px; background: var(--surface-2); width: 100%; }
+.skel-card i.tall { height: 26px; }
+.skel-card .w30 { width: 30%; } .skel-card .w40 { width: 40%; } .skel-card .w55 { width: 55%; }
+.skel-card .w60 { width: 60%; } .skel-card .w70 { width: 70%; } .skel-card .w80 { width: 80%; }
+.skel:not(:has(.skel-card)) { text-align: center; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .skel-card i { animation: skel-pulse 1.2s ease-in-out infinite alternate; }
+  @keyframes skel-pulse { from { opacity: 1; } to { opacity: .45; } }
+  .view.v-in { animation: view-in .15s ease-out both; }
+  @keyframes view-in { from { opacity: 0; } to { opacity: 1; } }
+  .btn { transition: transform .08s ease, background-color .15s ease; }
+  .btn:active:not(:disabled) { transform: scale(.97); }
+  .toast:not([hidden]) { animation: view-in .2s ease-out both; }
+}

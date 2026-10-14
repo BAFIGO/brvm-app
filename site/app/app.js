@@ -275,7 +275,7 @@
       const changed = !fresh || journalChanged(L, c);
       const perf = changed ? {} : c?.performance || {};       // performance du soir : valable pour ce journal-là
       h += `<div class="card kpis">
-        <div class="kpi"><div class="lbl">Valeur du portefeuille</div><div class="val num">${F(L.valeur)}</div></div>
+        <div class="kpi"><div class="lbl">Valeur du portefeuille</div><div class="val num" data-count="${L.valeur ?? ""}">${F(L.valeur)}</div></div>
         <div class="kpi"><div class="lbl">Trésorerie</div><div class="val num">${F(L.cash)}</div></div>
         <div class="kpi"><div class="lbl">Performance</div><div class="val num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
           <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div></div>`;
@@ -359,7 +359,7 @@
     const latent = L.positions.reduce((s, p) => s + (p.pv || 0), 0);
     let h = `<h1 id="h-pf">Portefeuille</h1>
       <div class="card kpis">
-        <div class="kpi"><div class="lbl">Valeur</div><div class="val num">${F(L.valeur)}</div></div>
+        <div class="kpi"><div class="lbl">Valeur</div><div class="val num" data-count="${L.valeur ?? ""}">${F(L.valeur)}</div></div>
         <div class="kpi"><div class="lbl">Trésorerie</div><div class="val num">${F(L.cash)}</div></div>
         <div class="kpi"><div class="lbl">Apports nets</div><div class="val num">${F(L.apports)}</div></div>
         <div class="kpi"><div class="lbl">Plus-value latente</div><div class="val num ${cls(latent)}">${F(latent)}</div></div>
@@ -672,11 +672,28 @@
   // ---------------------------------------------------------------- navigation
   let current = null;
   function tab() { const h = location.hash.slice(1); return TABS.includes(h) ? h : "aujourdhui"; }
+  const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  function countUp(el) {
+    const to = +el.dataset.count;
+    if (CALME || !isFinite(to) || !to) return;
+    const t0 = performance.now(), d = 600;
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = F(to * e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
   function render() {
     const t = tab();
     for (const k of TABS) $("#v-" + k).hidden = k !== t;
     document.querySelectorAll("[data-tab]").forEach((a) => (a.dataset.tab === t ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     VIEWS[t]();
+    if (current !== t) {                                   // transition douce et compteur, sauf « mouvement réduit »
+      const v = $("#v-" + t);
+      v.classList.remove("v-in"); void v.offsetWidth; v.classList.add("v-in");
+      v.querySelectorAll("[data-count]").forEach(countUp);
+    }
     if (current && current !== t) { $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
     current = t;
   }

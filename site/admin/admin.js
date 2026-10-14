@@ -659,7 +659,7 @@
     }
     $("#who").hidden = false; $("#who-email").textContent = moi.email || "";
     if (!moi.permissions?.length) {
-      gate(`<div class="card narrow"><h1>Accès réservé</h1><p>Votre compte n'a aucun rôle d'administration.</p><p><a href="../">Retour à l'application</a></p></div>`);
+      gate(`<div class="card narrow"><h1>Accès réservé</h1><p>Votre compte n'a aucun rôle d'administration.</p><p><a href="../app/">Retour à l'application</a></p></div>`);
       return;
     }
     const aal = await api.aal();
