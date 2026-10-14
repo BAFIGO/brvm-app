@@ -121,6 +121,8 @@
   // ------------------------------------------------------------ animations
   function animate() {
     gsap.registerPlugin(ScrollTrigger);
+    // Téléphone : la barre d'adresse qui apparaît ou disparaît ne doit pas recalculer les animations (petits sauts)
+    ScrollTrigger.config({ ignoreMobileResize: true });
     const mm = gsap.matchMedia();
 
     // Hero : titre mot par mot, puis le reste, puis l'odomètre
@@ -133,17 +135,31 @@
         { y: 0, opacity: 1, duration: 0.6, stagger: 0.08 }, "-=0.45");
     $$(".odo").forEach((el, i) => { el.textContent = "0"; tl.add(() => { el.dataset.started = 1; odometer(el, 0.1 * i); }, 0.5); });
 
-    // Titres de section : mot par mot à l'entrée dans l'écran
+    // Titres de section : mot par mot, rejoué dans les deux sens (en descendant comme en remontant)
     $$(".display").forEach((h) => {
       const ws = split(h);
-      gsap.fromTo(ws, { yPercent: 105 }, { yPercent: 0, duration: 0.7, stagger: 0.04, ease: "power3.out",
-        scrollTrigger: { trigger: h, start: "top 85%", once: true } });
+      const tw = gsap.fromTo(ws, { yPercent: 105 }, { yPercent: 0, duration: 0.7, stagger: 0.04, ease: "power3.out", paused: true });
+      ScrollTrigger.create({ trigger: h, start: "top 88%", end: "bottom 8%",
+        onEnter: () => tw.restart(), onEnterBack: () => tw.restart(),
+        onLeave: () => tw.pause(0), onLeaveBack: () => tw.pause(0) });
     });
 
-    // Apparitions au défilement (groupées)
+    // Apparitions au défilement : depuis le bas en descendant, depuis le haut en remontant ;
+    // un bloc sorti de l'écran se cache pour pouvoir réapparaître
     gsap.set("[data-reveal]", { opacity: 0, y: 28 });
-    ScrollTrigger.batch("[data-reveal]", { start: "top 88%", once: true,
-      onEnter: (els) => gsap.to(els, { opacity: 1, y: 0, duration: 0.7, stagger: 0.08, ease: "power2.out", clearProps: "transform" }) });
+    const montre = (els, dy) => gsap.fromTo(els, { opacity: 0, y: dy }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.07, ease: "power2.out", overwrite: true });
+    const cache = (els, dy) => gsap.set(els, { opacity: 0, y: dy, overwrite: true });
+    ScrollTrigger.batch("[data-reveal]", { start: "top 92%", end: "bottom 8%",
+      onEnter: (els) => montre(els, 28), onEnterBack: (els) => montre(els, -28),
+      onLeave: (els) => cache(els, -28), onLeaveBack: (els) => cache(els, 28) });
+
+    // Épargne : jauge et barre qui se remplissent (dans les deux sens)
+    const fills = $$(".epargne-v .ev-jauge i, .epargne-v .ev-barre i");
+    const remplir = gsap.fromTo(fills, { scaleX: 0 }, { scaleX: 1, duration: 0.9, stagger: 0.15, ease: "power2.out", paused: true });
+    const fab = gsap.fromTo(".ev-fab", { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)", paused: true, delay: 0.5 });
+    ScrollTrigger.create({ trigger: ".epargne-v .ev-grid", start: "top 80%", end: "bottom 10%",
+      onEnter: () => { remplir.restart(); fab.restart(true); }, onEnterBack: () => { remplir.restart(); fab.restart(true); },
+      onLeaveBack: () => { remplir.pause(0); fab.pause(0); } });
 
     // Méthode : bureau = anneau assemblé au défilement (scrub) + étape active ; mobile = assemblage à l'entrée
     draw();
@@ -159,6 +175,20 @@
         onEnter: () => gsap.to(D, { prog: 1, duration: 1.4, ease: "power2.out", onUpdate: draw }) });
     });
   }
+
+  // Après déconnexion : message ; déjà connecté (session Supabase dans ce navigateur) : « Mon espace »
+  try {
+    if (new URLSearchParams(location.search).has("deconnecte")) {
+      const m = $("#v-msg"); m.textContent = "Vous êtes déconnecté. À bientôt !"; m.hidden = false;
+      history.replaceState(null, "", location.pathname + location.hash);
+    }
+    const cle = Object.keys(localStorage).find((k) => /^sb-.+-auth-token$/.test(k));
+    const session = cle && JSON.parse(localStorage.getItem(cle));
+    if (session?.expires_at && session.expires_at * 1000 > Date.now() - 7 * 864e5) {   // jeton renouvelable
+      $("[data-espace]").textContent = "Mon espace";
+      $("[data-espace-cta]").textContent = "Ouvrir mon espace";
+    }
+  } catch (e) { /* stockage indisponible : affichage par défaut */ }
 
   if (ANIM) animate(); else draw();
   stats();
