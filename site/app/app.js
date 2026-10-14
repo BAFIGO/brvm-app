@@ -92,7 +92,7 @@
       onAuth: (cb) => sb.auth.onAuthStateChange((_e, s) => cb(s)),
       login: async (email) => r(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })),
       verify: async (email, token) => r(await sb.auth.verifyOtp({ email, token, type: "email" })),
-      logout: async () => { await sb.auth.signOut(); location.hash = ""; location.reload(); },
+      logout: async () => { await sb.auth.signOut(); location.href = "../?deconnecte=1"; },   // retour à la page d'accueil
       profil: async (uid) => r(await sb.from("profils").select("*").eq("id", uid).maybeSingle()),
       saveProfil: async (uid, p) => r(await sb.from("profils").update(p).eq("id", uid)),
       seance: async () => r(await sb.from("seances").select("*").order("date", { ascending: false }).limit(1))[0] || null,
@@ -125,7 +125,7 @@
       session: async () => { await load(); return { user: { id: "demo", email: data.profil.email } }; },
       onAuth: () => {},
       login: async () => {}, verify: async () => {},
-      logout: async () => { location.href = location.pathname; },
+      logout: async () => { location.href = "../?deconnecte=1"; },
       profil: async () => ({ ...(await load()).profil }),
       saveProfil: async (_u, p) => { Object.assign((await load()).profil, p); },
       seance: async () => (await load()).seance,
@@ -171,7 +171,7 @@
   }
 
   const api = DEMO ? demoApi() : supaApi();
-  const S = { user: null, profil: null, seance: null, prop: null, ops: [], mk: { actions: [], obligations: [], opcvm: [] },
+  const S = { vus: new Set(), user: null, profil: null, seance: null, prop: null, ops: [], mk: { actions: [], obligations: [], opcvm: [] },
               cibles: [], prices: new Map(), names: new Map(), classes: new Map(),
               ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30, perf: 1 } };
 
@@ -735,7 +735,7 @@
     const ends = SERIES.filter(([k]) => has[k]).map(([k, n, col]) => ({ k, n, col, v: pts[k][pts[k].length - 1], yy: y(pts[k][pts[k].length - 1]) })).sort((a, b) => a.yy - b.yy);
     for (let i = 1; i < ends.length; i++) ends[i].yy = Math.max(ends[i].yy, ends[i - 1].yy + 14);
     for (const [k, , col] of SERIES.filter(([k2]) => has[k2]))
-      g += `<path class="line" stroke="${col}" d="${pts[k].map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("")}"/>`;
+      g += `<path class="line" pathLength="1" stroke="${col}" d="${pts[k].map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("")}"/>`;
     g += `<g class="end">${ends.map((e) => `<text x="${Wd - R + 6}" y="${e.yy + 4}"><tspan fill="${e.col}">●</tspan> ${P(e.v)}</text>`).join("")}</g>`;
     g += `<g class="hover" visibility="hidden"><line class="cross" y1="${T}" y2="${Ht - B}"/>${SERIES.filter(([k]) => has[k]).map(([k, , col]) => `<circle class="dot" r="4" fill="${col}" data-k="${k}"/>`).join("")}</g>`;
     const label = `Performance cumulée du ${D(dates[1])} au ${D(dates[dates.length - 1])} : ` + SERIES.filter(([k]) => has[k]).map(([k, n]) => `${n} ${P(pts[k][pts[k].length - 1])}`).join(", ");
@@ -1066,6 +1066,13 @@
     if (current !== t) {                                   // transition douce et compteur, sauf « mouvement réduit »
       const v = $("#v-" + t);
       v.classList.remove("v-in"); void v.offsetWidth; v.classList.add("v-in");
+      // première visite de l'onglet : cartes en cascade, barres et courbes qui se dessinent (une seule fois)
+      v.classList.toggle("cascade", !S.vus.has(t));
+      if (!S.vus.has(t)) {
+        [...v.children].slice(0, 8).forEach((c, i) => c.style.setProperty("--i", i));
+        S.vus.add(t);
+        setTimeout(() => v.classList.remove("cascade"), 1400);   // une saisie ensuite ne rejoue pas l'animation
+      }
       v.querySelectorAll("[data-count]").forEach(countUp);
     }
     if (current && current !== t) { $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }

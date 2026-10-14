@@ -105,3 +105,34 @@ body.vitrine { padding-bottom: 0; overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .js-anim [data-reveal], .js-anim .hero > * { opacity: 1 !important; transform: none !important; }
 }
+
+/* Message après déconnexion */
+.v-msg { max-width: var(--wrap); margin: 12px auto 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-weight: 600;
+  margin-left: max(16px, calc((100% - var(--wrap)) / 2 + var(--gut))); margin-right: max(16px, calc((100% - var(--wrap)) / 2 + var(--gut))); }
+
+/* Épargne mise de côté (coffre) */
+.ev-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 32px; }
+@media (min-width: 900px) { .ev-grid { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 48px; align-items: center; } .ev-barre { grid-column: 1 / -1; } }
+.ev-demo { position: relative; margin: 0; padding: 20px; border-radius: 20px; }
+.ev-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ev-jauge { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; margin: 16px 0 6px; }
+.ev-jauge i { display: block; height: 100%; width: 25%; background: var(--s2); border-radius: 6px; transform-origin: left center; }
+.ev-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 4px; }
+.ev-stats div { display: flex; flex-direction: column; }
+.ev-stats b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.ev-pret { color: var(--good); font-weight: 600; margin-top: 10px; }
+.ev-fab { position: absolute; right: -10px; bottom: 54px; width: 54px; height: 54px; border-radius: 17px; background: var(--accent); color: var(--accent-text);
+  display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
+.ev-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 599px) { .ev-fab { right: 12px; bottom: 12px; } .ev-demo { padding-bottom: 76px; } }
+.ev-demo figcaption { margin-top: 12px; }
+.ev-chemin { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.ev-chemin li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 12px; align-items: start; }
+.ev-chemin p { margin: 2px 0 0; color: var(--muted); }
+.ev-pt { width: 14px; height: 14px; border-radius: 4px; margin-top: 4px; }
+.ev-pt.c3, .ev-barre .c3 { background: var(--s2); }
+.ev-pt.c2, .ev-barre .c2 { background: var(--s3); }
+.ev-pt.c1, .ev-barre .c1 { background: var(--s1); }
+.ev-barre { display: flex; gap: 4px; height: 14px; border-radius: 7px; overflow: hidden; }
+.ev-barre i { display: block; height: 100%; transform-origin: left center; }
+.ev-barre .c3 { flex: 20; } .ev-barre .c2 { flex: 35; } .ev-barre .c1 { flex: 45; }

@@ -24,20 +24,22 @@
   <header class="v-top">
     <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span>BRVM Portefeuille</span></a>
     <nav class="v-nav" aria-label="Sections">
-      <a href="#methode">Méthode</a><a href="#apercu">Aperçu</a><a href="#confiance">Confiance</a>
+      <a href="#methode">Méthode</a><a href="#epargne">Épargne</a><a href="#apercu">Aperçu</a><a href="#confiance">Confiance</a>
     </nav>
-    <a class="btn primary small" href="app/">Ouvrir l'application</a>
+    <a class="btn primary small" href="app/" data-espace>Ouvrir l'application</a>
   </header>
+
+  <p class="v-msg" id="v-msg" role="status" hidden></p>
 
   <main id="main" tabindex="-1">
     <!-- 1. Hero -->
     <section class="hero" aria-labelledby="hero-title">
       <p class="eyebrow">Bourse régionale des valeurs mobilières · UEMOA</p>
       <h1 id="hero-title" class="hero-title">Votre portefeuille BRVM, recalculé chaque soir de séance.</h1>
-      <p class="lead">Après la clôture, l'outil analyse le marché, construit un portefeuille adapté à votre budget et à votre profil de risque,
-        puis vous indique les ordres pour le rejoindre. Vous décidez, vous passez les ordres chez votre SGI.</p>
+      <p class="lead">Mettez de côté à votre rythme, même 1 000 F par jour. Chaque soir de séance, l'outil analyse le marché, construit
+        un portefeuille adapté à votre profil et vous dit quand et quoi acheter. Vous décidez, vous passez les ordres chez votre SGI.</p>
       <div class="cta">
-        <a class="btn primary" href="app/">Créer mon compte</a>
+        <a class="btn primary" href="app/" data-espace-cta>Créer mon compte</a>
         <a class="btn" href="app/?demo=1">Essayer la démo</a>
       </div>
       <dl class="stats" aria-describedby="stats-src">
@@ -52,27 +54,33 @@
     <section id="methode" class="methode" aria-labelledby="methode-title">
       <div class="m-intro" data-reveal>
         <p class="eyebrow">Méthode</p>
-        <h2 id="methode-title" class="display">Quatre étapes, chaque soir, sans intervention de votre part.</h2>
+        <h2 id="methode-title" class="display">Vous épargnez, l'outil fait le reste chaque soir.</h2>
       </div>
       <div class="m-grid">
         <ol class="m-steps">
-          <li class="m-step" data-step="1" data-reveal>
+          <li class="m-step" data-step="0" data-reveal>
             <span class="m-num" aria-hidden="true">01</span>
+            <h3>J'épargne à mon rythme</h3>
+            <p>Chaque jour, chaque semaine ou chaque mois, vous notez l'argent mis de côté en deux gestes. L'application suit votre régularité
+              et vous prévient quand la somme suffit pour investir.</p>
+          </li>
+          <li class="m-step" data-step="1" data-reveal>
+            <span class="m-num" aria-hidden="true">02</span>
             <h3>Collecte de la séance</h3>
             <p>Cours de clôture, volumes, indices BRVM 30 et Composite, obligations cotées et valeurs liquidatives des OPCVM.</p>
           </li>
           <li class="m-step" data-step="2" data-reveal>
-            <span class="m-num" aria-hidden="true">02</span>
+            <span class="m-num" aria-hidden="true">03</span>
             <h3>Analyse et score</h3>
             <p>Chaque titre reçoit un score : tendance, fondamentaux, dividende, valorisation, liquidité. Les titres à éviter sont écartés.</p>
           </li>
           <li class="m-step" data-step="3" data-reveal>
-            <span class="m-num" aria-hidden="true">03</span>
+            <span class="m-num" aria-hidden="true">04</span>
             <h3>Portefeuille cible selon votre profil</h3>
             <p>Le budget est réparti entre actions, OPCVM et obligations, dans les fourchettes de votre profil, avec un montant minimal par ligne pour limiter les frais.</p>
           </li>
           <li class="m-step" data-step="4" data-reveal>
-            <span class="m-num" aria-hidden="true">04</span>
+            <span class="m-num" aria-hidden="true">05</span>
             <h3>Ordres et suivi</h3>
             <p>Vous recevez les achats et ventes pour rejoindre la cible, avec un prix limite. Votre journal d'opérations alimente le suivi de performance face au BRVM 30.</p>
           </li>
@@ -113,7 +121,37 @@
       </div>
     </section>
 
-    <!-- 3. Aperçu des données -->
+    <!-- 3. Épargne mise de côté -->
+    <section id="epargne" class="epargne-v" aria-labelledby="epargne-title">
+      <div data-reveal>
+        <p class="eyebrow">Votre coffre d'épargne</p>
+        <h2 id="epargne-title" class="display">La discipline d'abord, la bourse ensuite.</h2>
+        <p class="lead">Le coffre suit l'argent que vous gardez pour la bourse, où qu'il soit : espèces, banque ou mobile money.
+          L'application ne garde rien : elle vous aide à tenir votre rythme et vous dit quand passer à l'action.</p>
+      </div>
+      <div class="ev-grid">
+        <figure class="card ev-demo" data-reveal aria-labelledby="ev-cap">
+          <div class="ev-head"><b>Mon épargne</b><span class="chip">5 000 F par jour</span></div>
+          <div class="ev-jauge" aria-hidden="true"><i data-fill="25"></i></div>
+          <p class="small">125 000 F épargnés sur un objectif de 500 000 F</p>
+          <div class="ev-stats">
+            <div><span class="small muted">Régularité</span><b>18 / 20 jours</b></div>
+            <div><span class="small muted">Série en cours</span><b>8 jours</b></div>
+          </div>
+          <p class="small ev-pret">Prêt à investir : envoyez votre épargne à votre SGI.</p>
+          <span class="ev-fab" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/></svg></span>
+          <figcaption id="ev-cap" class="small muted">Exemple : un plan de 5 000 F par jour, du lundi au vendredi.</figcaption>
+        </figure>
+        <ol class="ev-chemin" data-reveal>
+          <li><span class="ev-pt c3" aria-hidden="true"></span><div><b>Mis de côté</b><p>« J'ai épargné » : un bouton toujours à portée de pouce.</p></div></li>
+          <li><span class="ev-pt c2" aria-hidden="true"></span><div><b>Chez ma SGI</b><p>Dès 100 000 F, l'application vous invite à envoyer votre épargne à votre SGI ; le dépôt s'inscrit tout seul dans votre journal.</p></div></li>
+          <li><span class="ev-pt c1" aria-hidden="true"></span><div><b>Placé en bourse</b><p>Les ordres sont recalculés pour ce nouvel apport, selon votre profil.</p></div></li>
+        </ol>
+        <div class="ev-barre" data-reveal aria-hidden="true"><i class="c3" data-fill="20"></i><i class="c2" data-fill="35"></i><i class="c1" data-fill="45"></i></div>
+      </div>
+    </section>
+
+    <!-- 4. Aperçu des données -->
     <section id="apercu" class="apercu" aria-labelledby="apercu-title">
       <div data-reveal>
         <p class="eyebrow">Aperçu</p>
@@ -142,6 +180,7 @@
         <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
         <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
         <li data-reveal><h3>Pas de mot de passe</h3><p>Connexion par lien envoyé à votre adresse e-mail, sur téléphone comme sur ordinateur.</p></li>
+        <li data-reveal><h3>L'argent reste chez vous</h3><p>Le coffre d'épargne suit vos sommes mises de côté ; l'application ne détient ni ne déplace aucun argent.</p></li>
         <li data-reveal><h3>Vous gardez la main</h3><p>L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
       </ul>
       <div class="cta cta-end" data-reveal>
