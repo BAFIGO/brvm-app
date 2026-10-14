@@ -8,6 +8,11 @@
   const DEMO = new URLSearchParams(location.search).has("demo");
   const FEES = CFG.fraisCourtage;
   const MIN_LINE = 50000;                                  // même seuil que l'outil (MIN_LINE_FCFA)
+  const SEUIL_DEFAUT = 2 * MIN_LINE;                       // seuil d'investissement : 2 lignes minimum (réglable : console → Moteur)
+  const RYTHMES = { quotidien: ["par jour", "aujourd'hui"], hebdo: ["par semaine", "cette semaine"], mensuel: ["par mois", "ce mois-ci"] };
+  const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
+  const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
+                     FRAIS: "Frais", SOLDE: "Solde relevé" };
   const TABS = ["aujourdhui", "portefeuille", "performance", "marche", "profil"];
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
@@ -101,6 +106,13 @@
       cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
       indices: async () => r(await sb.from("indices").select("date,code,cloture,variation").order("date").limit(3000)),
       annonce: async () => r(await sb.from("annonces").select("message,niveau").order("cree_le", { ascending: false }).limit(1))[0] || null,
+      // Épargne mise de côté (supabase/epargne.sql) : erreur si le fichier n'est pas installé → fonctions masquées
+      coffre: async () => r(await sb.rpc("mon_epargne")),
+      addMouvement: async (m) => r(await sb.rpc("epargne_mouvement", { p_date: m.date, p_type: m.type, p_montant: m.montant,
+                                                                     p_source: m.source || "", p_note: m.note || null })),
+      envoyerSgi: async (date, montant) => r(await sb.rpc("epargne_envoyer_sgi", { p_date: date, p_montant: montant })),
+      savePlan: async (pl) => r(await sb.from("coffre_plans").upsert({ user_id: S.user.id, montant: pl.montant, rythme: pl.rythme,
+                                  jours_ouvres: pl.jours_ouvres, objectif: pl.objectif, debut: pl.debut }, { onConflict: "user_id" })),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
   }
@@ -128,6 +140,31 @@
       table: async (name) => (await load())[names[name]],
       cibles: async (_d, profil) => (await load()).cibles.filter((c) => c.profil === profil),
       indices: async () => (await load()).indices || [],
+      // Épargne mise de côté : en démonstration, un plan quotidien et quelques semaines de versements fictifs
+      coffre: async () => {
+        const d = await load();
+        if (!d.coffre) {
+          const iso = (dt) => new Date(dt.getTime() - dt.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+          const mv = [], src = ["especes", "mobile", "especes", "banque"];
+          let id = 1;
+          for (let j = 34; j >= 1; j--) {
+            const dt = new Date(); dt.setDate(dt.getDate() - j);
+            if ([0, 6].includes(dt.getDay()) || j % 9 === 4) continue;           // week-ends et quelques oublis
+            mv.push({ id: id++, date: iso(dt), type: "VERSEMENT", montant: j % 6 === 0 ? 10000 : 5000, source: src[j % 4] });
+          }
+          const debut = new Date(); debut.setDate(debut.getDate() - 34);
+          d.coffre = { plan: { montant: 5000, rythme: "quotidien", jours_ouvres: true, objectif: 500000, debut: iso(debut) }, mouvements: mv, nextId: id };
+        }
+        return { plan: d.coffre.plan && { ...d.coffre.plan }, mouvements: d.coffre.mouvements.slice(), seuil: 100000 };
+      },
+      addMouvement: async (m) => { const d = await load(); d.coffre.mouvements.push({ ...m, id: d.coffre.nextId++ }); },
+      envoyerSgi: async (date, montant) => {
+        const d = await load();
+        d.coffre.mouvements.push({ id: d.coffre.nextId++, date, type: "TRANSFERT", montant });
+        d.operations.push({ id: nextId++, date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant, note: "Depuis mon épargne" });
+        d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      },
+      savePlan: async (pl) => { (await load()).coffre.plan = { ...pl }; },
       annonce: async () => (await load()).annonce || null,
       documents: async () => (await load()).documents || [],
     };
@@ -141,14 +178,14 @@
   // ---------------------------------------------------------------- journal → positions (même méthode que l'outil)
   function replay(ops) {
     const pos = new Map();
-    let cash = 0, apports = 0;
+    let cash = 0, apports = 0, realise = 0, dividendes = 0, fraisOps = 0;
     const errors = [];
     for (const o of ops) {
       const t = o.ticker || "", q = +o.quantite || 0, p = +o.prix || 0, m = +o.montant || 0;
       const fee = ok(o.frais) ? +o.frais : (o.type === "ACHAT" || o.type === "VENTE" ? q * p * FEES : 0);
       if (o.type === "DEPOT") { cash += m; apports += m; }
       else if (o.type === "RETRAIT") { cash -= m; apports -= m; }
-      else if (o.type === "FRAIS") cash -= m;
+      else if (o.type === "FRAIS") { cash -= m; fraisOps += m; }
       else if (o.type === "ACHAT") {
         cash -= q * p + fee;
         const x = pos.get(t) || { q: 0, cost: 0 };
@@ -157,9 +194,9 @@
         const x = pos.get(t);
         if (!x || x.q < q - 1e-9) { errors.push(`Vente de ${N(q)} ${t} le ${D(o.date)} supérieure à la quantité détenue.`); continue; }
         const avg = x.cost / x.q;
-        cash += q * p - fee; x.q -= q; x.cost -= q * avg;
+        cash += q * p - fee; realise += q * p - fee - q * avg; x.q -= q; x.cost -= q * avg;
         if (x.q < 1e-9) pos.delete(t);
-      } else if (o.type === "DIVIDENDE") cash += ok(o.montant) ? m : q * p;
+      } else if (o.type === "DIVIDENDE") { const d = ok(o.montant) ? m : q * p; cash += d; dividendes += d; }
     }
     const positions = [...pos.entries()].map(([code, x]) => {
       const cours = S.prices.get(code);
@@ -168,7 +205,9 @@
                pv: ok(valeur) ? valeur * (1 - FEES) - x.cost : null, classe: S.classes.get(code) };
     }).sort((a, b) => (b.valeur || 0) - (a.valeur || 0));
     const investi = positions.reduce((s, p) => s + (p.valeur || 0), 0);
-    return { positions, cash, apports, errors, valeur: cash + investi };
+    const latent = positions.reduce((s, p) => s + (p.pv || 0), 0);
+    return { positions, cash, apports, errors, valeur: cash + investi, investi, latent, realise, dividendes, fraisOps,
+             fraisVente: investi * FEES, gainTotal: cash + investi - apports };
   }
 
   // ---------------------------------------------------------------- proposition instantanée (budget × poids cibles)
@@ -254,6 +293,67 @@
       <div class="legend">${keys.map((k) => `<span><i style="background:${COLORS[k]}"></i>${CLASSES[k]} ${Math.round((tot[k] / all) * 100)} %</span>`).join("")}</div>`;
   }
 
+
+  // ---------------------------------------------------------------- épargne mise de côté (coffre) : suivi déclaratif
+  const isoLocal = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
+  const weekday = (iso) => new Date(iso + "T12:00:00").getDay();             // 0 dimanche … 6 samedi
+  // Période d'épargne contenant une date (clé) selon le rythme du plan
+  function periode(iso, r) {
+    if (r === "mensuel") return iso.slice(0, 7);
+    if (r === "hebdo") { const w = weekday(iso); return addDays(iso, w === 0 ? -6 : 1 - w); }
+    return iso;
+  }
+  function prevPeriode(k, r, plan) {
+    if (r === "mensuel") { const [y, m] = k.split("-").map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; }
+    if (r === "hebdo") return addDays(k, -7);
+    let d = addDays(k, -1);
+    while (plan.jours_ouvres && [0, 6].includes(weekday(d))) d = addDays(d, -1);
+    return d;
+  }
+  const seuil = () => +S.coffre?.seuil || SEUIL_DEFAUT;
+  function epargne() {
+    const c = S.coffre;
+    if (!c) return null;
+    const mv = c.mouvements || [];
+    // totaux depuis le début (calculés par la base) ; à défaut, somme des mouvements chargés
+    const sum = (t) => mv.filter((m) => m.type === t).reduce((a, m) => a + (+m.montant || 0), 0);
+    const tt = c.totaux || {};
+    const verse = +(tt.verse ?? sum("VERSEMENT")), envoye = +(tt.envoye ?? sum("TRANSFERT")), retire = +(tt.retire ?? sum("RETRAIT"));
+    const e = { solde: verse - envoye - retire, verse, envoye, plan: c.plan, mv };
+    const plan = c.plan;
+    if (!plan?.montant) return e;
+    const r = plan.rythme || "mensuel", now = today();
+    const faits = new Set(mv.filter((m) => m.type === "VERSEMENT").map((m) => periode(m.date, r)));
+    const cur = periode(now, r);
+    const jourCompte = !(r === "quotidien" && plan.jours_ouvres && [0, 6].includes(weekday(now)));
+    e.aFaire = jourCompte && !faits.has(cur);
+    // régularité sur les dernières périodes écoulées (+ la période en cours si déjà tenue)
+    const n = r === "quotidien" ? 20 : r === "hebdo" ? 12 : 6;
+    const debut = plan.debut || (mv[0]?.date) || now;
+    let k = jourCompte && faits.has(cur) ? cur : prevPeriode(cur, r, plan), tenus = 0, total = 0, serie = 0, enSerie = true;
+    for (let i = 0; i < n && k >= periode(debut, r); i++, k = prevPeriode(k, r, plan)) {
+      total++;
+      if (faits.has(k)) { tenus++; if (enSerie) serie++; } else enSerie = false;
+    }
+    Object.assign(e, { tenus, total, serie, unite: r === "quotidien" ? "jour" : r === "hebdo" ? "semaine" : "mois" });
+    // projections (sommes versées seulement, sans rendement supposé)
+    const parPeriode = +plan.montant;
+    const periodesVers = (montant) => Math.max(0, Math.ceil(montant / parPeriode));
+    const enJours = (p) => (r === "quotidien" ? Math.ceil(p * (plan.jours_ouvres ? 7 / 5 : 1)) : r === "hebdo" ? p * 7 : p * 30);
+    if (e.solde < seuil()) e.seuilDans = enJours(periodesVers(seuil() - e.solde));
+    if (plan.objectif) {
+      e.objectif = +plan.objectif;
+      e.reste = Math.max(0, e.objectif - verse);
+      e.objectifLe = e.reste ? addDays(now, enJours(periodesVers(e.reste))) : null;
+    }
+    return e;
+  }
+  const delai = (j) => (j <= 1 ? "demain" : j < 14 ? `dans ${j} jours` : j < 60 ? `dans ${Math.round(j / 7)} semaines` : `dans ${Math.round(j / 30)} mois`);
+  // Montant à investir : saisi à la main, ou automatique (mis de côté + total chez ma SGI)
+  function budgetAuto() { const L = replay(S.ops); return Math.max(0, L.valeur) + (epargne()?.solde || 0); }
+  const budgetActuel = () => (S.coffre && S.profil?.budget_mode === "auto" ? budgetAuto() : +S.profil?.budget || 0);
+
   // ---------------------------------------------------------------- vues
   function vAujourdhui() {
     const v = $("#v-aujourdhui");
@@ -268,15 +368,19 @@
     }
     h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}</p>`;
     const alertes = [...L.errors, ...(fresh && c?.alertes ? c.alertes : [])];
-    if (L.cash < -1) alertes.unshift("Trésorerie négative : enregistrez vos dépôts d'espèces pour des calculs justes.");
+    if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
     for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
+    const ep = epargne();
+    if (ep && ep.solde >= seuil())
+      h += `<div class="notice info"><b>Votre épargne mise de côté atteint ${F(ep.solde)}.</b> C'est assez pour investir :
+        envoyez-la à votre SGI, les ordres seront recalculés. <button class="btn link" data-coffre="transfert">J'ai envoyé à ma SGI</button></div>`;
 
     if (hasPf) {
       const changed = !fresh || journalChanged(L, c);
       const perf = changed ? {} : c?.performance || {};       // performance du soir : valable pour ce journal-là
       h += `<div class="card kpis">
-        <div class="kpi"><div class="lbl">Valeur du portefeuille</div><div class="val num" data-count="${L.valeur ?? ""}">${F(L.valeur)}</div></div>
-        <div class="kpi"><div class="lbl">Trésorerie</div><div class="val num">${F(L.cash)}</div></div>
+        <div class="kpi"><div class="lbl">Total chez ma SGI</div><div class="val num" data-count="${L.valeur ?? ""}">${F(L.valeur)}</div></div>
+        <div class="kpi"><div class="lbl">Disponible chez ma SGI</div><div class="val num">${F(L.cash)}</div></div>
         <div class="kpi"><div class="lbl">Performance</div><div class="val num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
           <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div></div>`;
       const inst = changed ? instantOrders(L) : null;
@@ -286,7 +390,7 @@
       h += `<div class="card"><h2>Ordres proposés</h2>`;
       if (!ordres.length) {
         h += investi < 0.5 && L.cash > MIN_LINE
-          ? `<p>Aucun ordre calculable pour l'instant avec votre trésorerie de ${F(L.cash)}. Vérifiez votre budget et votre profil, ou revenez après le calcul du soir.</p>`
+          ? `<p>Aucun ordre calculable pour l'instant avec votre disponible de ${F(L.cash)}. Vérifiez votre montant à investir et votre profil, ou revenez après le calcul du soir.</p>`
           : `<p>Rien à faire pour l'instant : votre portefeuille est proche de sa cible.</p>`;
       } else {
         h += `<p class="small muted">Pour rejoindre votre portefeuille cible (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p><ul class="list">`;
@@ -307,13 +411,16 @@
         h += `<div class="card"><h2>Votre portefeuille cible</h2>${classBar(lignes)}
           <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}</p></div>`;
     } else {
-      const budget = +S.profil?.budget || 0;
+      const auto = S.coffre && S.profil?.budget_mode === "auto";
+      const budget = budgetActuel();
       const nightly = fresh && c?.proposition && !c.positions?.length && Math.round(c.proposition.base) === Math.round(budget)
         && c.profil === S.profil?.profil ? c.proposition : null;
       const e = nightly ? { lines: nightly.lignes, reliquat: nightly.reliquat, rdt: nightly.rendement_attendu } : estimate(budget);
       h += `<div class="card"><h2>Votre portefeuille proposé</h2>
         <form id="f-budget" class="grid2" novalidate>
-          <label>Budget à investir (F)<input name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${budget || ""}"></label>
+          ${auto ? `<div><div class="lbl small muted" style="font-weight:600">Montant à investir (automatique)</div><div class="val num" style="font-size:1.2rem;font-weight:700;margin-top:10px">${F(budget)}</div>
+            <a class="small" href="#profil">Changer de mode</a></div>`
+          : `<label>Montant à investir (F)<input name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${budget || ""}"></label>`}
           <label>Profil<select name="profil">${Object.entries(PROFILS).map(([k, p]) =>
             `<option value="${k}"${S.profil?.profil === k ? " selected" : ""}>${p.t}</option>`).join("")}</select></label>
         </form>`;
@@ -332,39 +439,113 @@
         S.lines = e.lines;
       }
       h += `<div class="notice info small">Pour suivre votre portefeuille, enregistrez d'abord votre dépôt chez votre SGI,
-        puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer un dépôt</button></div></div>`;
+        puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer l'argent versé à ma SGI</button></div></div>`;
     }
     h += `<p class="small muted">Outil d'aide à la décision, ce n'est pas un conseil en investissement. Données de marché : BRVM.</p>`;
     v.innerHTML = h;
     const fb = $("#f-budget", v);
     if (fb) {
       const save = async () => {
-        const budget = Math.max(0, +fb.budget.value || 0), profil = fb.profil.value;
+        const profil = fb.profil.value, upd = fb.budget ? { budget: Math.max(0, +fb.budget.value || 0), profil } : { profil };
         try {
-          await api.saveProfil(S.user.id, { budget, profil });
-          Object.assign(S.profil, { budget, profil });
+          await api.saveProfil(S.user.id, upd);
+          Object.assign(S.profil, upd);
           S.cibles = await api.cibles(S.seance.date, profil);
           vAujourdhui();
         } catch (err) { toast("Enregistrement impossible : " + err.message); }
       };
-      fb.budget.addEventListener("change", save);
+      fb.budget?.addEventListener("change", save);
       fb.profil.addEventListener("change", save);
       fb.addEventListener("submit", (ev) => { ev.preventDefault(); save(); });
     }
   }
 
+  const pluriel = (n, u) => `${n} ${u === "mois" ? "mois" : u + (n > 1 ? "s" : "")}`;
+  function carteEpargne(ep) {
+    const pl = ep.plan, r = pl?.rythme;
+    let h = `<div class="card epargne" id="mon-epargne"><div class="ep-head"><h2>Mon épargne</h2>
+      ${pl?.montant ? `<span class="chip">${F(pl.montant)} ${RYTHMES[r][0]}</span>` : ""}</div>`;
+    if (!pl?.montant) {
+      return h + `<p>Fixez-vous un rythme (par jour, par semaine ou par mois) : l'application vous aide à le tenir et vous dit quand investir.</p>
+        <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="plan">Créer mon plan d'épargne</button>
+        <button class="btn" data-coffre="verser">J'ai épargné</button></div></div>`;
+    }
+    if (ep.objectif) {
+      const pc = Math.min(100, (100 * ep.verse) / ep.objectif);
+      h += `<div class="jauge" role="img" aria-label="${Math.round(pc)} % de l'objectif"><i style="width:${pc.toFixed(1)}%"></i></div>
+        <p class="small">${F(ep.verse)} épargnés sur un objectif de ${F(ep.objectif)}${ep.objectifLe ? ` · atteint vers le ${D(ep.objectifLe)} à ce rythme` : " · objectif atteint !"}</p>`;
+    }
+    h += `<div class="ep-stats">
+        <div><div class="lbl">Mis de côté</div><b class="num">${F(ep.solde)}</b></div>
+        <div><div class="lbl">Régularité</div><b class="num">${ep.tenus} / ${pluriel(ep.total, ep.unite)}</b></div>
+        <div><div class="lbl">Série en cours</div><b class="num">${pluriel(ep.serie, ep.unite)}</b></div>
+        <div><div class="lbl">Prochain versement</div><b>${ep.aFaire ? RYTHMES[r][1] : "à jour ✓"}</b></div>
+      </div>
+      <p class="small ${ep.solde >= seuil() ? "good" : "muted"}">${ep.solde >= seuil() ? `Prêt à investir : envoyez votre épargne à votre SGI.`
+        : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(seuil())} mis de côté, pour limiter les frais).`}</p>
+      <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
+        <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
+        ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
+    const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
+    if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
+        <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
+        <div class="sub">${D(m.date)}${m.source ? " · " + esc(SOURCES[m.source] || m.source) : ""}</div></div>
+        <div class="right num ${m.type === "VERSEMENT" ? "good" : ""}">${m.type === "VERSEMENT" ? "+" : "−"}${F(m.montant)}</div></li>`).join("")}</ul></details>`;
+    return h + `</div>`;
+  }
+  function aideGain() {
+    const L = replay(S.ops), ligne = (t, v, cl = "") => `<tr class="${cl}"><th scope="row">${t}</th><td class="num ${cls(v)}">${v > 0 ? "+" : ""}${F(v)}</td></tr>`;
+    showInfo("Comprendre mon gain", `<p>Deux chiffres répondent à deux questions différentes :</p>
+      <ul class="small"><li><b>Gain si je vendais aujourd'hui</b> : seulement les titres que vous avez encore, frais de vente déduits.</li>
+      <li><b>Gain total depuis le début</b> : tout ce que votre argent a rapporté, dividendes et titres déjà vendus compris.</li></ul>
+      <table class="decomp"><tbody>
+        ${ligne("Gain si je vendais aujourd'hui", L.latent)}
+        ${L.investi > 0 ? ligne(`+ frais de vente estimés (${nf1.format(FEES * 100)} %), pas encore payés`, L.fraisVente) : ""}
+        ${ligne("+ dividendes reçus", L.dividendes)}
+        ${ligne("+ résultat des titres déjà vendus", L.realise)}
+        ${L.fraisOps ? ligne("− autres frais", -L.fraisOps) : ""}
+        ${ligne("= Gain total depuis le début", L.gainTotal, "tot")}
+      </tbody></table>
+      <p class="small muted">Vérification : total chez ma SGI ${F(L.valeur)} − total envoyé à ma SGI ${F(L.apports)} = ${F(L.gainTotal)}.
+        Les frais d'achat sont déjà déduits dans les deux chiffres.</p>
+      <p class="small">La page <b>Performance</b> montre ce même gain total, mais sur la période choisie (une séance, un mois…).</p>`);
+  }
+  function showInfo(title, html) {
+    $("#dlg-info-title").textContent = title;
+    $("#dlg-info-body").innerHTML = html;
+    $("#dlg-info").showModal();
+  }
+
   function vPortefeuille() {
     const v = $("#v-portefeuille");
     const L = replay(S.ops);
-    const latent = L.positions.reduce((s, p) => s + (p.pv || 0), 0);
+    const ep = epargne(), cote = ep ? Math.max(0, ep.solde) : 0;
+    const total = cote + Math.max(0, L.cash) + L.investi;
+    const seg = (v, col) => (total > 0 && v > 0 ? `<i style="width:${(100 * v / total).toFixed(2)}%;background:${col}"></i>` : "");
     let h = `<h1 id="h-pf">Portefeuille</h1>
-      <div class="card kpis">
-        <div class="kpi"><div class="lbl">Valeur</div><div class="val num" data-count="${L.valeur ?? ""}">${F(L.valeur)}</div></div>
-        <div class="kpi"><div class="lbl">Trésorerie</div><div class="val num">${F(L.cash)}</div></div>
-        <div class="kpi"><div class="lbl">Apports nets</div><div class="val num">${F(L.apports)}</div></div>
-        <div class="kpi"><div class="lbl">Plus-value latente</div><div class="val num ${cls(latent)}">${F(latent)}</div></div>
+      <div class="card argent">
+        <div class="lbl">Mon argent pour la bourse</div><div class="val num big" data-count="${total}">${F(total)}</div>
+        <div class="bar3" aria-hidden="true">${seg(cote, "var(--s2)")}${seg(Math.max(0, L.cash), "var(--s3)")}${seg(L.investi, "var(--s1)")}</div>
+        <ul class="legende">
+          ${ep ? `<li><span class="pt" style="background:var(--s2)"></span><span>Mis de côté</span><b class="num">${F(cote)}</b></li>` : ""}
+          <li><span class="pt" style="background:var(--s3)"></span><span>Disponible chez ma SGI</span><b class="num">${F(L.cash)}</b></li>
+          <li><span class="pt" style="background:var(--s1)"></span><span>Placé en bourse</span><b class="num">${F(L.investi)}</b></li>
+        </ul>
+        <details class="aide"><summary>Que veulent dire ces montants ?</summary><dl>
+          ${ep ? `<dt>Mis de côté</dt><dd>L'argent que vous gardez pour la bourse (espèces, banque, mobile money), pas encore envoyé à votre SGI.</dd>` : ""}
+          <dt>Disponible chez ma SGI</dt><dd>L'argent déjà envoyé à votre SGI, prêt pour vos prochains achats.</dd>
+          <dt>Placé en bourse</dt><dd>Ce que valent vos actions, obligations et OPCVM au cours de la dernière séance.</dd>
+          <dt>Total chez ma SGI</dt><dd>Disponible + placé en bourse : ${F(L.valeur)}.</dd></dl></details>
       </div>
-      <div class="actions"><button class="btn primary" data-op="">Nouvelle opération</button></div>`;
+      <div class="card kpis">
+        <div class="kpi"><div class="lbl">Total envoyé à ma SGI</div><div class="val num">${F(L.apports)}</div><div class="small muted">dépôts moins retraits</div></div>
+        <div class="kpi"><div class="lbl">Gain total depuis le début</div><div class="val num ${cls(L.gainTotal)}">${L.gainTotal > 0 ? "+" : ""}${F(L.gainTotal)}</div><div class="small muted">dividendes et ventes compris</div></div>
+        <div class="kpi"><div class="lbl">Gain si je vendais aujourd'hui</div><div class="val num ${cls(L.latent)}">${L.latent > 0 ? "+" : ""}${F(L.latent)}</div><div class="small muted">titres détenus, frais de vente déduits</div></div>
+        <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
+      </div>`;
+    if (ep) h += carteEpargne(ep);
+    h += `
+      <div class="actions"><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
     h += `<div class="card"><h2>Positions</h2>`;
     if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
@@ -377,7 +558,7 @@
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} × PRU ${F(p.pru)} ${chip(d)}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
-      h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}, net des frais de vente estimés.</p>`;
+      h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
     }
     h += `</div><div class="card"><h2>Journal des opérations</h2>`;
     if (!S.ops.length) h += `<p class="muted">Aucune opération enregistrée.</p>`;
@@ -385,13 +566,14 @@
       h += `<ul class="list">`;
       for (const o of [...S.ops].reverse()) {
         const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
-        h += `<li><div class="main"><div class="name">${esc(o.type.charAt(0) + o.type.slice(1).toLowerCase())} ${esc(o.ticker || "")}</div>
+        h += `<li><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker || "")}</div>
           <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
           <div class="right num">${what}<div><button class="btn link small" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
       }
       h += `</ul><p class="small muted">Une erreur de saisie se corrige en supprimant la ligne, jamais par une opération inverse.</p>`;
     }
     v.innerHTML = h + `</div>`;
+    $("#gain-aide", v).addEventListener("click", aideGain);
   }
 
   function vMarche() {
@@ -446,13 +628,30 @@
     $("#mk-more", v)?.addEventListener("click", () => { u.mkShow += 30; vMarche(); });
   }
 
+  function formPlan(pl) {
+    return `<form id="f-plan" class="card" novalidate><h2>Mon plan d'épargne</h2>
+      <p class="small muted">L'argent reste chez vous (espèces, banque, mobile money) : l'application vous aide seulement à suivre votre régularité.</p>
+      <div class="grid2"><label>Montant (F)<input name="montant" type="number" min="0" step="500" inputmode="numeric" value="${pl.montant || ""}" placeholder="ex. 5000"></label>
+        <label>Rythme<select name="rythme">${Object.entries({ quotidien: "Chaque jour", hebdo: "Chaque semaine", mensuel: "Chaque mois" })
+          .map(([k, t]) => `<option value="${k}"${(pl.rythme || "mensuel") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label></div>
+      <label class="switch" id="pl-ouvres"><input type="checkbox" name="jours_ouvres"${pl.jours_ouvres !== false ? " checked" : ""}> Du lundi au vendredi seulement</label>
+      <label>Objectif à atteindre (F, facultatif)<input name="objectif" type="number" min="0" step="10000" inputmode="numeric" value="${pl.objectif || ""}" placeholder="ex. 500000"></label>
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer mon plan</button></div></form>`;
+  }
+
   function vProfil() {
     const v = $("#v-profil"), p = S.profil || {};
     v.innerHTML = `<h1 id="h-pr">Profil</h1>
       <form id="f-profil" class="card" novalidate>
         <p class="muted small">Connecté avec <b>${esc(S.user.email || p.email || "")}</b></p>
-        <label for="pr-budget">Budget à investir (F)</label>
-        <input id="pr-budget" name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${p.budget ?? ""}">
+        ${S.coffre ? `<fieldset class="fs"><legend>Montant à investir</legend><div class="radios">
+          <label><input type="radio" name="budget_mode" value="manuel"${p.budget_mode !== "auto" ? " checked" : ""}><span><b>Je le saisis</b><br>
+            <span class="small muted">Un montant fixe, que vous changez quand vous voulez.</span></span></label>
+          <label><input type="radio" name="budget_mode" value="auto"${p.budget_mode === "auto" ? " checked" : ""}><span><b>Automatique : ${F(budgetAuto())}</b><br>
+            <span class="small muted">Mis de côté + total chez ma SGI : il grandit avec votre épargne.</span></span></label></div></fieldset>` : ""}
+        <div id="pr-budget-w"${S.coffre && p.budget_mode === "auto" ? " hidden" : ""}>
+          <label for="pr-budget">${S.coffre ? "Montant saisi (F)" : "Montant à investir (F)"}</label>
+          <input id="pr-budget" name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${p.budget ?? ""}"></div>
         <fieldset style="border:0;padding:0;margin:12px 0 0"><legend style="font-weight:600;font-size:.9rem">Profil de risque</legend>
           <div class="radios">${Object.entries(PROFILS).map(([k, x]) => `<label><input type="radio" name="profil" value="${k}"${p.profil === k ? " checked" : ""}>
             <span><b>${x.t}</b><br><span class="small muted">${x.d}</span></span></label>`).join("")}</div>
@@ -461,6 +660,7 @@
           Recevoir ma proposition par e-mail chaque soir de séance</label>
         <div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form>
+      ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
       <div class="card">
         <h2>À propos</h2>
         <p class="small">Chaque soir de séance, l'outil analyse les actions, obligations et OPCVM cotés à la BRVM, puis calcule
@@ -476,6 +676,7 @@
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const upd = { budget: Math.max(0, +f.budget.value || 0), profil: f.profil.value || "equilibre", recevoir_email: f.recevoir_email.checked };
+      if (S.coffre) upd.budget_mode = f.budget_mode.value;
       try {
         await api.saveProfil(S.user.id, upd);
         const changed = upd.profil !== S.profil.profil;
@@ -486,6 +687,21 @@
     });
     $("#logout", v).addEventListener("click", () => api.logout());
     $("#voir-cgu", v)?.addEventListener("click", () => showCgu(S.docs.cgu, false));
+    f.querySelectorAll('[name="budget_mode"]').forEach((r) => r.addEventListener("change", () => ($("#pr-budget-w", v).hidden = f.budget_mode.value === "auto")));
+    const fp = $("#f-plan", v);
+    if (fp) {
+      const sync = () => ($("#pl-ouvres", fp).hidden = fp.rythme.value !== "quotidien");
+      fp.rythme.addEventListener("change", sync); sync();
+      fp.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const montant = Math.round(+fp.montant.value || 0);
+        if (montant <= 0) { toast("Indiquez le montant à mettre de côté."); return; }
+        const plan = { montant, rythme: fp.rythme.value, jours_ouvres: fp.jours_ouvres.checked, objectif: Math.round(+fp.objectif.value || 0) || null,
+                       debut: S.coffre.plan?.debut || today() };
+        try { await api.savePlan(plan); S.coffre.plan = plan; toast("Plan d'épargne enregistré."); vProfil(); }
+        catch (e) { toast("Enregistrement impossible : " + e.message); }
+      });
+    }
   }
 
   // ---------------------------------------------------------------- performance quotidienne
@@ -555,7 +771,8 @@
         </div>
         <p class="small" style="margin-top:10px">${ok(pf) && ok(b30) ? `Écart avec le BRVM 30 : <b class="${cls(pf - b30)}">${(pf - b30 > 0 ? "+" : "") + nf1.format((pf - b30) * 100)} points</b>` + (pf >= b30 ? " — vous faites mieux que le marché." : " — le marché fait mieux sur cette période.") : ""}</p>
         ${!ok(b30) || !ok(bc) ? `<p class="small muted">« – » : indice pas encore disponible pour ces séances.</p>` : ""}
-        <p class="small muted">Hors dépôts et retraits : seule l'évolution des cours, des dividendes et des frais compte.</p></div>`;
+        <p class="small muted">Gain sur la période choisie, hors dépôts et retraits : évolution des cours, dividendes et frais.
+          À ne pas confondre avec le « gain si je vendais aujourd'hui » de Portefeuille.</p></div>`;
     const chartRows = rows.length >= 5 ? rows : hist.slice(-21);
     const ch = perfChart(chartRows, ix);
     h += `<div class="card"><h2>Évolution comparée</h2>
@@ -592,38 +809,127 @@
 
   const VIEWS = { aujourdhui: vAujourdhui, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
-  // ---------------------------------------------------------------- saisie d'une opération
+  // ---------------------------------------------------------------- saisie d'une opération chez la SGI
+  // Étapes : que s'est-il passé ? → catégorie → titre (liste « code – nom ») → quantité, prix, total en direct.
   const dlg = $("#dlg-op"), fop = $("#f-op");
+  const AUTRE = "__autre__";
+  const catDe = (code) => { const c = S.classes.get(code) || ""; return c === "actions" ? "actions" : c === "obligations" ? "obligations" : c ? "opcvm" : null; };
+  const TABLES = { actions: "actions", obligations: "obligations", opcvm: "opcvm" };
+  const prixDe = (r, cat) => (cat === "actions" ? r.cours : cat === "obligations" ? r.prix : r.vl);
+  const court = (t, n = 34) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  function libelle(r, cat) {
+    const nom = r.nom || r.code;
+    if (cat === "actions") return `${r.code} – ${court(nom, 30)}`;
+    if (cat === "obligations") return `${court(nom, 30)} – ${r.code}`;
+    return `${court(nom, 26)} – ${court(r.gestionnaire || r.code, 14)}`;
+  }
+  const opType = () => fop.querySelector('[name="type"]:checked')?.value || "ACHAT";
+  const opCat = () => fop.querySelector('[name="cat"]:checked')?.value || "actions";
+  function remplirTitres(garder) {
+    const t = opType(), q = $("#op-q").value.trim().toLowerCase(), sel = $("#op-titre");
+    const match = (txt) => !q || txt.toLowerCase().includes(q);
+    let html = `<option value="">Choisir un titre…</option>`, n = 0;
+    if (t === "ACHAT") {
+      const cat = opCat(), rows = (S.mk[TABLES[cat]] || []).filter((r) => r.code && match(libelle(r, cat) + " " + r.code));
+      const tri = cat === "actions" ? (a, b) => a.code.localeCompare(b.code) : (a, b) => (a.nom || "").localeCompare(b.nom || "");
+      const prop = rows.filter((r) => BUY.includes(r.decision)).sort((a, b) => (b.score || 0) - (a.score || 0));
+      const opt = (r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))}</option>`;
+      if (prop.length) html += `<optgroup label="Proposés ce soir">${prop.map(opt).join("")}</optgroup>`;
+      html += `<optgroup label="Tous les titres">${rows.slice().sort(tri).map(opt).join("")}</optgroup>`;
+      n = rows.length;
+      $('[data-for="recherche"]', fop).hidden = cat === "actions";            // ~48 actions : la liste suffit
+    } else {
+      // vente, dividende : seulement les titres détenus, regroupés par catégorie
+      const pos = replay(S.ops).positions;
+      for (const [cat, nom] of [["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]]) {
+        const rows = pos.filter((p) => (catDe(p.code) || "actions") === cat).map((p) => ({ ...(S.mk[TABLES[cat]] || []).find((r) => r.code === p.code), code: p.code, nom: S.names.get(p.code) || p.code, q: p.quantite }))
+          .filter((r) => match(libelle(r, cat)));
+        if (rows.length) html += `<optgroup label="${nom}">${rows.map((r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))} (${N(r.q)})</option>`).join("")}</optgroup>`;
+        n += rows.length;
+      }
+      $('[data-for="recherche"]', fop).hidden = n <= 30 && !q;
+    }
+    html += `<option value="${AUTRE}">Autre titre (saisir le code)</option>`;
+    sel.innerHTML = html;
+    if (garder && [...sel.options].some((o) => o.value === garder)) sel.value = garder;
+    else if (garder) { sel.value = AUTRE; fop.autre.value = garder; }
+    infoTitre(false);
+  }
+  function infoTitre(prefill) {
+    const t = opType(), code = fop.ticker.value, info = $("#op-info");
+    $('[data-for="autre"]', fop).hidden = code !== AUTRE;
+    if (!code || code === AUTRE) { info.textContent = ""; total(); return; }
+    const cat = catDe(code) || opCat(), r = (S.mk[TABLES[cat]] || []).find((x) => x.code === code);
+    const px = r ? prixDe(r, cat) : null, held = replay(S.ops).positions.find((p) => p.code === code)?.quantite || 0;
+    const parts = [];
+    if (ok(px)) parts.push(`${cat === "opcvm" ? "Valeur liquidative" : cat === "obligations" ? "Prix (coupon couru compris)" : "Cours"} de la séance du ${D(S.seance?.date)} : ${F(px)}`);
+    if (r?.decision) parts.push(`analyse : ${r.decision}`);
+    if (held) parts.push(`vous en détenez ${N(held)}`);
+    info.textContent = parts.join(" · ");
+    if (prefill && ok(px) && (t === "ACHAT" || t === "VENTE") && (!fop.prix.value || fop.dataset.prixAuto === "1")) { fop.prix.value = px; fop.dataset.prixAuto = "1"; }
+    if (t === "VENTE" && held && !fop.quantite.value) fop.quantite.value = held;
+    total();
+  }
+  function total() {
+    const t = opType(), out = $("#op-total");
+    const q = +fop.quantite.value || 0, p = +fop.prix.value || 0, brut = q * p;
+    const fee = fop.frais.value !== "" ? +fop.frais.value : brut * FEES, dispo = replay(S.ops).cash;
+    out.className = "op-total";
+    if (t === "ACHAT" && brut > 0) {
+      out.innerHTML = `${N(q)} × ${F(p)} = ${F(brut)} + frais ${F(fee)} = <b>${F(brut + fee)}</b><br><span class="small">Disponible chez ma SGI : ${F(dispo)}</span>`;
+      if (brut + fee > dispo + 1) { out.classList.add("warn"); out.innerHTML += `<br><span class="small">Le disponible ne suffit pas : enregistrez d'abord l'argent versé à votre SGI.</span>`; }
+    } else if (t === "VENTE" && brut > 0) out.innerHTML = `Vous recevez environ <b>${F(brut - fee)}</b> (${F(brut)} − frais ${F(fee)})`;
+    else out.textContent = "";
+  }
   function syncOpForm() {
-    const t = fop.type.value;
-    const titre = ["ACHAT", "VENTE", "DIVIDENDE"].includes(t), montant = !["ACHAT", "VENTE"].includes(t);
+    const t = opType();
+    const titre = ["ACHAT", "VENTE", "DIVIDENDE"].includes(t);
     fop.querySelectorAll('[data-for="titre"]').forEach((e) => (e.hidden = !titre));
-    fop.querySelectorAll('[data-for="montant"]').forEach((e) => (e.hidden = !montant));
-    fop.querySelectorAll('[data-for="titre"] input[name="quantite"], [data-for="titre"] input[name="prix"], [data-for="titre"] input[name="frais"]')
-      .forEach((e) => (e.closest("label").hidden = !titre || t === "DIVIDENDE"));
+    $('[data-for="cat"]', fop).hidden = t !== "ACHAT";
+    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !["ACHAT", "VENTE"].includes(t)));
+    $('[data-for="montant"]', fop).hidden = ["ACHAT", "VENTE"].includes(t);
+    $('[data-for="vers-epargne"]', fop).hidden = !(t === "RETRAIT" && S.coffre);
+    if (titre) remplirTitres(fop.ticker.value || null);
+    total();
   }
   function openOp(pre = {}) {
     fop.reset();
+    delete fop.dataset.dupOk; delete fop.dataset.prixAuto;
     fop.date.value = today();
-    for (const [k, val] of Object.entries(pre)) if (fop[k] && val !== null && val !== undefined) fop[k].value = val;
     $(".msg", fop).textContent = "";
-    $("#dlg-op-title").textContent = pre.type ? "Enregistrer l'opération" : "Nouvelle opération";
+    $("#op-q").value = "";
+    const t = pre.type || "ACHAT";
+    fop.querySelector(`[name="type"][value="${t}"]`).checked = true;
+    const cat = (pre.ticker && catDe(pre.ticker)) || S.ui.opCat || "actions";
+    fop.querySelector(`[name="cat"][value="${cat}"]`).checked = true;
+    $("#dlg-op-title").textContent = "Opération chez ma SGI";
+    fop.ticker.innerHTML = "";
     syncOpForm();
+    if (pre.ticker) remplirTitres(pre.ticker);
+    for (const k of ["quantite", "prix", "montant"]) if (pre[k] !== undefined && pre[k] !== null) fop[k].value = pre[k];
+    infoTitre(!pre.prix);
     dlg.showModal();
   }
-  fop.type.addEventListener("change", syncOpForm);
+  fop.querySelectorAll('[name="type"]').forEach((r) => r.addEventListener("change", () => { fop.ticker.value = ""; fop.quantite.value = ""; fop.prix.value = ""; syncOpForm(); }));
+  fop.querySelectorAll('[name="cat"]').forEach((r) => r.addEventListener("change", () => { S.ui.opCat = opCat(); $("#op-q").value = ""; remplirTitres(null); }));
+  $("#op-q").addEventListener("input", () => remplirTitres(fop.ticker.value || null));
+  fop.ticker.addEventListener("change", () => { fop.quantite.value = opType() === "VENTE" ? "" : fop.quantite.value; infoTitre(true); });
+  fop.prix.addEventListener("input", () => { delete fop.dataset.prixAuto; total(); });
+  fop.quantite.addEventListener("input", total);
+  fop.frais.addEventListener("input", total);
   fop.addEventListener("submit", async (ev) => {
     if (ev.submitter?.value !== "ok") return;                    // « Annuler » ferme simplement la fenêtre
     ev.preventDefault();
-    const t = fop.type.value, num = (n) => (fop[n].value === "" ? null : +fop[n].value);
-    const op = { date: fop.date.value, type: t, ticker: (fop.ticker.value || "").trim().toUpperCase() || null,
+    const t = opType(), num = (n) => (fop[n].value === "" ? null : +fop[n].value);
+    const code = fop.ticker.value === AUTRE ? (fop.autre.value || "").trim().toUpperCase() : fop.ticker.value;
+    const op = { date: fop.date.value, type: t, ticker: code || null,
                  quantite: null, prix: null, frais: null, montant: null, note: fop.note.value.trim() || null };
     const err = (m) => { $(".msg", fop).textContent = m; };
     if (!op.date) return err("Indiquez la date.");
     if (op.date > today()) return err("La date ne peut pas être dans le futur.");
     if (t === "ACHAT" || t === "VENTE") {
       Object.assign(op, { quantite: num("quantite"), prix: num("prix"), frais: num("frais") });
-      if (!op.ticker) return err("Indiquez le code du titre.");
+      if (!op.ticker) return err("Choisissez le titre.");
       if (!(op.quantite > 0) || !(op.prix > 0)) return err("Indiquez une quantité et un prix positifs.");
       if (t === "VENTE") {
         const held = replay(S.ops).positions.find((p) => p.code === op.ticker)?.quantite || 0;
@@ -632,15 +938,19 @@
     } else {
       op.montant = num("montant");
       if (!(op.montant > 0)) return err("Indiquez un montant positif.");
-      if (t === "DIVIDENDE" && !op.ticker) return err("Indiquez le code du titre qui a versé le dividende.");
+      if (t === "DIVIDENDE" && !op.ticker) return err("Choisissez le titre qui a versé le dividende ou le coupon.");
       if (t !== "DIVIDENDE") op.ticker = null;
     }
     const dup = S.ops.some((o) => o.date === op.date && o.type === op.type && (o.ticker || null) === op.ticker
       && +o.quantite === +op.quantite && +o.prix === +op.prix && +o.montant === +op.montant);
-    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; return err("Une opération identique existe déjà ce jour-là. Enregistrer quand même ?"); }
+    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; return err("Une opération identique existe déjà ce jour-là. Appuyez de nouveau sur Enregistrer pour confirmer."); }
     delete fop.dataset.dupOk;
     try {
       await api.addOperation(op);
+      if (t === "RETRAIT" && S.coffre && fop.vers_epargne.checked) {
+        await api.addMouvement({ date: op.date, type: "VERSEMENT", montant: op.montant, source: "banque", note: "Retiré de ma SGI" });
+        S.coffre = await api.coffre(S.user.id);
+      }
       S.ops = await api.operations(S.user.id);
       dlg.close();
       toast("Opération enregistrée.");
@@ -648,10 +958,68 @@
     } catch (e) { err("Enregistrement impossible : " + e.message); }
   });
 
+  // ---------------------------------------------------------------- saisie rapide : « J'ai épargné » / « J'ai envoyé à ma SGI »
+  const dcf = $("#dlg-coffre"), fcf = $("#f-coffre");
+  let cfMode = "verser";
+  function openCoffre(mode) {
+    const ep = epargne();
+    if (!ep) return;
+    cfMode = mode;
+    fcf.reset();
+    fcf.date.value = today();
+    $(".msg", fcf).textContent = "";
+    const verser = mode === "verser", m = +ep.plan?.montant || 0;
+    $("#dlg-coffre-title").textContent = verser ? "J'ai épargné" : mode === "reprendre" ? "J'ai repris de mon épargne" : "J'ai envoyé à ma SGI";
+    $("#dlg-coffre-sub").textContent = verser
+      ? "Notez l'argent que vous venez de mettre de côté pour la bourse."
+      : mode === "reprendre"
+        ? `Cet argent sort de votre épargne (${F(ep.solde)} mis de côté) pour un autre usage. Il ne compte plus pour la bourse.`
+        : `Cet argent quitte votre épargne (${F(ep.solde)} mis de côté) et devient disponible chez votre SGI : un dépôt est ajouté à votre journal.`;
+    const presets = verser ? (m ? [m, 2 * m, 5 * m] : [1000, 5000, 10000]) : [ep.solde];
+    $("#cf-presets").innerHTML = presets.filter((x) => x > 0).map((x, i) => `<button type="button" class="btn small" data-v="${x}">${!verser ? "Tout : " : ""}${F(x)}</button>`).join("");
+    $("#cf-presets").querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => {
+      fcf.montant.value = b.dataset.v;
+      $("#cf-presets").querySelectorAll("[data-v]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    }));
+    fcf.montant.value = presets[0] > 0 ? presets[0] : "";
+    $("#cf-presets [data-v]")?.setAttribute("aria-pressed", "true");
+    $("#cf-src").hidden = !verser;
+    $("#cf-ok").textContent = verser ? "Mettre de côté" : mode === "reprendre" ? "Confirmer" : "Confirmer l'envoi";
+    dcf.showModal();
+  }
+  fcf.addEventListener("submit", async (ev) => {
+    if (ev.submitter?.value !== "ok") return;
+    ev.preventDefault();
+    const ep = epargne(), montant = Math.round(+fcf.montant.value || 0), date = fcf.date.value || today();
+    const err = (t) => ($(".msg", fcf).textContent = t);
+    if (montant <= 0) return err("Indiquez un montant.");
+    if (date > today()) return err("La date ne peut pas être dans le futur.");
+    try {
+      if (cfMode === "verser") {
+        await api.addMouvement({ date, type: "VERSEMENT", montant, source: fcf.source.value });
+        toast(`Bravo : ${F(montant)} de plus mis de côté.`);
+      } else if (cfMode === "reprendre") {
+        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté.`);
+        await api.addMouvement({ date, type: "RETRAIT", montant });
+        toast(`${F(montant)} repris de votre épargne.`);
+      } else {
+        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour de l'argent venant d'ailleurs, utilisez « Opération chez ma SGI » → Argent versé à ma SGI.`);
+        await api.envoyerSgi(date, montant);                     // une seule transaction : épargne et journal ensemble
+        S.ops = await api.operations(S.user.id);
+        toast(`${F(montant)} envoyés à votre SGI : vos ordres sont recalculés.`);
+      }
+      S.coffre = await api.coffre(S.user.id);
+      dcf.close();
+      render();
+    } catch (e) { err("Enregistrement impossible : " + e.message); }
+  });
+
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("button");
     if (!b) return;
-    if (b.dataset.op !== undefined) openOp(b.dataset.op ? { type: b.dataset.op } : {});
+    if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
+    else if (b.dataset.coffre) openCoffre(b.dataset.coffre);
+    else if (b.dataset.op !== undefined) openOp(b.dataset.op ? { type: b.dataset.op } : {});
     else if (b.dataset.ordre !== undefined) {
       const o = S.ordres[+b.dataset.ordre];
       openOp({ type: o.sens, ticker: o.code, quantite: String(o.quantite), prix: String(o.prix_limite) });
@@ -689,6 +1057,12 @@
     for (const k of TABS) $("#v-" + k).hidden = k !== t;
     document.querySelectorAll("[data-tab]").forEach((a) => (a.dataset.tab === t ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     VIEWS[t]();
+    const fab = $("#fab-coffre"), showFab = !!S.coffre && ["aujourdhui", "portefeuille"].includes(t);
+    fab.hidden = !showFab;
+    document.body.classList.toggle("has-fab", showFab);
+    const aFaire = !!epargne()?.aFaire;
+    $(".fab-dot", fab).hidden = !aFaire;
+    fab.setAttribute("aria-label", aFaire ? "Noter mon épargne (pas encore notée pour cette période)" : "Noter mon épargne");
     if (current !== t) {                                   // transition douce et compteur, sauf « mouvement réduit »
       const v = $("#v-" + t);
       v.classList.remove("v-in"); void v.offsetWidth; v.classList.add("v-in");
@@ -702,6 +1076,7 @@
   // ---------------------------------------------------------------- démarrage
   async function loadAll() {
     const uid = S.user.id;
+    try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }   // épargne : absente si epargne.sql n'est pas installé
     try {                                                              // versions les plus récentes de chaque texte
       const docs = await api.documents();
       S.docs = {};
@@ -721,7 +1096,6 @@
       for (const r of S.mk.actions) { S.prices.set(r.code, r.cours); S.names.set(r.code, r.nom); S.classes.set(r.code, "actions"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.obligations) { S.prices.set(r.code, r.prix); S.names.set(r.code, r.nom); S.classes.set(r.code, "obligations"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.opcvm) { S.prices.set(r.code, r.vl); S.names.set(r.code, r.nom); S.classes.set(r.code, r.classe); S.decisions.set(r.code, r.decision); }
-      $("#codes").innerHTML = [...S.names.entries()].map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join("");
     }
   }
 
