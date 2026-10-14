@@ -3,121 +3,168 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>BRVM Portefeuille</title>
-  <meta name="description" content="Votre portefeuille BRVM : proposition du soir, ordres, suivi et analyses du marché.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>BRVM Portefeuille – votre portefeuille recalculé chaque soir de séance</title>
+  <meta name="description" content="Chaque soir de séance BRVM : analyse des actions, obligations et OPCVM, portefeuille cible selon votre profil et ordres pour le rejoindre. Gratuit, sans mot de passe.">
   <meta name="theme-color" content="#0f5c4d">
-  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="vitrine.css">
+  <script src="boot.js"></script>
+  <script src="config.js" defer></script>
+  <script src="vendor/gsap.min.js" defer></script>
+  <script src="vendor/ScrollTrigger.min.js" defer></script>
+  <script src="vitrine.js" defer></script>
 </head>
-<body>
+<body class="vitrine">
   <a class="skip" href="#main">Aller au contenu</a>
 
-  <header class="topbar">
-    <div class="brand"><img src="icon.svg" alt="" width="28" height="28"><span>BRVM Portefeuille</span></div>
-    <span id="badge-demo" class="chip warn" hidden>Démo</span>
-    <nav class="tabs-top" aria-label="Navigation principale" hidden>
-      <a href="#aujourdhui" data-tab="aujourdhui">Aujourd'hui</a>
-      <a href="#portefeuille" data-tab="portefeuille">Portefeuille</a>
-      <a href="#performance" data-tab="performance">Performance</a>
-      <a href="#marche" data-tab="marche">Marché</a>
-      <a href="#profil" data-tab="profil">Profil</a>
+  <header class="v-top">
+    <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span>BRVM Portefeuille</span></a>
+    <nav class="v-nav" aria-label="Sections">
+      <a href="#methode">Méthode</a><a href="#apercu">Aperçu</a><a href="#confiance">Confiance</a>
     </nav>
+    <a class="btn primary small" href="app/">Ouvrir l'application</a>
   </header>
 
-  <div id="annonce" class="annonce" role="status" hidden></div>
-
   <main id="main" tabindex="-1">
-    <!-- Connexion -->
-    <section id="v-connexion" class="view" hidden>
-      <div class="card narrow">
-        <h1>Bienvenue</h1>
-        <p>Recevez chaque soir, après la séance de la BRVM, une proposition de portefeuille adaptée à votre budget
-          et à votre profil, et suivez vos placements.</p>
-        <form id="f-login" novalidate>
-          <label for="email">Votre adresse e-mail</label>
-          <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
-          <button class="btn primary" type="submit">Recevoir mon lien de connexion</button>
-          <p class="msg" role="status" aria-live="polite"></p>
-        </form>
-        <form id="f-code" novalidate hidden>
-          <label for="code">Ou saisissez le code reçu par e-mail</label>
-          <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}">
-          <button class="btn" type="submit">Valider le code</button>
-          <p class="msg" role="status" aria-live="polite"></p>
-        </form>
-        <p class="small muted">Pas de mot de passe : un lien vous est envoyé à chaque connexion.
-          <a href="?demo=1">Essayer la démo</a> sans compte (données fictives).</p>
+    <!-- 1. Hero -->
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow">Bourse régionale des valeurs mobilières · UEMOA</p>
+      <h1 id="hero-title" class="hero-title">Votre portefeuille BRVM, recalculé chaque soir de séance.</h1>
+      <p class="lead">Après la clôture, l'outil analyse le marché, construit un portefeuille adapté à votre budget et à votre profil de risque,
+        puis vous indique les ordres pour le rejoindre. Vous décidez, vous passez les ordres chez votre SGI.</p>
+      <div class="cta">
+        <a class="btn primary" href="app/">Créer mon compte</a>
+        <a class="btn" href="app/?demo=1">Essayer la démo</a>
+      </div>
+      <dl class="stats" aria-describedby="stats-src">
+        <div><dt>actions analysées</dt><dd><span class="odo" data-k="nb_actions">49</span></dd></div>
+        <div><dt>obligations suivies</dt><dd><span class="odo" data-k="nb_obligations">18</span></dd></div>
+        <div><dt>OPCVM comparés</dt><dd><span class="odo" data-k="nb_opcvm">24</span></dd></div>
+      </dl>
+      <p id="stats-src" class="small muted stats-src">Exemple tiré des données de démonstration.</p>
+    </section>
+
+    <!-- 2. Méthode -->
+    <section id="methode" class="methode" aria-labelledby="methode-title">
+      <div class="m-intro" data-reveal>
+        <p class="eyebrow">Méthode</p>
+        <h2 id="methode-title" class="display">Quatre étapes, chaque soir, sans intervention de votre part.</h2>
+      </div>
+      <div class="m-grid">
+        <ol class="m-steps">
+          <li class="m-step" data-step="1" data-reveal>
+            <span class="m-num" aria-hidden="true">01</span>
+            <h3>Collecte de la séance</h3>
+            <p>Cours de clôture, volumes, indices BRVM 30 et Composite, obligations cotées et valeurs liquidatives des OPCVM.</p>
+          </li>
+          <li class="m-step" data-step="2" data-reveal>
+            <span class="m-num" aria-hidden="true">02</span>
+            <h3>Analyse et score</h3>
+            <p>Chaque titre reçoit un score : tendance, fondamentaux, dividende, valorisation, liquidité. Les titres à éviter sont écartés.</p>
+          </li>
+          <li class="m-step" data-step="3" data-reveal>
+            <span class="m-num" aria-hidden="true">03</span>
+            <h3>Portefeuille cible selon votre profil</h3>
+            <p>Le budget est réparti entre actions, OPCVM et obligations, dans les fourchettes de votre profil, avec un montant minimal par ligne pour limiter les frais.</p>
+          </li>
+          <li class="m-step" data-step="4" data-reveal>
+            <span class="m-num" aria-hidden="true">04</span>
+            <h3>Ordres et suivi</h3>
+            <p>Vous recevez les achats et ventes pour rejoindre la cible, avec un prix limite. Votre journal d'opérations alimente le suivi de performance face au BRVM 30.</p>
+          </li>
+        </ol>
+        <figure class="m-viz" aria-labelledby="alloc-cap">
+          <div class="seg" role="group" aria-label="Profil de risque">
+            <button type="button" data-profil="prudent" aria-pressed="false">Prudent</button>
+            <button type="button" data-profil="equilibre" aria-pressed="true">Équilibré</button>
+            <button type="button" data-profil="dynamique" aria-pressed="false">Dynamique</button>
+          </div>
+          <div class="donut-wrap">
+            <svg class="donut" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+              <circle class="donut-track" cx="60" cy="60" r="46"></circle>
+              <g class="donut-arcs" transform="rotate(-90 60 60)">
+                <circle class="arc c1" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="30.2 69.8" stroke-dashoffset="0"></circle>
+                <circle class="arc c2" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="9.2 90.8" stroke-dashoffset="-31"></circle>
+                <circle class="arc c3" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="37.2 62.8" stroke-dashoffset="-41"></circle>
+                <circle class="arc c4" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="20.2 79.8" stroke-dashoffset="-79"></circle>
+              </g>
+            </svg>
+            <div class="donut-center" aria-hidden="true"><span class="donut-pct" data-center>31 %</span><span class="small muted">actions</span></div>
+          </div>
+          <figcaption id="alloc-cap" class="small muted">Répartition indicative par profil : milieu des fourchettes appliquées par le moteur.
+            Le portefeuille réel dépend chaque soir du marché et de votre budget.</figcaption>
+          <div class="tbl-wrap">
+            <table class="alloc">
+              <caption class="sr-only">Répartition indicative du profil <span data-profil-label>Équilibré</span></caption>
+              <thead><tr><th scope="col">Classe d'actifs</th><th scope="col" class="num">Fourchette</th><th scope="col" class="num">Repère</th></tr></thead>
+              <tbody>
+                <tr class="r1" data-prudent="10" data-prudent-f="0–20 %" data-equilibre="31" data-equilibre-f="20–40 %" data-dynamique="52" data-dynamique-f="40–70 %"><th scope="row"><span class="sw c1" aria-hidden="true"></span>Actions</th><td class="num f">20–40 %</td><td class="num w">31 %</td></tr>
+                <tr class="r2" data-prudent="5" data-prudent-f="0–10 %" data-equilibre="10" data-equilibre-f="0–20 %" data-dynamique="19" data-dynamique-f="10–30 %"><th scope="row"><span class="sw c2" aria-hidden="true"></span>OPCVM actions</th><td class="num f">0–20 %</td><td class="num w">10 %</td></tr>
+                <tr class="r3" data-prudent="52" data-prudent-f="40–70 %" data-equilibre="38" data-equilibre-f="25–50 %" data-dynamique="19" data-dynamique-f="10–30 %"><th scope="row"><span class="sw c3" aria-hidden="true"></span>Obligations</th><td class="num f">25–50 %</td><td class="num w">38 %</td></tr>
+                <tr class="r4" data-prudent="33" data-prudent-f="20–50 %" data-equilibre="21" data-equilibre-f="10–30 %" data-dynamique="10" data-dynamique-f="0–20 %"><th scope="row"><span class="sw c4" aria-hidden="true"></span>OPCVM taux</th><td class="num f">10–30 %</td><td class="num w">21 %</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </figure>
       </div>
     </section>
 
-    <section id="v-aujourdhui" class="view" hidden aria-labelledby="h-auj"></section>
-    <section id="v-portefeuille" class="view" hidden aria-labelledby="h-pf"></section>
-    <section id="v-performance" class="view" hidden aria-labelledby="h-perf"></section>
-    <section id="v-marche" class="view" hidden aria-labelledby="h-mk"></section>
-    <section id="v-profil" class="view" hidden aria-labelledby="h-pr"></section>
+    <!-- 3. Aperçu des données -->
+    <section id="apercu" class="apercu" aria-labelledby="apercu-title">
+      <div data-reveal>
+        <p class="eyebrow">Aperçu</p>
+        <h2 id="apercu-title" class="display">Tout le marché, lisible sur un téléphone.</h2>
+        <p class="lead">Actions, obligations et OPCVM au même endroit, avec pour chaque titre l'analyse de l'outil, une courbe sur un an et les chiffres clés.</p>
+      </div>
+      <div class="card apercu-card" data-reveal>
+        <div class="seg" role="group" aria-label="Classe d'actifs">
+          <button type="button" data-cl="actions" aria-pressed="true">Actions</button>
+          <button type="button" data-cl="obligations" aria-pressed="false">Obligations</button>
+          <button type="button" data-cl="opcvm" aria-pressed="false">OPCVM</button>
+        </div>
+        <div class="tbl-wrap apercu-tbl">
+          <table data-tbl="actions"><caption class="sr-only">Actions (démonstration)</caption><thead><tr><th scope="col">Code</th><th scope="col">Société</th><th scope="col" class="num">Cours</th><th scope="col" class="num">Var. jour</th></tr></thead><tbody><tr><td><b>ABJC</b></td><td>SERVAIR ABIDJAN CI</td><td class="num">2 961 F</td><td class="num ">0,0 %</td></tr><tr><td><b>BBGC</b></td><td>BRIDGE BANK GROUP CI</td><td class="num">9 324 F</td><td class="num bad">-0,3 %</td></tr><tr><td><b>BICB</b></td><td>BIIC BENIN</td><td class="num">10 308 F</td><td class="num ">0,0 %</td></tr><tr><td><b>BICC</b></td><td>BICI CI</td><td class="num">1 157 F</td><td class="num bad">-0,8 %</td></tr><tr><td><b>BNBC</b></td><td>BERNABE CI</td><td class="num">7 856 F</td><td class="num ">0,0 %</td></tr><tr><td><b>BOAB</b></td><td>BANK OF AFRICA BENIN</td><td class="num">11 504 F</td><td class="num bad">-0,8 %</td></tr></tbody></table>
+          <table data-tbl="obligations" hidden><caption class="sr-only">Obligations (démonstration)</caption><thead><tr><th scope="col">Code</th><th scope="col">Emprunt</th><th scope="col" class="num">Prix</th><th scope="col" class="num">Rendement</th></tr></thead><tbody><tr><td><b>D08.O8</b></td><td>ETAT DU NIGER 6.50% 2020-2027</td><td class="num">4 947 F</td><td class="num">11,8 %</td></tr><tr><td><b>D10.O10</b></td><td>ETAT DU TOGO 6.75% 2021-2028</td><td class="num">4 901 F</td><td class="num">9,7 %</td></tr><tr><td><b>D06.O6</b></td><td>ETAT DU BURKINA 6.10% 2020-2027</td><td class="num">2 520 F</td><td class="num">9,1 %</td></tr><tr><td><b>D15.O15</b></td><td>CRRH 6.40% 2025-2032</td><td class="num">9 845 F</td><td class="num">8,0 %</td></tr><tr><td><b>D16.O16</b></td><td>BANQUE ALPHA 6.75% 2019-2028</td><td class="num">7 507 F</td><td class="num">8,3 %</td></tr><tr><td><b>D07.O7</b></td><td>ETAT DU BURKINA 6.25% 2025-2030</td><td class="num">5 011 F</td><td class="num">7,4 %</td></tr></tbody></table>
+          <table data-tbl="opcvm" hidden><caption class="sr-only">OPCVM (démonstration)</caption><thead><tr><th scope="col">Fonds</th><th scope="col">Catégorie</th><th scope="col" class="num">Valeur liquidative</th></tr></thead><tbody><tr><td>FCP GAMMA ACTIONS 02</td><td>Actions</td><td class="num">20 052 F</td></tr><tr><td>FCP ALPHA ACTIONS 00</td><td>Actions</td><td class="num">19 627 F</td></tr><tr><td>FCP ALPHA DIVERSIFIÉ 10</td><td>Diversifié</td><td class="num">15 299 F</td></tr><tr><td>FCP BETA DIVERSIFIÉ 11</td><td>Diversifié</td><td class="num">14 778 F</td></tr><tr><td>FCP SIGMA MONÉTAIRE 35</td><td>Monétaire</td><td class="num">11 543 F</td></tr><tr><td>FCP GAMMA MONÉTAIRE 32</td><td>Monétaire</td><td class="num">11 639 F</td></tr></tbody></table>
+        </div>
+        <p class="small muted">Valeurs de démonstration, à titre d'illustration : ce ne sont ni des cours du jour ni une recommandation.</p>
+      </div>
+    </section>
 
-    <p id="loading" class="center muted" role="status">Chargement…</p>
+    <!-- 4. Confiance -->
+    <section id="confiance" class="confiance" aria-labelledby="confiance-title">
+      <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
+      <ul class="points">
+        <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
+        <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
+        <li data-reveal><h3>Pas de mot de passe</h3><p>Connexion par lien envoyé à votre adresse e-mail, sur téléphone comme sur ordinateur.</p></li>
+        <li data-reveal><h3>Vous gardez la main</h3><p>L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
+      </ul>
+      <div class="cta cta-end" data-reveal>
+        <a class="btn primary" href="app/">Créer mon compte</a>
+        <a class="btn" href="app/?demo=1">Essayer la démo</a>
+      </div>
+    </section>
   </main>
 
-  <nav class="tabs-bottom" aria-label="Navigation principale" hidden>
-    <a href="#aujourdhui" data-tab="aujourdhui"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Aujourd'hui</a>
-    <a href="#portefeuille" data-tab="portefeuille"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM8 7V5h8v2M4 12h16"/></svg>Portefeuille</a>
-    <a href="#performance" data-tab="performance"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>Performance</a>
-    <a href="#marche" data-tab="marche"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>Marché</a>
-    <a href="#profil" data-tab="profil"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Profil</a>
-  </nav>
-
-  <dialog id="dlg-op" aria-labelledby="dlg-op-title">
-    <form id="f-op" method="dialog" novalidate>
-      <h2 id="dlg-op-title">Nouvelle opération</h2>
-      <div class="grid2">
-        <label>Type
-          <select name="type" required>
-            <option value="ACHAT">Achat</option><option value="VENTE">Vente</option>
-            <option value="DEPOT">Dépôt d'espèces</option><option value="RETRAIT">Retrait d'espèces</option>
-            <option value="DIVIDENDE">Dividende / coupon reçu</option><option value="FRAIS">Frais</option>
-            <option value="SOLDE">Solde relevé chez ma SGI</option>
-          </select>
-        </label>
-        <label>Date <input name="date" type="date" required></label>
-      </div>
-      <label data-for="titre">Code du titre
-        <input name="ticker" list="codes" autocapitalize="characters" autocomplete="off" placeholder="ex. SNTS">
-      </label>
-      <datalist id="codes"></datalist>
-      <div class="grid2" data-for="titre">
-        <label>Quantité <input name="quantite" type="number" min="0" step="any" inputmode="decimal"></label>
-        <label>Prix unitaire (F) <input name="prix" type="number" min="0" step="any" inputmode="decimal"></label>
-      </div>
-      <label data-for="titre">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
-        <input name="frais" type="number" min="0" step="any" inputmode="decimal">
-      </label>
-      <label data-for="montant">Montant (F) <input name="montant" type="number" min="0" step="any" inputmode="decimal"></label>
-      <label>Note <input name="note" maxlength="200"></label>
-      <p class="msg err" role="alert"></p>
-      <div class="actions">
-        <button class="btn" value="annuler" formnovalidate>Annuler</button>
-        <button class="btn primary" value="ok">Enregistrer</button>
-      </div>
-    </form>
-  </dialog>
+  <footer class="v-foot">
+    <p class="small"><strong>Avertissement.</strong> BRVM Portefeuille est un outil d'aide à la décision : il ne constitue pas un conseil en
+      investissement personnalisé. Investir en bourse comporte un risque de perte en capital ; les performances passées ne préjugent pas des
+      performances futures.</p>
+    <p class="small"><button type="button" class="btn link" id="voir-cgu" hidden></button> <a href="app/">Application</a> · <a href="app/?demo=1">Démo</a></p>
+  </footer>
 
   <dialog id="dlg-cgu" aria-labelledby="dlg-cgu-title">
     <form method="dialog">
       <h2 id="dlg-cgu-title"></h2>
       <p class="small muted" id="dlg-cgu-sub"></p>
       <div id="dlg-cgu-texte" class="doc-texte small" tabindex="0"></div>
-      <p class="msg err" role="alert"></p>
-      <div class="actions"></div>
+      <div class="actions"><button class="btn primary" value="ok">Fermer</button></div>
     </form>
   </dialog>
-
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-
-  <script src="config.js"></script>
-  <script src="supabase.min.js"></script>
-  <script src="app.js"></script>
 </body>
 </html>
