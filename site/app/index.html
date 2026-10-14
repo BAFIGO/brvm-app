@@ -75,31 +75,43 @@
 
   <dialog id="dlg-op" aria-labelledby="dlg-op-title">
     <form id="f-op" method="dialog" novalidate>
-      <h2 id="dlg-op-title">Nouvelle opération</h2>
-      <div class="grid2">
-        <label>Type
-          <select name="type" required>
-            <option value="ACHAT">Achat</option><option value="VENTE">Vente</option>
-            <option value="DEPOT">Dépôt d'espèces</option><option value="RETRAIT">Retrait d'espèces</option>
-            <option value="DIVIDENDE">Dividende / coupon reçu</option><option value="FRAIS">Frais</option>
-            <option value="SOLDE">Solde relevé chez ma SGI</option>
-          </select>
-        </label>
-        <label>Date <input name="date" type="date" required></label>
+      <h2 id="dlg-op-title">Opération chez ma SGI</h2>
+      <fieldset class="fs"><legend>Que s'est-il passé ?</legend>
+        <div class="choix">
+          <label><input type="radio" name="type" value="ACHAT" checked><span>J'ai acheté</span></label>
+          <label><input type="radio" name="type" value="VENTE"><span>J'ai vendu</span></label>
+          <label><input type="radio" name="type" value="DIVIDENDE"><span>Dividende ou coupon reçu</span></label>
+          <label><input type="radio" name="type" value="DEPOT"><span>Argent versé à ma SGI</span></label>
+          <label><input type="radio" name="type" value="RETRAIT"><span>Argent retiré de ma SGI</span></label>
+          <label><input type="radio" name="type" value="FRAIS"><span>Frais prélevés</span></label>
+          <label><input type="radio" name="type" value="SOLDE"><span>Solde relevé chez ma SGI</span></label>
+        </div>
+      </fieldset>
+      <div data-for="titre">
+        <fieldset class="fs" data-for="cat"><legend>Catégorie</legend>
+          <div class="seg src">
+            <label><input type="radio" name="cat" value="actions" checked><span>Actions</span></label>
+            <label><input type="radio" name="cat" value="obligations"><span>Obligations</span></label>
+            <label><input type="radio" name="cat" value="opcvm"><span>OPCVM</span></label>
+          </div>
+        </fieldset>
+        <label data-for="recherche">Rechercher<input id="op-q" type="search" autocomplete="off" placeholder="ex. Niger, Gamma…"></label>
+        <label>Titre<select name="ticker" id="op-titre"></select></label>
+        <label data-for="autre" hidden>Code du titre<input name="autre" autocapitalize="characters" autocomplete="off" placeholder="ex. SNTS"></label>
+        <p class="small muted" id="op-info"></p>
       </div>
-      <label data-for="titre">Code du titre
-        <input name="ticker" list="codes" autocapitalize="characters" autocomplete="off" placeholder="ex. SNTS">
-      </label>
-      <datalist id="codes"></datalist>
-      <div class="grid2" data-for="titre">
+      <div class="grid2" data-for="qp">
         <label>Quantité <input name="quantite" type="number" min="0" step="any" inputmode="decimal"></label>
         <label>Prix unitaire (F) <input name="prix" type="number" min="0" step="any" inputmode="decimal"></label>
       </div>
-      <label data-for="titre">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
+      <label data-for="qp">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
         <input name="frais" type="number" min="0" step="any" inputmode="decimal">
       </label>
       <label data-for="montant">Montant (F) <input name="montant" type="number" min="0" step="any" inputmode="decimal"></label>
+      <label class="switch" data-for="vers-epargne" hidden><input type="checkbox" name="vers_epargne"> Je le remets dans mon épargne mise de côté</label>
+      <label>Date <input name="date" type="date" required></label>
       <label>Note <input name="note" maxlength="200"></label>
+      <p class="op-total" id="op-total" aria-live="polite"></p>
       <p class="msg err" role="alert"></p>
       <div class="actions">
         <button class="btn" value="annuler" formnovalidate>Annuler</button>

@@ -11,6 +11,8 @@
   const SEUIL = 2 * MIN_LINE;                              // seuil d'investissement : 2 lignes minimum (paramètre moteur à venir)
   const RYTHMES = { quotidien: ["par jour", "aujourd'hui"], hebdo: ["par semaine", "cette semaine"], mensuel: ["par mois", "ce mois-ci"] };
   const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
+  const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
+                     FRAIS: "Frais", SOLDE: "Solde relevé" };
   const TABS = ["aujourdhui", "portefeuille", "performance", "marche", "profil"];
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
@@ -421,7 +423,7 @@
         S.lines = e.lines;
       }
       h += `<div class="notice info small">Pour suivre votre portefeuille, enregistrez d'abord votre dépôt chez votre SGI,
-        puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer un dépôt</button></div></div>`;
+        puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer l'argent versé à ma SGI</button></div></div>`;
     }
     h += `<p class="small muted">Outil d'aide à la décision, ce n'est pas un conseil en investissement. Données de marché : BRVM.</p>`;
     v.innerHTML = h;
@@ -466,7 +468,8 @@
       <p class="small ${ep.solde >= SEUIL ? "good" : "muted"}">${ep.solde >= SEUIL ? `Prêt à investir : envoyez votre épargne à votre SGI.`
         : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(SEUIL)} mis de côté, pour limiter les frais).`}</p>
       <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
-        <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button></div>`;
+        <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
+        ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
     const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
     if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
         <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
@@ -526,7 +529,7 @@
       </div>`;
     if (ep) h += carteEpargne(ep);
     h += `
-      <div class="actions"><button class="btn primary" data-op="">Nouvelle opération</button></div>`;
+      <div class="actions"><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
     h += `<div class="card"><h2>Positions</h2>`;
     if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
@@ -547,7 +550,7 @@
       h += `<ul class="list">`;
       for (const o of [...S.ops].reverse()) {
         const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
-        h += `<li><div class="main"><div class="name">${esc(o.type.charAt(0) + o.type.slice(1).toLowerCase())} ${esc(o.ticker || "")}</div>
+        h += `<li><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker || "")}</div>
           <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
           <div class="right num">${what}<div><button class="btn link small" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
       }
@@ -790,38 +793,127 @@
 
   const VIEWS = { aujourdhui: vAujourdhui, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
-  // ---------------------------------------------------------------- saisie d'une opération
+  // ---------------------------------------------------------------- saisie d'une opération chez la SGI
+  // Étapes : que s'est-il passé ? → catégorie → titre (liste « code – nom ») → quantité, prix, total en direct.
   const dlg = $("#dlg-op"), fop = $("#f-op");
+  const AUTRE = "__autre__";
+  const catDe = (code) => { const c = S.classes.get(code) || ""; return c === "actions" ? "actions" : c === "obligations" ? "obligations" : c ? "opcvm" : null; };
+  const TABLES = { actions: "actions", obligations: "obligations", opcvm: "opcvm" };
+  const prixDe = (r, cat) => (cat === "actions" ? r.cours : cat === "obligations" ? r.prix : r.vl);
+  const court = (t, n = 34) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  function libelle(r, cat) {
+    const nom = r.nom || r.code;
+    if (cat === "actions") return `${r.code} – ${court(nom, 30)}`;
+    if (cat === "obligations") return `${court(nom, 30)} – ${r.code}`;
+    return `${court(nom, 26)} – ${court(r.gestionnaire || r.code, 14)}`;
+  }
+  const opType = () => fop.querySelector('[name="type"]:checked')?.value || "ACHAT";
+  const opCat = () => fop.querySelector('[name="cat"]:checked')?.value || "actions";
+  function remplirTitres(garder) {
+    const t = opType(), q = $("#op-q").value.trim().toLowerCase(), sel = $("#op-titre");
+    const match = (txt) => !q || txt.toLowerCase().includes(q);
+    let html = `<option value="">Choisir un titre…</option>`, n = 0;
+    if (t === "ACHAT") {
+      const cat = opCat(), rows = (S.mk[TABLES[cat]] || []).filter((r) => r.code && match(libelle(r, cat) + " " + r.code));
+      const tri = cat === "actions" ? (a, b) => a.code.localeCompare(b.code) : (a, b) => (a.nom || "").localeCompare(b.nom || "");
+      const prop = rows.filter((r) => BUY.includes(r.decision)).sort((a, b) => (b.score || 0) - (a.score || 0));
+      const opt = (r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))}</option>`;
+      if (prop.length) html += `<optgroup label="Proposés ce soir">${prop.map(opt).join("")}</optgroup>`;
+      html += `<optgroup label="Tous les titres">${rows.slice().sort(tri).map(opt).join("")}</optgroup>`;
+      n = rows.length;
+      $('[data-for="recherche"]', fop).hidden = cat === "actions";            // ~48 actions : la liste suffit
+    } else {
+      // vente, dividende : seulement les titres détenus, regroupés par catégorie
+      const pos = replay(S.ops).positions;
+      for (const [cat, nom] of [["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]]) {
+        const rows = pos.filter((p) => (catDe(p.code) || "actions") === cat).map((p) => ({ ...(S.mk[TABLES[cat]] || []).find((r) => r.code === p.code), code: p.code, nom: S.names.get(p.code) || p.code, q: p.quantite }))
+          .filter((r) => match(libelle(r, cat)));
+        if (rows.length) html += `<optgroup label="${nom}">${rows.map((r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))} (${N(r.q)})</option>`).join("")}</optgroup>`;
+        n += rows.length;
+      }
+      $('[data-for="recherche"]', fop).hidden = n <= 30 && !q;
+    }
+    html += `<option value="${AUTRE}">Autre titre (saisir le code)</option>`;
+    sel.innerHTML = html;
+    if (garder && [...sel.options].some((o) => o.value === garder)) sel.value = garder;
+    else if (garder) { sel.value = AUTRE; fop.autre.value = garder; }
+    infoTitre(false);
+  }
+  function infoTitre(prefill) {
+    const t = opType(), code = fop.ticker.value, info = $("#op-info");
+    $('[data-for="autre"]', fop).hidden = code !== AUTRE;
+    if (!code || code === AUTRE) { info.textContent = ""; total(); return; }
+    const cat = catDe(code) || opCat(), r = (S.mk[TABLES[cat]] || []).find((x) => x.code === code);
+    const px = r ? prixDe(r, cat) : null, held = replay(S.ops).positions.find((p) => p.code === code)?.quantite || 0;
+    const parts = [];
+    if (ok(px)) parts.push(`${cat === "opcvm" ? "Valeur liquidative" : cat === "obligations" ? "Prix (coupon couru compris)" : "Cours"} de la séance du ${D(S.seance?.date)} : ${F(px)}`);
+    if (r?.decision) parts.push(`analyse : ${r.decision}`);
+    if (held) parts.push(`vous en détenez ${N(held)}`);
+    info.textContent = parts.join(" · ");
+    if (prefill && ok(px) && (t === "ACHAT" || t === "VENTE") && (!fop.prix.value || fop.dataset.prixAuto === "1")) { fop.prix.value = px; fop.dataset.prixAuto = "1"; }
+    if (t === "VENTE" && held && !fop.quantite.value) fop.quantite.value = held;
+    total();
+  }
+  function total() {
+    const t = opType(), out = $("#op-total");
+    const q = +fop.quantite.value || 0, p = +fop.prix.value || 0, brut = q * p;
+    const fee = fop.frais.value !== "" ? +fop.frais.value : brut * FEES, dispo = replay(S.ops).cash;
+    out.className = "op-total";
+    if (t === "ACHAT" && brut > 0) {
+      out.innerHTML = `${N(q)} × ${F(p)} = ${F(brut)} + frais ${F(fee)} = <b>${F(brut + fee)}</b><br><span class="small">Disponible chez ma SGI : ${F(dispo)}</span>`;
+      if (brut + fee > dispo + 1) { out.classList.add("warn"); out.innerHTML += `<br><span class="small">Le disponible ne suffit pas : enregistrez d'abord l'argent versé à votre SGI.</span>`; }
+    } else if (t === "VENTE" && brut > 0) out.innerHTML = `Vous recevez environ <b>${F(brut - fee)}</b> (${F(brut)} − frais ${F(fee)})`;
+    else out.textContent = "";
+  }
   function syncOpForm() {
-    const t = fop.type.value;
-    const titre = ["ACHAT", "VENTE", "DIVIDENDE"].includes(t), montant = !["ACHAT", "VENTE"].includes(t);
+    const t = opType();
+    const titre = ["ACHAT", "VENTE", "DIVIDENDE"].includes(t);
     fop.querySelectorAll('[data-for="titre"]').forEach((e) => (e.hidden = !titre));
-    fop.querySelectorAll('[data-for="montant"]').forEach((e) => (e.hidden = !montant));
-    fop.querySelectorAll('[data-for="titre"] input[name="quantite"], [data-for="titre"] input[name="prix"], [data-for="titre"] input[name="frais"]')
-      .forEach((e) => (e.closest("label").hidden = !titre || t === "DIVIDENDE"));
+    $('[data-for="cat"]', fop).hidden = t !== "ACHAT";
+    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !["ACHAT", "VENTE"].includes(t)));
+    $('[data-for="montant"]', fop).hidden = ["ACHAT", "VENTE"].includes(t);
+    $('[data-for="vers-epargne"]', fop).hidden = !(t === "RETRAIT" && S.coffre);
+    if (titre) remplirTitres(fop.ticker.value || null);
+    total();
   }
   function openOp(pre = {}) {
     fop.reset();
+    delete fop.dataset.dupOk; delete fop.dataset.prixAuto;
     fop.date.value = today();
-    for (const [k, val] of Object.entries(pre)) if (fop[k] && val !== null && val !== undefined) fop[k].value = val;
     $(".msg", fop).textContent = "";
-    $("#dlg-op-title").textContent = pre.type ? "Enregistrer l'opération" : "Nouvelle opération";
+    $("#op-q").value = "";
+    const t = pre.type || "ACHAT";
+    fop.querySelector(`[name="type"][value="${t}"]`).checked = true;
+    const cat = (pre.ticker && catDe(pre.ticker)) || S.ui.opCat || "actions";
+    fop.querySelector(`[name="cat"][value="${cat}"]`).checked = true;
+    $("#dlg-op-title").textContent = "Opération chez ma SGI";
+    fop.ticker.innerHTML = "";
     syncOpForm();
+    if (pre.ticker) remplirTitres(pre.ticker);
+    for (const k of ["quantite", "prix", "montant"]) if (pre[k] !== undefined && pre[k] !== null) fop[k].value = pre[k];
+    infoTitre(!pre.prix);
     dlg.showModal();
   }
-  fop.type.addEventListener("change", syncOpForm);
+  fop.querySelectorAll('[name="type"]').forEach((r) => r.addEventListener("change", () => { fop.ticker.value = ""; fop.quantite.value = ""; fop.prix.value = ""; syncOpForm(); }));
+  fop.querySelectorAll('[name="cat"]').forEach((r) => r.addEventListener("change", () => { S.ui.opCat = opCat(); $("#op-q").value = ""; remplirTitres(null); }));
+  $("#op-q").addEventListener("input", () => remplirTitres(fop.ticker.value || null));
+  fop.ticker.addEventListener("change", () => { fop.quantite.value = opType() === "VENTE" ? "" : fop.quantite.value; infoTitre(true); });
+  fop.prix.addEventListener("input", () => { delete fop.dataset.prixAuto; total(); });
+  fop.quantite.addEventListener("input", total);
+  fop.frais.addEventListener("input", total);
   fop.addEventListener("submit", async (ev) => {
     if (ev.submitter?.value !== "ok") return;                    // « Annuler » ferme simplement la fenêtre
     ev.preventDefault();
-    const t = fop.type.value, num = (n) => (fop[n].value === "" ? null : +fop[n].value);
-    const op = { date: fop.date.value, type: t, ticker: (fop.ticker.value || "").trim().toUpperCase() || null,
+    const t = opType(), num = (n) => (fop[n].value === "" ? null : +fop[n].value);
+    const code = fop.ticker.value === AUTRE ? (fop.autre.value || "").trim().toUpperCase() : fop.ticker.value;
+    const op = { date: fop.date.value, type: t, ticker: code || null,
                  quantite: null, prix: null, frais: null, montant: null, note: fop.note.value.trim() || null };
     const err = (m) => { $(".msg", fop).textContent = m; };
     if (!op.date) return err("Indiquez la date.");
     if (op.date > today()) return err("La date ne peut pas être dans le futur.");
     if (t === "ACHAT" || t === "VENTE") {
       Object.assign(op, { quantite: num("quantite"), prix: num("prix"), frais: num("frais") });
-      if (!op.ticker) return err("Indiquez le code du titre.");
+      if (!op.ticker) return err("Choisissez le titre.");
       if (!(op.quantite > 0) || !(op.prix > 0)) return err("Indiquez une quantité et un prix positifs.");
       if (t === "VENTE") {
         const held = replay(S.ops).positions.find((p) => p.code === op.ticker)?.quantite || 0;
@@ -830,15 +922,19 @@
     } else {
       op.montant = num("montant");
       if (!(op.montant > 0)) return err("Indiquez un montant positif.");
-      if (t === "DIVIDENDE" && !op.ticker) return err("Indiquez le code du titre qui a versé le dividende.");
+      if (t === "DIVIDENDE" && !op.ticker) return err("Choisissez le titre qui a versé le dividende ou le coupon.");
       if (t !== "DIVIDENDE") op.ticker = null;
     }
     const dup = S.ops.some((o) => o.date === op.date && o.type === op.type && (o.ticker || null) === op.ticker
       && +o.quantite === +op.quantite && +o.prix === +op.prix && +o.montant === +op.montant);
-    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; return err("Une opération identique existe déjà ce jour-là. Enregistrer quand même ?"); }
+    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; return err("Une opération identique existe déjà ce jour-là. Appuyez de nouveau sur Enregistrer pour confirmer."); }
     delete fop.dataset.dupOk;
     try {
       await api.addOperation(op);
+      if (t === "RETRAIT" && S.coffre && fop.vers_epargne.checked) {
+        await api.addMouvement({ date: op.date, type: "VERSEMENT", montant: op.montant, source: "banque", note: "Retiré de ma SGI" });
+        S.coffre = await api.coffre(S.user.id);
+      }
       S.ops = await api.operations(S.user.id);
       dlg.close();
       toast("Opération enregistrée.");
@@ -857,10 +953,12 @@
     fcf.date.value = today();
     $(".msg", fcf).textContent = "";
     const verser = mode === "verser", m = +ep.plan?.montant || 0;
-    $("#dlg-coffre-title").textContent = verser ? "J'ai épargné" : "J'ai envoyé à ma SGI";
+    $("#dlg-coffre-title").textContent = verser ? "J'ai épargné" : mode === "reprendre" ? "J'ai repris de mon épargne" : "J'ai envoyé à ma SGI";
     $("#dlg-coffre-sub").textContent = verser
       ? "Notez l'argent que vous venez de mettre de côté pour la bourse."
-      : `Cet argent quitte votre épargne (${F(ep.solde)} mis de côté) et devient disponible chez votre SGI : un dépôt est ajouté à votre journal.`;
+      : mode === "reprendre"
+        ? `Cet argent sort de votre épargne (${F(ep.solde)} mis de côté) pour un autre usage. Il ne compte plus pour la bourse.`
+        : `Cet argent quitte votre épargne (${F(ep.solde)} mis de côté) et devient disponible chez votre SGI : un dépôt est ajouté à votre journal.`;
     const presets = verser ? (m ? [m, 2 * m, 5 * m] : [1000, 5000, 10000]) : [ep.solde];
     $("#cf-presets").innerHTML = presets.filter((x) => x > 0).map((x, i) => `<button type="button" class="btn small" data-v="${x}">${!verser ? "Tout : " : ""}${F(x)}</button>`).join("");
     $("#cf-presets").querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => {
@@ -870,7 +968,7 @@
     fcf.montant.value = presets[0] > 0 ? presets[0] : "";
     $("#cf-presets [data-v]")?.setAttribute("aria-pressed", "true");
     $("#cf-src").hidden = !verser;
-    $("#cf-ok").textContent = verser ? "Mettre de côté" : "Confirmer l'envoi";
+    $("#cf-ok").textContent = verser ? "Mettre de côté" : mode === "reprendre" ? "Confirmer" : "Confirmer l'envoi";
     dcf.showModal();
   }
   fcf.addEventListener("submit", async (ev) => {
@@ -884,8 +982,12 @@
       if (cfMode === "verser") {
         await api.addMouvement({ date, type: "VERSEMENT", montant, source: fcf.source.value });
         toast(`Bravo : ${F(montant)} de plus mis de côté.`);
+      } else if (cfMode === "reprendre") {
+        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté.`);
+        await api.addMouvement({ date, type: "RETRAIT", montant });
+        toast(`${F(montant)} repris de votre épargne.`);
       } else {
-        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour un dépôt venant d'ailleurs, utilisez « Nouvelle opération » → Dépôt.`);
+        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour de l'argent venant d'ailleurs, utilisez « Opération chez ma SGI » → Argent versé à ma SGI.`);
         await api.addMouvement({ date, type: "TRANSFERT", montant });
         await api.addOperation({ date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant, note: "Depuis mon épargne" });
         S.ops = await api.operations(S.user.id);
@@ -979,7 +1081,6 @@
       for (const r of S.mk.actions) { S.prices.set(r.code, r.cours); S.names.set(r.code, r.nom); S.classes.set(r.code, "actions"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.obligations) { S.prices.set(r.code, r.prix); S.names.set(r.code, r.nom); S.classes.set(r.code, "obligations"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.opcvm) { S.prices.set(r.code, r.vl); S.names.set(r.code, r.nom); S.classes.set(r.code, r.classe); S.decisions.set(r.code, r.decision); }
-      $("#codes").innerHTML = [...S.names.entries()].map(([k, n]) => `<option value="${esc(k)}">${esc(n)}</option>`).join("");
     }
   }
 
