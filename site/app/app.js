@@ -147,9 +147,12 @@
           const iso = (dt) => new Date(dt.getTime() - dt.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
           const mv = [], src = ["especes", "mobile", "especes", "banque"];
           let id = 1;
+          const ouvres = [];                                                    // jours ouvrés, du plus récent au plus ancien
+          for (let j = 1; j <= 40; j++) { const dt = new Date(); dt.setDate(dt.getDate() - j); if (![0, 6].includes(dt.getDay())) ouvres.push(j); }
+          const manques = new Set([6, 7, 11, 16, 21].map((i) => ouvres[i]));   // série de 6 jours en cours ; avant, des séries plus courtes
           for (let j = 34; j >= 1; j--) {
             const dt = new Date(); dt.setDate(dt.getDate() - j);
-            if ([0, 6].includes(dt.getDay()) || j % 9 === 4) continue;           // week-ends et quelques oublis
+            if ([0, 6].includes(dt.getDay()) || manques.has(j)) continue;
             mv.push({ id: id++, date: iso(dt), type: "VERSEMENT", montant: j % 6 === 0 ? 10000 : 5000, source: src[j % 4] });
           }
           const debut = new Date(); debut.setDate(debut.getDate() - 34);
@@ -331,12 +334,22 @@
     // régularité sur les dernières périodes écoulées (+ la période en cours si déjà tenue)
     const n = r === "quotidien" ? 20 : r === "hebdo" ? 12 : 6;
     const debut = plan.debut || (mv[0]?.date) || now;
+    // Série en cours : un oubli par période de 30 jours est couvert par le joker ; record : plus longue série
+    const debutK = periode(debut, r), dateDe = (key) => (key.length === 7 ? key + "-01" : key), limJoker = addDays(now, -30);
     let k = jourCompte && faits.has(cur) ? cur : prevPeriode(cur, r, plan), tenus = 0, total = 0, serie = 0, enSerie = true;
-    for (let i = 0; i < n && k >= periode(debut, r); i++, k = prevPeriode(k, r, plan)) {
-      total++;
-      if (faits.has(k)) { tenus++; if (enSerie) serie++; } else enSerie = false;
+    let joker = null, run = 0, record = 0;
+    for (let i = 0; i < 400 && k >= debutK; i++, k = prevPeriode(k, r, plan)) {
+      const fait = faits.has(k);
+      if (i < n) { total++; if (fait) tenus++; }
+      if (enSerie) {
+        if (fait) serie++;
+        else if (!joker && serie > 0 && dateDe(k) >= limJoker) joker = k;
+        else enSerie = false;
+      }
+      if (fait) { run++; record = Math.max(record, run); } else run = 0;
     }
-    Object.assign(e, { tenus, total, serie, unite: r === "quotidien" ? "jour" : r === "hebdo" ? "semaine" : "mois" });
+    record = Math.max(record, serie);
+    Object.assign(e, { tenus, total, serie, record, joker, unite: r === "quotidien" ? "jour" : r === "hebdo" ? "semaine" : "mois" });
     // projections (sommes versées seulement, sans rendement supposé)
     const parPeriode = +plan.montant;
     const periodesVers = (montant) => Math.max(0, Math.ceil(montant / parPeriode));
@@ -349,6 +362,117 @@
     }
     return e;
   }
+  // ---------------------------------------------------------------- encourager la régularité (trophées, félicitations)
+  // On félicite l'épargne (versement, régularité, objectif), jamais les achats ou ventes de titres.
+  const PALIERS = { quotidien: [3, 7, 14, 30, 60, 100], hebdo: [4, 8, 12, 26, 52], mensuel: [3, 6, 12, 24] };
+  // Rang de chaque médaille : plus l'effort est long, plus le métal est précieux
+  const RANGS = { bronze: "Bronze", argent: "Argent", or: "Or", platine: "Platine", diamant: "Diamant", legende: "Légende", emeraude: "Émeraude", saphir: "Saphir", rubis: "Rubis" };
+  const RANG_SERIE = ["bronze", "argent", "or", "platine", "diamant", "legende"];
+  const RANG_OBJECTIF = { 25: "bronze", 50: "argent", 75: "or", 100: "platine" };
+  function trophees(e) {
+    if (!e) return [];
+    const r = e.plan?.rythme, u = e.unite || "jour", t = [];
+    t.push({ id: "premier", titre: "Premier pas", marque: "1", metal: "emeraude", ok: e.verse > 0, rang: 1,
+      msg: "Votre coffre est ouvert. Chaque versement compte : revenez au prochain rendez-vous pour lancer votre série." });
+    if (r && e.plan?.montant) PALIERS[r].forEach((n, i) => t.push({ id: `serie-${r}-${n}`, titre: `${pluriel(n, u)} d'affilée`, marque: String(n), metal: RANG_SERIE[i],
+      ok: Math.max(e.serie || 0, e.record || 0) >= n, reste: n - (e.serie || 0), unite: u, rang: 10 + n,
+      msg: `Petit à petit, l'oiseau fait son nid : ${pluriel(n, u)} sans interruption. Continuez sur cette lancée !` }));
+    if (e.objectif) for (const pc of [25, 50, 75, 100]) t.push({ id: `objectif-${e.objectif}-${pc}`, titre: pc === 100 ? "Objectif atteint" : `${pc} % de l'objectif`,
+      marque: pc + "%", metal: RANG_OBJECTIF[pc], ok: e.verse >= (e.objectif * pc) / 100, rang: pc === 100 ? 500 : 200 + pc,
+      msg: pc === 100 ? `Vous avez mis de côté ${F(e.verse)} : objectif de ${F(e.objectif)} atteint. Bravo pour votre discipline !`
+        : `${F(e.verse)} épargnés sur ${F(e.objectif)}. ${pc === 50 ? "La moitié du chemin est faite !" : "Vous êtes sur la bonne voie."}` });
+    t.push({ id: "seuil", titre: "Prêt à investir", marque: "↑", metal: "saphir", ok: e.solde >= seuil() || e.envoye > 0, rang: 400, action: "transfert",
+      msg: `Votre épargne atteint ${F(e.solde)} : elle peut maintenant travailler en bourse. Envoyez-la à votre SGI.` });
+    t.push({ id: "sgi", titre: "Investisseur BRVM", marque: "★", metal: "rubis", ok: e.envoye > 0, rang: 450,
+      msg: "Premier envoi à votre SGI : vous êtes maintenant investisseur à la BRVM. Votre portefeuille va grandir avec votre épargne." });
+    return t;
+  }
+  const cleFetes = () => "brvm-fetes-" + (S.user?.id || "x");
+  // Étapes déjà fêtées : dans le profil Supabase (profils.fetes, partagé entre appareils) ; à défaut, sur ce téléphone
+  const fetesEnBase = () => !DEMO && S.profil && "fetes" in S.profil;
+  function chargerFetes() {
+    let v = fetesEnBase() && Array.isArray(S.profil.fetes) ? S.profil.fetes : null;
+    if (!v && !fetesEnBase()) try { v = JSON.parse(localStorage.getItem(cleFetes()) || "null"); } catch (e) { /* stockage indisponible */ }
+    S.fetes = new Set(Array.isArray(v) ? v : []);
+    if (!v) { trophees(epargne()).filter((t) => t.ok).forEach((t) => S.fetes.add(t.id)); garderFetes(); }   // l'historique ne se fête pas
+  }
+  function garderFetes() {
+    const liste = [...S.fetes];
+    if (fetesEnBase()) { S.profil.fetes = liste; api.saveProfil(S.user.id, { fetes: liste }).catch(() => { /* réessayé à la prochaine étape */ }); }
+    else try { localStorage.setItem(cleFetes(), JSON.stringify(liste)); } catch (e) { /* tant pis */ }
+  }
+  const MSG_JOUR = [
+    (m, s, u) => `Bravo ! ${F(m)} de plus. Série : ${pluriel(s, u)}.`,
+    (m, s, u) => `C'est noté : ${F(m)} mis de côté. ${pluriel(s, u)} d'affilée !`,
+    (m, s) => `Petit à petit, l'oiseau fait son nid : ${F(m)} de plus.${s > 1 ? ` Série : ${s}.` : ""}`,
+    (m, s, u) => `Belle régularité ! ${pluriel(s, u)} sans interruption.`,
+  ];
+  // Après une action d'épargne : grande félicitation si une étape est franchie, sinon petite victoire
+  function feter(montant) {
+    const e = epargne();
+    const nouveaux = trophees(e).filter((t) => t.ok && !S.fetes.has(t.id)).sort((a, b) => b.rang - a.rang);
+    if (nouveaux.length) { nouveaux.forEach((t) => S.fetes.add(t.id)); garderFetes(); bravo(nouveaux); return; }
+    if (montant) {
+      const s = Math.max(1, e?.serie || 1), u = e?.unite || "jour";
+      toast(MSG_JOUR[s % MSG_JOUR.length](montant, s, u));
+      const fab = $("#fab-coffre");
+      fab.classList.remove("fab-ok"); void fab.offsetWidth; fab.classList.add("fab-ok");
+      setTimeout(() => fab.classList.remove("fab-ok"), 1600);
+    }
+  }
+  // Médaille : ruban à deux pans, couronne métallique crantée, face bombée, gravure, reflet ; grisée si pas encore gagnée
+  const medaille = (t, gros) => {
+    const m = t.metal || "bronze", petit = t.marque.length > 2;
+    return `<svg class="medaille m-${m}${t.ok ? "" : " verrou"}${gros ? " gros" : ""}" viewBox="0 0 64 84" aria-hidden="true">
+      <path class="ruban-a" d="M17 0h13l7 25-11 7z"/><path class="ruban-b" d="M47 0H34l-7 25 11 7z"/>
+      <path class="ruban-l" d="M23.5 0h3l6.2 23.5-2.6 1.6zM40.5 0h-3l-6.2 23.5 2.6 1.6z"/>
+      <circle cx="32" cy="55" r="26" fill="url(#m-${m}-rim)"/>
+      <circle cx="32" cy="55" r="26" fill="none" class="cran" stroke-dasharray="2.4 2.1"/>
+      <circle cx="32" cy="55" r="20.5" fill="url(#m-${m}-face)"/>
+      <circle cx="32" cy="55" r="17.2" fill="none" class="grav"/>
+      <path d="M14 46a20 20 0 0 1 22-11" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="32.6" y="${petit ? 60.6 : 61.6}" text-anchor="middle" font-size="${petit ? 12.5 : 17}" class="ombre">${esc(t.marque)}</text>
+      <text x="32" y="${petit ? 60 : 61}" text-anchor="middle" font-size="${petit ? 12.5 : 17}">${esc(t.marque)}</text></svg>`;
+  };
+  function bravo(items) {
+    const t = items[0], d = $("#dlg-bravo");
+    $("#bravo-medaille").innerHTML = `<div class="halo h-${t.metal || "bronze"}" aria-hidden="true"></div>${medaille(t, true)}`;
+    $("#bravo-rang").textContent = "Médaille " + (RANGS[t.metal] || "");
+    $("#bravo-titre").textContent = t.titre;
+    $("#bravo-msg").textContent = t.msg;
+    $("#bravo-aussi").innerHTML = items.length > 1 ? "Et aussi : " + items.slice(1).map((x) => `<b>${esc(x.titre)}</b>`).join(", ") : "";
+    $("#bravo-action").hidden = t.action !== "transfert";
+    d.showModal();
+    confettis(d);
+  }
+  function confettis(hote) {
+    if (CALME || S.profil?.felicitations === false) return;
+    const c = document.createElement("canvas");
+    c.className = "confettis";
+    (hote?.open ? hote : document.body).append(c);
+    const dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+    c.width = W * dpr; c.height = H * dpr;
+    const g = c.getContext("2d"); g.scale(dpr, dpr);
+    const css = getComputedStyle(document.documentElement);
+    const cols = ["--s1", "--s2", "--s3", "--accent"].map((v) => css.getPropertyValue(v).trim() || "#17866F").concat(["#E4B43A", "#C8553D"]);
+    const P = Array.from({ length: W < 500 ? 90 : 150 }, () => ({ x: Math.random() * W, y: -20 - Math.random() * H * 0.6,
+      vx: (Math.random() - 0.5) * 2.4, vy: 2.2 + Math.random() * 3.2, r: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.3,
+      w: 6 + Math.random() * 6, h: 4 + Math.random() * 5, c: cols[(Math.random() * cols.length) | 0], o: Math.random() * 6.3 }));
+    const t0 = performance.now();
+    const f = (t) => {
+      const el = t - t0;
+      g.clearRect(0, 0, W, H);
+      g.globalAlpha = Math.max(0, 1 - Math.max(0, el - 2300) / 900);
+      for (const p of P) {
+        p.o += 0.06; p.x += p.vx + Math.sin(p.o) * 0.7; p.y += p.vy; p.r += p.vr;
+        g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c;
+        g.fillRect(-p.w / 2, -p.h / 2, p.w, Math.abs(Math.cos(p.o)) * p.h + 1); g.restore();
+      }
+      if (el < 3200) requestAnimationFrame(f); else c.remove();
+    };
+    requestAnimationFrame(f);
+  }
+
   const delai = (j) => (j <= 1 ? "demain" : j < 14 ? `dans ${j} jours` : j < 60 ? `dans ${Math.round(j / 7)} semaines` : `dans ${Math.round(j / 30)} mois`);
   // Montant à investir : saisi à la main, ou automatique (mis de côté + total chez ma SGI)
   function budgetAuto() { const L = replay(S.ops); return Math.max(0, L.valeur) + (epargne()?.solde || 0); }
@@ -371,6 +495,10 @@
     if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
     for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
     const ep = epargne();
+    if (ep?.aFaire && ep.plan?.montant)
+      h += `<div class="notice rappel"><span><b>Vos ${F(ep.plan.montant)} ${RYTHMES[ep.plan.rythme][1] === "aujourd'hui" ? "d'aujourd'hui" : RYTHMES[ep.plan.rythme][1]} ?</b>
+        ${ep.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} vous attend.` : "C'est le moment de commencer une nouvelle série."}</span>
+        <button class="btn small primary" data-coffre="verser">J'ai épargné</button></div>`;
     if (ep && ep.solde >= seuil())
       h += `<div class="notice info"><b>Votre épargne mise de côté atteint ${F(ep.solde)}.</b> C'est assez pour investir :
         envoyez-la à votre SGI, les ordres seront recalculés. <button class="btn link" data-coffre="transfert">J'ai envoyé à ma SGI</button></div>`;
@@ -481,11 +609,18 @@
         <div><div class="lbl">Série en cours</div><b class="num">${pluriel(ep.serie, ep.unite)}</b></div>
         <div><div class="lbl">Prochain versement</div><b>${ep.aFaire ? RYTHMES[r][1] : "à jour ✓"}</b></div>
       </div>
+      ${(ep.serie === 0 && ep.record > 1) || S.demoPerdue
+        ? `<p class="encourage">Une série s'arrête, une nouvelle commence. Votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre !</p>` : ""}
+      ${ep.joker && ep.serie > 0 ? `<p class="small muted">Joker utilisé : l'oubli du ${D(ep.joker.length === 7 ? ep.joker + "-01" : ep.joker)} n'a pas cassé votre série (un joker par mois).</p>` : ""}
       <p class="small ${ep.solde >= seuil() ? "good" : "muted"}">${ep.solde >= seuil() ? `Prêt à investir : envoyez votre épargne à votre SGI.`
         : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(seuil())} mis de côté, pour limiter les frais).`}</p>
       <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
         <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
         ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
+    const tr = trophees(ep), gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
+    h += `<div class="trophees-tete"><b>Mes trophées</b><span class="small muted">${gagnes.length} / ${tr.length}</span></div>
+      <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
+        <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}</li>`).join("")}</ul>`;
     const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
     if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
         <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
@@ -656,11 +791,18 @@
           <div class="radios">${Object.entries(PROFILS).map(([k, x]) => `<label><input type="radio" name="profil" value="${k}"${p.profil === k ? " checked" : ""}>
             <span><b>${x.t}</b><br><span class="small muted">${x.d}</span></span></label>`).join("")}</div>
         </fieldset>
+        ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:14px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}>
+          Animations de félicitations (confettis)</label>` : ""}
         <label class="switch" style="margin-top:14px"><input type="checkbox" name="recevoir_email"${p.recevoir_email ? " checked" : ""}>
           Recevoir ma proposition par e-mail chaque soir de séance</label>
         <div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form>
       ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
+      ${DEMO && S.coffre ? `<div class="card"><h2>Essayer les félicitations</h2><p class="small muted">Démonstration uniquement.</p>
+        <div class="actions" style="justify-content:flex-start">
+          <button class="btn small" data-essai="jour">Petite victoire</button><button class="btn small" data-essai="serie">Série de 7 jours</button>
+          <button class="btn small" data-essai="objectif">Objectif atteint</button><button class="btn small" data-essai="seuil">Prêt à investir</button>
+          <button class="btn small" data-essai="perdue">Série perdue</button></div></div>` : ""}
       <div class="card">
         <h2>À propos</h2>
         <p class="small">Chaque soir de séance, l'outil analyse les actions, obligations et OPCVM cotés à la BRVM, puis calcule
@@ -676,7 +818,7 @@
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const upd = { budget: Math.max(0, +f.budget.value || 0), profil: f.profil.value || "equilibre", recevoir_email: f.recevoir_email.checked };
-      if (S.coffre) upd.budget_mode = f.budget_mode.value;
+      if (S.coffre) { upd.budget_mode = f.budget_mode.value; if (f.felicitations) upd.felicitations = f.felicitations.checked; }
       try {
         await api.saveProfil(S.user.id, upd);
         const changed = upd.profil !== S.profil.profil;
@@ -687,6 +829,14 @@
     });
     $("#logout", v).addEventListener("click", () => api.logout());
     $("#voir-cgu", v)?.addEventListener("click", () => showCgu(S.docs.cgu, false));
+    v.querySelectorAll("[data-essai]").forEach((b) => b.addEventListener("click", () => {
+      const tr = trophees(epargne()), e = b.dataset.essai;
+      if (e === "jour") { location.hash = "portefeuille"; setTimeout(() => feter(5000), 300); }
+      else if (e === "perdue") { S.demoPerdue = true; location.hash = "portefeuille"; setTimeout(() => (S.demoPerdue = false), 800); }
+      else bravo([{ serie: { titre: "7 jours d'affilée", marque: "7", metal: "argent", msg: "Petit à petit, l'oiseau fait son nid : 7 jours sans interruption. Continuez sur cette lancée !", ok: true },
+        objectif: { titre: "Objectif atteint", marque: "100%", metal: "platine", msg: "Vous avez mis de côté 500 000 F : objectif atteint. Bravo pour votre discipline !", ok: true },
+        seuil: tr.find((t) => t.id === "seuil") }[e]].map((t) => ({ ...t, ok: true })));
+    }));
     f.querySelectorAll('[name="budget_mode"]').forEach((r) => r.addEventListener("change", () => ($("#pr-budget-w", v).hidden = f.budget_mode.value === "auto")));
     const fp = $("#f-plan", v);
     if (fp) {
@@ -997,7 +1147,7 @@
     try {
       if (cfMode === "verser") {
         await api.addMouvement({ date, type: "VERSEMENT", montant, source: fcf.source.value });
-        toast(`Bravo : ${F(montant)} de plus mis de côté.`);
+        S.feteMontant = montant;
       } else if (cfMode === "reprendre") {
         if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté.`);
         await api.addMouvement({ date, type: "RETRAIT", montant });
@@ -1011,6 +1161,7 @@
       S.coffre = await api.coffre(S.user.id);
       dcf.close();
       render();
+      feter(cfMode === "verser" ? S.feteMontant : 0);
     } catch (e) { err("Enregistrement impossible : " + e.message); }
   });
 
@@ -1018,7 +1169,7 @@
     const b = ev.target.closest("button");
     if (!b) return;
     if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
-    else if (b.dataset.coffre) openCoffre(b.dataset.coffre);
+    else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); openCoffre(b.dataset.coffre); }
     else if (b.dataset.op !== undefined) openOp(b.dataset.op ? { type: b.dataset.op } : {});
     else if (b.dataset.ordre !== undefined) {
       const o = S.ordres[+b.dataset.ordre];
@@ -1083,7 +1234,8 @@
   // ---------------------------------------------------------------- démarrage
   async function loadAll() {
     const uid = S.user.id;
-    try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }   // épargne : absente si epargne.sql n'est pas installé
+    try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
+    if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
     try {                                                              // versions les plus récentes de chaque texte
       const docs = await api.documents();
       S.docs = {};

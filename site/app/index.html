@@ -144,6 +144,23 @@
     </form>
   </dialog>
 
+  <!-- Dégradés des médailles (bronze, argent, or, platine, diamant…) -->
+  <svg class="defs-medailles" width="0" height="0" aria-hidden="true" focusable="false"><defs><linearGradient id="m-bronze-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0B07A"/><stop offset=".55" stop-color="#E9A06A"/><stop offset="1" stop-color="#7A3F18"/></linearGradient><radialGradient id="m-bronze-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#F0B07A"/><stop offset=".45" stop-color="#E9A06A"/><stop offset="1" stop-color="#A85A2A"/></radialGradient><linearGradient id="m-argent-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#F4F6F8"/><stop offset="1" stop-color="#7D8794"/></linearGradient><radialGradient id="m-argent-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#F4F6F8"/><stop offset="1" stop-color="#A9B2BD"/></radialGradient><linearGradient id="m-or-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF1A8"/><stop offset=".55" stop-color="#FFE37A"/><stop offset="1" stop-color="#A8740D"/></linearGradient><radialGradient id="m-or-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFF1A8"/><stop offset=".45" stop-color="#FFE37A"/><stop offset="1" stop-color="#D9A21E"/></radialGradient><linearGradient id="m-platine-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F5FAFC"/><stop offset=".55" stop-color="#E3EEF3"/><stop offset="1" stop-color="#5E7C8E"/></linearGradient><radialGradient id="m-platine-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#F5FAFC"/><stop offset=".45" stop-color="#E3EEF3"/><stop offset="1" stop-color="#9DB6C4"/></radialGradient><linearGradient id="m-diamant-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E9FBFF"/><stop offset=".55" stop-color="#BFEFFF"/><stop offset="1" stop-color="#2A6E9E"/></linearGradient><radialGradient id="m-diamant-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#E9FBFF"/><stop offset=".45" stop-color="#BFEFFF"/><stop offset="1" stop-color="#4FA7D8"/></radialGradient><linearGradient id="m-legende-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD6F0"/><stop offset=".55" stop-color="#E7A6F5"/><stop offset="1" stop-color="#5B1F7A"/></linearGradient><radialGradient id="m-legende-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFD6F0"/><stop offset=".45" stop-color="#E7A6F5"/><stop offset="1" stop-color="#8E43B8"/></radialGradient><linearGradient id="m-emeraude-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C7F5DF"/><stop offset=".55" stop-color="#8FE0BA"/><stop offset="1" stop-color="#0B5E43"/></linearGradient><radialGradient id="m-emeraude-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#C7F5DF"/><stop offset=".45" stop-color="#8FE0BA"/><stop offset="1" stop-color="#1E8C63"/></radialGradient><linearGradient id="m-saphir-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#CFE0FF"/><stop offset=".55" stop-color="#9DBDF7"/><stop offset="1" stop-color="#1C3E86"/></linearGradient><radialGradient id="m-saphir-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#CFE0FF"/><stop offset=".45" stop-color="#9DBDF7"/><stop offset="1" stop-color="#3563C4"/></radialGradient><linearGradient id="m-rubis-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC9CC"/><stop offset=".55" stop-color="#F68E97"/><stop offset="1" stop-color="#7E1622"/></linearGradient><radialGradient id="m-rubis-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFC9CC"/><stop offset=".45" stop-color="#F68E97"/><stop offset="1" stop-color="#C2303F"/></radialGradient></defs></svg>
+
+  <dialog id="dlg-bravo" class="bravo" aria-labelledby="bravo-titre">
+    <form method="dialog">
+      <div id="bravo-medaille"></div>
+      <p class="bravo-rang" id="bravo-rang"></p>
+      <h2 id="bravo-titre"></h2>
+      <p id="bravo-msg"></p>
+      <p class="small muted" id="bravo-aussi"></p>
+      <div class="actions">
+        <button class="btn primary" value="ok">Continuer</button>
+        <button class="btn" type="button" id="bravo-action" data-coffre="transfert" hidden>J'ai envoyé à ma SGI</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlg-info" aria-labelledby="dlg-info-title">
     <form method="dialog">
       <h2 id="dlg-info-title"></h2>
