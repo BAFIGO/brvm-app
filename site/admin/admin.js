@@ -129,7 +129,10 @@
     const params = [{ cle: "min_ligne_fcfa", libelle: "Montant minimal d'une ligne proposée", unite: "F", type: "nombre", defaut: 50000, min: 10000, max: 1000000, aide: "Sous ce montant, une ligne n'est pas proposée (frais minimum des SGI). Plus élevé = moins de lignes." },
       { cle: "poids_max_secteur", libelle: "Poids maximal d'un secteur (poche actions)", unite: "%", type: "taux", defaut: 0.4, min: 0.2, max: 1, aide: "Limite la concentration sectorielle des actions proposées." },
       { cle: "seuil_ordre_pct", libelle: "Ordre minimal (part du portefeuille)", unite: "%", type: "taux", defaut: 0.02, min: 0, max: 0.1, aide: "Les ajustements plus petits sont ignorés pour éviter des frais inutiles." },
-      { cle: "titres_exclus", libelle: "Actions exclues des propositions", unite: "", type: "codes", defaut: [], aide: "Codes BRVM jamais proposés à l'achat (ex. données douteuses, opération sur titre en cours)." }]
+      { cle: "titres_exclus", libelle: "Actions exclues des propositions", unite: "", type: "codes", defaut: [], aide: "Codes BRVM jamais proposés à l'achat (ex. données douteuses, opération sur titre en cours)." },
+      { cle: "mode_recommandation", libelle: "Mode des portefeuilles", unite: "", type: "choix", defaut: "proposition",
+        options: [{ valeur: "proposition", libelle: "Proposition : l'application propose un portefeuille" }, { valeur: "simulation", libelle: "Simulation : l'utilisateur fixe ses règles, l'outil calcule" }],
+        aide: "Bascule de prudence réglementaire. En simulation, l'application et l'e-mail du soir présentent un calcul fait à partir des réglages de l'utilisateur, jamais une recommandation. Effet immédiat dans l'application, au prochain traitement pour l'e-mail." }]
       .map((p) => ({ ...p, valeur: null, modifie_le: null, modifie_par: null }));
     const traitements = [1, 2, 3, 4].map((j, i) => ({ id: 10 - i, debut: d(j - 0.2), fin: d(j - 0.21), statut: j === 3 ? "echec" : "succes", declencheur: "planifié",
       seance: j === 3 ? null : d(j).slice(0, 10), details: j === 3 ? { erreur: "Échec de la collecte ou de l'analyse", duree_s: 412 } : { propositions: 6, utilisateurs: 6, duree_s: 268 } }));
@@ -175,7 +178,8 @@
       modifierParametre: async (cle, val, motif) => {
         need("engine.params");
         const p = params.find((x) => x.cle === cle);
-        if (val !== null && p.type !== "codes" && (val < p.min || val > p.max)) throw new Error(`Valeur hors bornes (${p.min} à ${p.max})`);
+        if (val !== null && p.type === "choix" && !p.options.some((o) => o.valeur === val)) throw new Error("Choix inconnu");
+        if (val !== null && !["codes", "choix"].includes(p.type) && (val < p.min || val > p.max)) throw new Error(`Valeur hors bornes (${p.min} à ${p.max})`);
         log("engine.params", cle, motif, { avant: p.valeur, apres: val }); Object.assign(p, { valeur: val, modifie_le: new Date().toISOString(), modifie_par: "admin@exemple.org" });
       },
       traitements: async () => { need("batch.read"); return { relance_configuree: true, traitements }; },
@@ -482,16 +486,18 @@
     const v = $("#v-moteur");
     v.innerHTML = `<h1 id="h-moteur">Paramètres du moteur</h1><p class="muted">Chargement…</p>`;
     const ps = await api.parametres();
-    const aff = (p, val) => (val == null ? "–" : p.type === "taux" ? P(val) : p.type === "codes" ? (val.length ? val.join(", ") : "aucune") : F(val));
+    const aff = (p, val) => (val == null ? "–" : p.type === "taux" ? P(val) : p.type === "codes" ? (val.length ? val.join(", ") : "aucune")
+      : p.type === "choix" ? (p.options.find((o) => o.valeur === val)?.libelle || val) : F(val));
     const brut = (p, val) => (val == null ? "" : p.type === "taux" ? +(val * 100).toFixed(2) : p.type === "codes" ? val.join(", ") : val);
     v.innerHTML = `<h1 id="h-moteur">Paramètres du moteur</h1>
-      <p class="small muted">Appliqués au prochain traitement du soir, pour les portefeuilles cibles et les propositions de l'application. Chaque modification est consignée.</p>
+      <p class="small muted">Appliqués au prochain traitement du soir, pour les portefeuilles cibles et les propositions de l'application (le mode des portefeuilles s'applique aussi tout de suite dans l'application). Chaque modification est consignée.</p>
       ${ps.map((p) => `<form class="card" data-cle="${esc(p.cle)}" novalidate><h2>${esc(p.libelle)}</h2><p class="small muted">${esc(p.aide)}</p>
         <p class="small">Valeur actuelle : <b>${esc(aff(p, p.valeur ?? p.defaut))}</b> ${p.valeur == null ? `<span class="chip">par défaut</span>`
           : `<span class="chip warn">modifiée</span> <span class="muted">le ${DT(p.modifie_le)} par ${esc(p.modifie_par || "–")} · défaut ${esc(aff(p, p.defaut))}</span>`}</p>
-        <label>Nouvelle valeur${p.type === "taux" ? " (en %)" : p.type === "codes" ? " (codes séparés par des virgules)" : " (F)"}
-          <input name="val" value="${esc(brut(p, p.valeur ?? p.defaut))}" ${p.type === "codes" ? 'autocapitalize="characters"' : 'inputmode="decimal"'} autocomplete="off"></label>
-        ${p.type !== "codes" ? `<p class="small muted">Entre ${esc(aff(p, p.min))} et ${esc(aff(p, p.max))}.</p>` : ""}
+        ${p.type === "choix" ? `<label>Nouvelle valeur<select name="val">${p.options.map((o) => `<option value="${esc(o.valeur)}"${o.valeur === (p.valeur ?? p.defaut) ? " selected" : ""}>${esc(o.libelle)}</option>`).join("")}</select></label>`
+        : `<label>Nouvelle valeur${p.type === "taux" ? " (en %)" : p.type === "codes" ? " (codes séparés par des virgules)" : " (F)"}
+          <input name="val" value="${esc(brut(p, p.valeur ?? p.defaut))}" ${p.type === "codes" ? 'autocapitalize="characters"' : 'inputmode="decimal"'} autocomplete="off"></label>`}
+        ${!["codes", "choix"].includes(p.type) ? `<p class="small muted">Entre ${esc(aff(p, p.min))} et ${esc(aff(p, p.max))}.</p>` : ""}
         <div class="actions">${p.valeur != null ? `<button class="btn" type="button" data-defaut>Rétablir le défaut</button>` : ""}<button class="btn primary" type="submit">Enregistrer…</button></div></form>`).join("")}`;
     const save = async (p, val, titre) => {
       const r = await ask({ title: titre, ok: "Enregistrer", body: `<p>${esc(p.libelle)} : <b>${esc(aff(p, val ?? p.defaut))}</b>${val == null ? " (valeur par défaut)" : ""}.</p>` });
@@ -504,7 +510,9 @@
         ev.preventDefault();
         const raw = f.val.value.trim();
         let val;
-        if (p.type === "codes") {
+        if (p.type === "choix") {
+          val = f.val.value;
+        } else if (p.type === "codes") {
           val = [...new Set(raw.toUpperCase().split(/[\s,;]+/).filter(Boolean))];
           if (val.some((c) => !/^[A-Z0-9]{2,12}$/.test(c))) { toast("Codes BRVM attendus (lettres et chiffres)."); return; }
         } else {

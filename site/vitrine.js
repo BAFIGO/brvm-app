@@ -43,6 +43,15 @@
     } catch (e) { /* hors ligne ou fonction pas encore installée : on garde l'exemple de démonstration */ }
   }
 
+  // ------------------------------------------------------------ mode des portefeuilles (console → Moteur)
+  // « simulation » : les textes marqués data-sim remplacent ceux qui parlent de proposition
+  async function mode() {
+    try {
+      if ((await rest("rpc/mode_recommandation", { method: "POST", body: "{}" })) !== "simulation") return;
+      $$("[data-sim]").forEach((el) => { el.textContent = el.dataset.sim; });
+    } catch (e) { /* hors ligne ou fonction pas encore installée : textes par défaut */ }
+  }
+
   // ------------------------------------------------------------ conditions d'utilisation (si publiées)
   async function cgu() {
     try {
@@ -192,5 +201,6 @@
 
   if (ANIM) animate(); else draw();
   stats();
+  mode();
   cgu();
 })();

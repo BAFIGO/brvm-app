@@ -6,6 +6,13 @@
 
   const CFG = window.BRVM_CONFIG;
   const DEMO = new URLSearchParams(location.search).has("demo");
+  // Mode des portefeuilles réglé dans la console (Moteur) : « simulation » = calcul selon les réglages de l'utilisateur,
+  // jamais présenté comme une recommandation. Démo : ?demo=1&mode=simulation
+  let MODE = DEMO && new URLSearchParams(location.search).get("mode") === "simulation" ? "simulation" : "proposition";
+  const SIM = () => MODE === "simulation";
+  const AVERT = () => SIM()
+    ? "Simulation calculée à partir de vos réglages (budget et profil de risque) : ce n'est ni une recommandation ni un conseil en investissement. Vous restez seul décideur de vos ordres."
+    : "Outil d'aide à la décision, ce n'est pas un conseil en investissement.";
   const FEES = CFG.fraisCourtage;
   const MIN_LINE = 50000;                                  // même seuil que l'outil (MIN_LINE_FCFA)
   const SEUIL_DEFAUT = 2 * MIN_LINE;                       // seuil d'investissement : 2 lignes minimum (réglable : console → Moteur)
@@ -113,6 +120,7 @@
       envoyerSgi: async (date, montant) => r(await sb.rpc("epargne_envoyer_sgi", { p_date: date, p_montant: montant })),
       savePlan: async (pl) => r(await sb.from("coffre_plans").upsert({ user_id: S.user.id, montant: pl.montant, rythme: pl.rythme,
                                   jours_ouvres: pl.jours_ouvres, objectif: pl.objectif, debut: pl.debut }, { onConflict: "user_id" })),
+      mode: async () => r(await sb.rpc("mode_recommandation")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
   }
@@ -501,7 +509,7 @@
         <button class="btn small primary" data-coffre="verser">J'ai épargné</button></div>`;
     if (ep && ep.solde >= seuil())
       h += `<div class="notice info"><b>Votre épargne mise de côté atteint ${F(ep.solde)}.</b> C'est assez pour investir :
-        envoyez-la à votre SGI, les ordres seront recalculés. <button class="btn link" data-coffre="transfert">J'ai envoyé à ma SGI</button></div>`;
+        envoyez-la à votre SGI, ${SIM() ? "la simulation sera recalculée" : "les ordres seront recalculés"}. <button class="btn link" data-coffre="transfert">J'ai envoyé à ma SGI</button></div>`;
 
     if (hasPf) {
       const changed = !fresh || journalChanged(L, c);
@@ -515,13 +523,13 @@
       const ordres = changed ? inst.ordres : c?.ordres || [];
       S.ordres = ordres;
       const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
-      h += `<div class="card"><h2>Ordres proposés</h2>`;
+      h += `<div class="card"><h2>${SIM() ? "Ajustements simulés" : "Ordres proposés"}</h2>`;
       if (!ordres.length) {
         h += investi < 0.5 && L.cash > MIN_LINE
           ? `<p>Aucun ordre calculable pour l'instant avec votre disponible de ${F(L.cash)}. Vérifiez votre montant à investir et votre profil, ou revenez après le calcul du soir.</p>`
           : `<p>Rien à faire pour l'instant : votre portefeuille est proche de sa cible.</p>`;
       } else {
-        h += `<p class="small muted">Pour rejoindre votre portefeuille cible (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p><ul class="list">`;
+        h += `<p class="small muted">${SIM() ? "Pour rejoindre la cible calculée selon vos réglages" : "Pour rejoindre votre portefeuille cible"} (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p><ul class="list">`;
         ordres.forEach((o, i) => {
           h += `<li><div class="main"><div class="name">${esc(o.libelle || o.code)}</div>
             <div class="sub">${chip(o.sens)} ${esc(o.code)} · ${esc(o.motif || "")}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
@@ -536,7 +544,7 @@
       h += `</div>`;
       const lignes = changed ? inst.cible : c?.proposition?.lignes || [];
       if (lignes.length)
-        h += `<div class="card"><h2>Votre portefeuille cible</h2>${classBar(lignes)}
+        h += `<div class="card"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
           <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}</p></div>`;
     } else {
       const auto = S.coffre && S.profil?.budget_mode === "auto";
@@ -544,7 +552,7 @@
       const nightly = fresh && c?.proposition && !c.positions?.length && Math.round(c.proposition.base) === Math.round(budget)
         && c.profil === S.profil?.profil ? c.proposition : null;
       const e = nightly ? { lines: nightly.lignes, reliquat: nightly.reliquat, rdt: nightly.rendement_attendu } : estimate(budget);
-      h += `<div class="card"><h2>Votre portefeuille proposé</h2>
+      h += `<div class="card"><h2>${SIM() ? "Simulation de portefeuille" : "Votre portefeuille proposé"}</h2>
         <form id="f-budget" class="grid2" novalidate>
           ${auto ? `<div><div class="lbl small muted" style="font-weight:600">Montant à investir (automatique)</div><div class="val num" style="font-size:1.2rem;font-weight:700;margin-top:10px">${F(budget)}</div>
             <a class="small" href="#profil">Changer de mode</a></div>`
@@ -552,11 +560,12 @@
           <label>Profil<select name="profil">${Object.entries(PROFILS).map(([k, p]) =>
             `<option value="${k}"${S.profil?.profil === k ? " selected" : ""}>${p.t}</option>`).join("")}</select></label>
         </form>`;
-      if (!budget) h += `<p class="muted">Indiquez le montant que vous souhaitez investir pour recevoir une proposition.</p>`;
+      if (!budget) h += `<p class="muted">Indiquez le montant que vous souhaitez investir ${SIM() ? "pour lancer la simulation" : "pour recevoir une proposition"}.</p>`;
       else if (!e.lines.length) h += `<p class="muted">Budget trop faible pour constituer un portefeuille diversifié.</p>`;
       else {
         h += classBar(e.lines) + `<p class="small muted">Rendement attendu ${P(e.rdt, false)} par an · non investi ${F(e.reliquat)}.
-          ${nightly ? "Proposition calculée ce soir." : "Estimation immédiate ; la proposition détaillée est recalculée chaque soir."}</p><ul class="list">`;
+          ${nightly ? (SIM() ? "Simulation calculée ce soir." : "Proposition calculée ce soir.")
+            : `Estimation immédiate ; la ${SIM() ? "simulation" : "proposition"} détaillée est recalculée chaque soir.`}</p><ul class="list">`;
         e.lines.forEach((l, i) => {
           h += `<li><div class="main"><div class="name">${esc(l.libelle || l.code)}</div>
             <div class="sub">${esc(CLASSES[l.classe] || l.classe)} · ${esc(l.code)} ${chip(l.decision)}</div></div>
@@ -569,7 +578,7 @@
       h += `<div class="notice info small">Pour suivre votre portefeuille, enregistrez d'abord votre dépôt chez votre SGI,
         puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer l'argent versé à ma SGI</button></div></div>`;
     }
-    h += `<p class="small muted">Outil d'aide à la décision, ce n'est pas un conseil en investissement. Données de marché : BRVM.</p>`;
+    h += `<p class="small muted">${AVERT()} Données de marché : BRVM.</p>`;
     v.innerHTML = h;
     const fb = $("#f-budget", v);
     if (fb) {
@@ -794,7 +803,7 @@
         ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:14px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}>
           Animations de félicitations (confettis)</label>` : ""}
         <label class="switch" style="margin-top:14px"><input type="checkbox" name="recevoir_email"${p.recevoir_email ? " checked" : ""}>
-          Recevoir ma proposition par e-mail chaque soir de séance</label>
+          Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
         <div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form>
       ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
@@ -806,9 +815,10 @@
       <div class="card">
         <h2>À propos</h2>
         <p class="small">Chaque soir de séance, l'outil analyse les actions, obligations et OPCVM cotés à la BRVM, puis calcule
-          pour vous un portefeuille cible et les ordres pour le rejoindre, à partir de votre budget, de votre profil et de votre journal.</p>
+          ${SIM() ? "une simulation de portefeuille et les ajustements pour la rejoindre, à partir des réglages que vous choisissez (budget, profil) et de votre journal."
+            : "pour vous un portefeuille cible et les ordres pour le rejoindre, à partir de votre budget, de votre profil et de votre journal."}</p>
         ${S.docs?.avertissement ? `<div class="doc-texte small muted">${esc(S.docs.avertissement.texte)}</div>`
-          : `<p class="small muted">Outil d'aide à la décision : ce n'est pas un conseil en investissement. Les performances passées ne préjugent
+          : `<p class="small muted">${AVERT()} Les performances passées ne préjugent
           pas des performances futures. Vos données (profil, journal) ne sont visibles que par vous.</p>`}
         ${S.docs?.cgu ? `<p class="small"><button class="btn link" type="button" id="voir-cgu">${esc(S.docs.cgu.titre)} (version ${esc(S.docs.cgu.version)})</button>
           ${p.cgu_acceptee_le ? `<span class="muted">acceptée le ${new Date(p.cgu_acceptee_le).toLocaleDateString("fr-FR")}</span>` : ""}</p>` : ""}
@@ -824,7 +834,7 @@
         const changed = upd.profil !== S.profil.profil;
         Object.assign(S.profil, upd);
         if (changed && S.seance) S.cibles = await api.cibles(S.seance.date, upd.profil);
-        toast("Profil enregistré. La proposition sera recalculée ce soir.");
+        toast(`Profil enregistré. La ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir.`);
       } catch (err) { toast("Enregistrement impossible : " + err.message); }
     });
     $("#logout", v).addEventListener("click", () => api.logout());
@@ -984,7 +994,7 @@
       const tri = cat === "actions" ? (a, b) => a.code.localeCompare(b.code) : (a, b) => (a.nom || "").localeCompare(b.nom || "");
       const prop = rows.filter((r) => BUY.includes(r.decision)).sort((a, b) => (b.score || 0) - (a.score || 0));
       const opt = (r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))}</option>`;
-      if (prop.length) html += `<optgroup label="Proposés ce soir">${prop.map(opt).join("")}</optgroup>`;
+      if (prop.length) html += `<optgroup label="${SIM() ? "Les mieux notés ce soir" : "Proposés ce soir"}">${prop.map(opt).join("")}</optgroup>`;
       html += `<optgroup label="Tous les titres">${rows.slice().sort(tri).map(opt).join("")}</optgroup>`;
       n = rows.length;
       $('[data-for="recherche"]', fop).hidden = cat === "actions";            // ~48 actions : la liste suffit
@@ -1234,6 +1244,7 @@
   // ---------------------------------------------------------------- démarrage
   async function loadAll() {
     const uid = S.user.id;
+    await chargerMode();
     try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
     if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
     try {                                                              // versions les plus récentes de chaque texte
@@ -1256,6 +1267,15 @@
       for (const r of S.mk.obligations) { S.prices.set(r.code, r.prix); S.names.set(r.code, r.nom); S.classes.set(r.code, "obligations"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.opcvm) { S.prices.set(r.code, r.vl); S.names.set(r.code, r.nom); S.classes.set(r.code, r.classe); S.decisions.set(r.code, r.decision); }
     }
+  }
+
+  // Lit le mode (lisible sans connexion) et adapte les textes statiques marqués data-sim ; « proposition » par défaut
+  async function chargerMode() {
+    if (!DEMO) try { MODE = (await api.mode()) === "simulation" ? "simulation" : "proposition"; } catch (e) { /* fonction pas encore installée */ }
+    document.querySelectorAll("[data-sim]").forEach((el) => {
+      el.dataset.prop ??= el.textContent;
+      el.textContent = SIM() ? el.dataset.sim : el.dataset.prop;
+    });
   }
 
   let started = false;
@@ -1362,6 +1382,7 @@
     $("#badge-demo").hidden = !DEMO;
     if (DEMO) document.title = "Démo – BRVM Portefeuille";
     showAnnonce();
+    chargerMode();
     try {
       api.onAuth((s) => { if (s?.user) start(s.user); });
       const s = await api.session();
