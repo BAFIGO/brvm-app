@@ -121,6 +121,9 @@
       savePlan: async (pl) => r(await sb.from("coffre_plans").upsert({ user_id: S.user.id, montant: pl.montant, rythme: pl.rythme,
                                   jours_ouvres: pl.jours_ouvres, objectif: pl.objectif, debut: pl.debut }, { onConflict: "user_id" })),
       mode: async () => r(await sb.rpc("mode_recommandation")),
+      // Univers accessible (supabase/univers.sql) : erreur si le fichier n'est pas installé → rubrique masquée
+      sgi: async () => r(await sb.from("sgi").select("nom").eq("actif", true).order("nom")),
+      gestionnaires: async () => r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
   }
@@ -138,6 +141,10 @@
       saveProfil: async (_u, p) => { Object.assign((await load()).profil, p); },
       seance: async () => (await load()).seance,
       proposition: async () => (await load()).proposition,
+      sgi: async () => ["Alpha Bourse", "Beta Securities", "Gamma Finance", "Omega Capital"].map((nom) => ({ nom })),
+      gestionnaires: async () => [["ALPHA AM", ["Alpha Bourse"]], ["BETA GESTION", ["Beta Securities"]], ["DELTA ASSET", []],
+        ["GAMMA CAPITAL", ["Gamma Finance"]], ["OMEGA FINANCE", ["Omega Capital"]], ["SIGMA AM", []]]
+        .map(([gestionnaire, distributeurs]) => ({ gestionnaire, distributeurs, sgo_directe: true, confirme: false })),
       operations: async () => (await load()).operations.slice(),
       addOperation: async (op) => {
         const d = await load();
@@ -222,15 +229,60 @@
   }
 
   // ---------------------------------------------------------------- proposition instantanée (budget × poids cibles)
-  function estimate(budget) {
+  // ---------------------------------------------------------------- univers accessible (Profil → Mes comptes et mes placements)
+  const CHOIX_FCP = { accessibles: ["Seulement ceux que je peux souscrire", "Selon mes SGI (et les sociétés de gestion si je le précise)."],
+    tous: ["Tous les FCP", "Sans tenir compte de mes SGI."], aucun: ["Aucun FCP", ""] };
+  const CHOIX_OBLIG = { toutes: ["Toutes les obligations cotées", ""], publiques: ["États et institutions régionales seulement", "Pas d'émetteurs privés."],
+    aucune: ["Aucune obligation", ""] };
+  // Gestionnaires dont l'utilisateur peut souscrire les FCP ; null = pas de filtre (aucune SGI déclarée, univers absent)
+  function accesFcp() {
+    const p = S.profil || {}, U = S.univ;
+    if (!U || (p.choix_fcp || "accessibles") !== "accessibles") return null;
+    const mes = new Set(p.mes_sgi || []), dir = !!p.souscription_sgo;
+    if (!mes.size && !dir) return null;
+    return new Set(U.gest.filter((g) => (dir && g.sgo_directe !== false) || (g.distributeurs || []).some((x) => mes.has(x))).map((g) => g.gestionnaire));
+  }
+  // L'estimation immédiate respecte les choix du profil, comme le calcul du soir ; FCP et obligations détenus restent dans l'univers
+  function permis(classe, code, detenus) {
+    const p = S.profil || {};
+    if (classe === "actions") return p.choix_actions !== false;
+    if (detenus?.has(code)) return true;
+    if (classe === "obligations") {
+      const o = p.choix_obligations || "toutes";
+      return o === "toutes" || (o === "publiques" && ["etat", "regional"].includes(S.mk.obligations.find((x) => x.code === code)?.categorie));
+    }
+    if (String(classe).startsWith("opcvm")) {
+      if (p.choix_fcp === "aucun") return false;
+      const a = accesFcp();
+      return !a || a.has(S.mk.opcvm.find((x) => x.code === code)?.gestionnaire);
+    }
+    return true;
+  }
+
+  function noticesUnivers(c) {
+    const p = S.profil || {};
+    if (!S.univ) return "";
+    if ((p.choix_fcp || "accessibles") === "accessibles" && !(p.mes_sgi || []).length && !p.souscription_sgo)
+      return `<div class="notice info small">Indiquez votre SGI dans <a href="#profil">Profil → Mes comptes et mes placements</a> :
+        seuls les FCP que vous pouvez souscrire vous seront alors ${SIM() ? "inclus dans la simulation" : "proposés"}.</div>`;
+    const hors = c?.univers?.fcp_inaccessibles || [];
+    if (!hors.length || !accesFcp()) return "";
+    return `<div class="card"><h2>FCP bien notés, non souscriptibles par vos SGI</h2><ul class="list">${hors.map((f) => `<li><div class="main">
+      <div class="name">${esc(f.nom)}</div><div class="sub">${esc(f.gestionnaire)} · se souscrit chez ${esc((f.ou || []).join(" ou ") || "–")}${f.confirme ? "" : " (à confirmer)"}</div></div></li>`).join("")}</ul>
+      <p class="small muted">Pour les inclure, ajoutez une SGI qui les distribue dans votre profil.</p></div>`;
+  }
+
+  function estimate(budget, detenus) {
     // Même principe que le calcul du soir : chaque poche garde ses meilleures lignes de façon qu'aucune
     // ne descende sous MIN_LINE, puis nombre entier de titres au prix limite (frais compris).
     const byClass = {};
-    for (const c of S.cibles) if (ok(c.prix) && +c.prix > 0) (byClass[c.classe] ||= []).push(c);
+    const cibles = S.cibles.filter((c) => ok(c.prix) && +c.prix > 0 && permis(c.classe, c.code, detenus));
+    const total = cibles.reduce((s, c) => s + +c.poids, 0) || 1;   // part retirée par les choix : répartie sur le reste
+    for (const c of cibles) (byClass[c.classe] ||= []).push(c);
     const lines = [];
     let invest = 0, rdt = 0;
     for (const list of Object.values(byClass)) {
-      const pocket = list.reduce((s, c) => s + +c.poids, 0) * budget;
+      const pocket = list.reduce((s, c) => s + +c.poids, 0) / total * budget;
       const n = Math.max(1, Math.min(list.length, Math.floor(pocket / MIN_LINE)));
       const keep = [...list].sort((a, b) => b.poids - a.poids).slice(0, n);
       const wsum = keep.reduce((s, c) => s + +c.poids, 0);
@@ -263,7 +315,7 @@
   function instantOrders(L) {
     const value = L.valeur;
     if (!(value > 0)) return { ordres: [], cible: [] };
-    const cible = estimate(value).lines;
+    const cible = estimate(value, new Set(L.positions.map((p) => p.code))).lines;
     const want = new Map(cible.map((l) => [l.code, l]));
     const held = new Map(L.positions.map((p) => [p.code, p]));
     const minTrade = 0.02 * value;
@@ -578,6 +630,7 @@
       h += `<div class="notice info small">Pour suivre votre portefeuille, enregistrez d'abord votre dépôt chez votre SGI,
         puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer l'argent versé à ma SGI</button></div></div>`;
     }
+    h += noticesUnivers(c);
     h += `<p class="small muted">${AVERT()} Données de marché : BRVM.</p>`;
     v.innerHTML = h;
     const fb = $("#f-budget", v);
@@ -752,7 +805,8 @@
         det = `${esc(r.emetteur || "")} · échéance ${D(r.echeance)} · duration ${ok(r.duration) ? nf1.format(r.duration) + " ans" : "–"} · coupon ${P(r.taux_coupon, false)}`;
       } else {
         px = `${F(r.vl)}<div class="sub">VL du ${D(r.date_vl)}</div>`;
-        det = `${esc(r.gestionnaire || "")} · ${esc(CLASSES[r.classe] || r.classe || "")} · volatilité ${P(r.volatilite, false)} · rendement attendu ${P(r.rendement_attendu, false)}`;
+        const acc = accesFcp();
+        det = `${esc(r.gestionnaire || "")}${acc ? (acc.has(r.gestionnaire) ? " · souscriptible via vos comptes" : " · non souscriptible via vos SGI") : ""} · ${esc(CLASSES[r.classe] || r.classe || "")} · volatilité ${P(r.volatilite, false)} · rendement attendu ${P(r.rendement_attendu, false)}`;
       }
       const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Note financière">${esc(r.analyse.note)}</span>` : "";
       if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
@@ -783,6 +837,22 @@
       <div class="actions"><button class="btn primary" type="submit">Enregistrer mon plan</button></div></form>`;
   }
 
+  function formUnivers(p) {
+    const mes = new Set(p.mes_sgi || []);
+    const radios = (name, opts, cur) => `<div class="radios">${Object.entries(opts).map(([k, [t, d]]) => `<label><input type="radio" name="${name}" value="${k}"${cur === k ? " checked" : ""}>
+      <span><b>${t}</b>${d ? `<br><span class="small muted">${d}</span>` : ""}</span></label>`).join("")}</div>`;
+    return `<form id="f-univers" class="card" novalidate><h2>Mes comptes et mes placements</h2>
+      <p class="small muted">Le portefeuille ne retient que ce que vous pouvez et voulez acheter. Les titres que vous détenez déjà ne sont pas concernés.</p>
+      <fieldset class="fs"><legend>Mes SGI</legend><div class="radios sgi">${S.univ.sgi.map((n) => `<label><input type="checkbox" name="mes_sgi" value="${esc(n)}"${mes.has(n) ? " checked" : ""}><span>${esc(n)}</span></label>`).join("")
+        || `<p class="small muted">Liste pas encore disponible.</p>`}</div>
+        <p class="small muted">Votre SGI n'est pas dans la liste ? Écrivez-nous : elle sera ajoutée.</p></fieldset>
+      <label class="switch" style="margin-top:6px"><input type="checkbox" name="souscription_sgo"${p.souscription_sgo ? " checked" : ""}> Je peux aussi souscrire directement auprès des sociétés de gestion</label>
+      <fieldset class="fs"><legend>FCP</legend>${radios("choix_fcp", CHOIX_FCP, p.choix_fcp || "accessibles")}</fieldset>
+      <fieldset class="fs"><legend>Obligations</legend>${radios("choix_obligations", CHOIX_OBLIG, p.choix_obligations || "toutes")}</fieldset>
+      <label class="switch" style="margin-top:14px"><input type="checkbox" name="choix_actions"${p.choix_actions !== false ? " checked" : ""}> Actions cotées</label>
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer mes choix</button></div></form>`;
+  }
+
   function vProfil() {
     const v = $("#v-profil"), p = S.profil || {};
     v.innerHTML = `<h1 id="h-pr">Profil</h1>
@@ -806,6 +876,7 @@
           Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
         <div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form>
+      ${S.univ && (DEMO || "mes_sgi" in p) ? formUnivers(p) : ""}
       ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
       ${DEMO && S.coffre ? `<div class="card"><h2>Essayer les félicitations</h2><p class="small muted">Démonstration uniquement.</p>
         <div class="actions" style="justify-content:flex-start">
@@ -835,6 +906,18 @@
         Object.assign(S.profil, upd);
         if (changed && S.seance) S.cibles = await api.cibles(S.seance.date, upd.profil);
         toast(`Profil enregistré. La ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir.`);
+      } catch (err) { toast("Enregistrement impossible : " + err.message); }
+    });
+    $("#f-univers", v)?.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fu = ev.currentTarget;
+      const upd = { mes_sgi: [...fu.querySelectorAll('[name="mes_sgi"]:checked')].map((x) => x.value), souscription_sgo: fu.souscription_sgo.checked,
+        choix_fcp: fu.choix_fcp.value || "accessibles", choix_obligations: fu.choix_obligations.value || "toutes", choix_actions: fu.choix_actions.checked };
+      if (upd.choix_fcp === "aucun" && upd.choix_obligations === "aucune" && !upd.choix_actions) { toast("Gardez au moins une catégorie de placements."); return; }
+      try {
+        await api.saveProfil(S.user.id, upd);
+        Object.assign(S.profil, upd);
+        toast(`Choix enregistrés. ${SIM() ? "La simulation" : "La proposition"} en tiendra compte ce soir ; l'estimation immédiate, tout de suite.`);
       } catch (err) { toast("Enregistrement impossible : " + err.message); }
     });
     $("#logout", v).addEventListener("click", () => api.logout());
@@ -1247,6 +1330,8 @@
     await chargerMode();
     try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
     if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
+    try { const [sg, ge] = await Promise.all([api.sgi(), api.gestionnaires()]); S.univ = { sgi: (sg || []).map((x) => x.nom), gest: ge || [] }; }
+    catch (e) { S.univ = null; }     // univers.sql pas encore installé
     try {                                                              // versions les plus récentes de chaque texte
       const docs = await api.documents();
       S.docs = {};

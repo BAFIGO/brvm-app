@@ -10,7 +10,7 @@
   const DEMO = QS.has("demo");
   // Écran → permission requise (doit refléter la matrice de supabase/admin.sql ; la base revérifie tout)
   const NEED = { tableau: "dashboard.read", utilisateurs: "users.read", donnees: "market.read", traitements: "batch.read",
-    moteur: "engine.params", communication: "comms.manage", conformite: "compliance.manage", habilitations: "roles.read", audit: "audit.read" };
+    moteur: "engine.params", univers: "engine.params", communication: "comms.manage", conformite: "compliance.manage", habilitations: "roles.read", audit: "audit.read" };
   const TABS = Object.keys(NEED);
   const ACTIONS = {
     "users.read_portfolio": "Consultation d'un portefeuille", "users.suspend": "Suspension d'un compte",
@@ -78,6 +78,10 @@
       corriger: (t, d, code, champ, val, motif) => rpc("admin_corriger", { p_tableau: t, p_date: d, p_code: code, p_champ: champ, p_valeur: val, p_motif: motif }),
       parametres: () => rpc("admin_parametres"),
       modifierParametre: (cle, val, motif) => rpc("admin_modifier_parametre", { p_cle: cle, p_valeur: val, p_motif: motif }),
+      univers: () => rpc("admin_univers"),
+      modifierGestionnaire: (g, motif) => rpc("admin_modifier_gestionnaire", { p_gestionnaire: g.gestionnaire, p_sgo_directe: g.sgo_directe,
+        p_distributeurs: g.distributeurs, p_confirme: g.confirme, p_note: g.note || null, p_motif: motif }),
+      sgi: (nom, actif, motif) => rpc("admin_sgi", { p_nom: nom, p_actif: actif, p_motif: motif }),
       traitements: () => rpc("admin_traitements"),
       relancer: (motif) => rpc("admin_relancer", { p_motif: motif }),
       annonces: () => rpc("admin_annonces"),
@@ -134,6 +138,11 @@
         options: [{ valeur: "proposition", libelle: "Proposition : l'application propose un portefeuille" }, { valeur: "simulation", libelle: "Simulation : l'utilisateur fixe ses règles, l'outil calcule" }],
         aide: "Bascule de prudence réglementaire. En simulation, l'application et l'e-mail du soir présentent un calcul fait à partir des réglages de l'utilisateur, jamais une recommandation. Effet immédiat dans l'application, au prochain traitement pour l'e-mail." }]
       .map((p) => ({ ...p, valeur: null, modifie_le: null, modifie_par: null }));
+    const univers = { sgi: ["Alpha Bourse", "Beta Securities", "Gamma Finance", "Omega Capital"].map((nom) => ({ nom, actif: true })),
+      gestionnaires: [["ALPHA AM", ["Alpha Bourse"], 5], ["BETA GESTION", ["Beta Securities"], 4], ["DELTA ASSET", [], 3], ["GAMMA CAPITAL", ["Gamma Finance"], 4], ["OMEGA FINANCE", ["Omega Capital"], 4]]
+        .map(([gestionnaire, distributeurs, fonds]) => ({ gestionnaire, distributeurs, fonds, sgo_directe: true, confirme: false,
+          note: distributeurs.length ? "Lien de groupe supposé, à confirmer" : "Distributeurs à renseigner", modifie_le: null, modifie_par: null })),
+      inconnus: ["SIGMA AM"] };
     const traitements = [1, 2, 3, 4].map((j, i) => ({ id: 10 - i, debut: d(j - 0.2), fin: d(j - 0.21), statut: j === 3 ? "echec" : "succes", declencheur: "planifié",
       seance: j === 3 ? null : d(j).slice(0, 10), details: j === 3 ? { erreur: "Échec de la collecte ou de l'analyse", duree_s: 412 } : { propositions: 6, utilisateurs: 6, duree_s: 268 } }));
     const annonces = [];
@@ -175,6 +184,23 @@
         r[champ] = v; log("market.correct", code, motif, { champ });
       },
       parametres: async () => { need("engine.params"); return params; },
+      univers: async () => { need("engine.params"); return univers; },
+      modifierGestionnaire: async (g, motif) => {
+        need("engine.params");
+        if (g.distributeurs.some((x) => !univers.sgi.some((y) => y.nom === x))) throw new Error("SGI inconnue : ajoutez-la d'abord à la liste");
+        const i = univers.gestionnaires.findIndex((x) => x.gestionnaire === g.gestionnaire);
+        const row = { ...(univers.gestionnaires[i] || { fonds: 1 }), ...g, modifie_le: new Date().toISOString(), modifie_par: "admin@exemple.org" };
+        if (i < 0) univers.gestionnaires.push(row); else univers.gestionnaires[i] = row;
+        univers.inconnus = univers.inconnus.filter((x) => x !== g.gestionnaire);
+        log("engine.params", "univers : " + g.gestionnaire, motif);
+      },
+      sgi: async (nom, actif, motif) => {
+        need("engine.params");
+        if (nom.trim().length < 2) throw new Error("Nom de SGI attendu (2 à 80 caractères)");
+        const x = univers.sgi.find((y) => y.nom === nom.trim());
+        if (x) x.actif = actif; else univers.sgi.push({ nom: nom.trim(), actif }), univers.sgi.sort((a, b) => a.nom.localeCompare(b.nom));
+        log("engine.params", "univers : SGI " + nom, motif);
+      },
       modifierParametre: async (cle, val, motif) => {
         need("engine.params");
         const p = params.find((x) => x.cle === cle);
@@ -527,6 +553,61 @@
     });
   }
 
+  // ------------------------------------------------------------ univers accessible : où souscrire les FCP (engine.params)
+  async function vUnivers() {
+    const v = $("#v-univers");
+    v.innerHTML = `<h1 id="h-univers">Univers accessible</h1><p class="muted">Chargement…</p>`;
+    const u = await api.univers();
+    const actives = u.sgi.filter((x) => x.actif);
+    const chip = (g) => g.confirme ? `<span class="chip">confirmé</span>` : `<span class="chip warn">à confirmer</span>`;
+    v.innerHTML = `<h1 id="h-univers">Univers accessible</h1>
+      <p class="small muted">Où souscrire les FCP de chaque société de gestion. Les utilisateurs déclarent leurs SGI dans leur profil :
+        le portefeuille ne retient alors que les FCP qu'ils peuvent souscrire. Effet au prochain traitement du soir ; chaque modification est consignée.</p>
+      ${u.inconnus.length ? `<div class="notice">Nouveaux gestionnaires dans les données du jour, à renseigner :
+        ${u.inconnus.map((n) => `<button class="btn link" type="button" data-nouveau="${esc(n)}">${esc(n)}</button>`).join(" · ")}</div>` : ""}
+      <div class="card"><h2>Gestionnaires d'OPCVM (${u.gestionnaires.length})</h2>
+        <p class="small muted">${u.gestionnaires.filter((g) => g.confirme).length} confirmé(s) sur ${u.gestionnaires.length}. Les liens préremplis sont des liens de groupe probables : vérifiez-les auprès des sociétés de gestion.</p>
+        <ul class="list">${u.gestionnaires.map((g, i) => `<li><div class="main"><div class="name">${esc(g.gestionnaire)} ${chip(g)}</div>
+          <div class="sub">${N(g.fonds)} fonds · ${g.distributeurs.length ? "via " + esc(g.distributeurs.join(", ")) : "aucune SGI renseignée"}${g.sgo_directe ? " · souscription directe possible" : ""}${g.note ? " · " + esc(g.note) : ""}</div></div>
+          <div class="right"><button class="btn small" type="button" data-g="${i}">Modifier…</button></div></li>`).join("")}</ul></div>
+      <div class="card"><h2>SGI proposées dans les profils (${actives.length})</h2>
+        <div class="chips">${u.sgi.map((x) => `<button class="chip${x.actif ? "" : " sell"}" type="button" data-sgi="${esc(x.nom)}" title="${x.actif ? "Retirer des profils" : "Proposer à nouveau"}">${esc(x.nom)}${x.actif ? "" : " (retirée)"}</button>`).join(" ")}</div>
+        <form id="f-sgi" class="grid2" novalidate style="margin-top:12px"><label>Ajouter une SGI<input name="nom" maxlength="80" autocomplete="off" placeholder="Nom de la SGI"></label>
+          <div class="actions" style="align-self:end"><button class="btn primary" type="submit">Ajouter…</button></div></form></div>`;
+    const editer = async (g) => {
+      const r = await ask({ title: "Où souscrire : " + g.gestionnaire, ok: "Enregistrer",
+        body: `<fieldset class="fs"><legend>SGI qui distribuent ses fonds</legend>${actives.map((x) => `<label class="switch"><input type="checkbox" name="d" value="${esc(x.nom)}"${g.distributeurs.includes(x.nom) ? " checked" : ""}> ${esc(x.nom)}</label>`).join("")}</fieldset>
+          <label class="switch"><input type="checkbox" name="sgo"${g.sgo_directe !== false ? " checked" : ""}> Souscription directe auprès de la société de gestion</label>
+          <label class="switch"><input type="checkbox" name="conf"${g.confirme ? " checked" : ""}> Informations vérifiées</label>
+          <label>Note (facultatif)<input name="note" maxlength="200" value="${esc(g.note || "")}"></label>` });
+      if (!r) return;
+      const f = r.form;
+      try {
+        await api.modifierGestionnaire({ gestionnaire: g.gestionnaire, distributeurs: [...f.querySelectorAll('[name="d"]:checked')].map((x) => x.value),
+          sgo_directe: f.sgo.checked, confirme: f.conf.checked, note: f.note.value.trim() }, r.motif);
+        toast("Gestionnaire enregistré."); vUnivers();
+      } catch (e) { toast("Action refusée : " + msgErr(e)); }
+    };
+    v.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => editer(u.gestionnaires[+b.dataset.g])));
+    v.querySelectorAll("[data-nouveau]").forEach((b) => b.addEventListener("click", () =>
+      editer({ gestionnaire: b.dataset.nouveau, distributeurs: [], sgo_directe: true, confirme: false, note: "" })));
+    v.querySelectorAll("[data-sgi]").forEach((b) => b.addEventListener("click", async () => {
+      const x = u.sgi.find((y) => y.nom === b.dataset.sgi);
+      const r = await ask({ title: x.actif ? "Retirer une SGI des profils" : "Proposer à nouveau une SGI", ok: "Confirmer",
+        body: `<p>${esc(x.nom)} ${x.actif ? "ne sera plus proposée aux utilisateurs (ceux qui l'ont déjà choisie la gardent)." : "sera de nouveau proposée."}</p>` });
+      if (!r) return;
+      try { await api.sgi(x.nom, !x.actif, r.motif); toast("SGI mise à jour."); vUnivers(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
+    }));
+    $("#f-sgi", v).addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const nom = ev.currentTarget.nom.value.trim();
+      if (nom.length < 2) { toast("Indiquez le nom de la SGI."); return; }
+      const r = await ask({ title: "Ajouter une SGI", ok: "Ajouter", body: `<p><b>${esc(nom)}</b> sera proposée dans les profils.</p>` });
+      if (!r) return;
+      try { await api.sgi(nom, true, r.motif); toast("SGI ajoutée."); vUnivers(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
+    });
+  }
+
   // ------------------------------------------------------------ communication (comms.manage)
   async function vCommunication() {
     const v = $("#v-communication");
@@ -598,7 +679,7 @@
       try { const n = await api.publierDocument(f.type.value, titre, texte, r.motif); toast(`Version ${n} publiée.`); vConformite(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
     });
   }
-  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur,
+  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
     communication: vCommunication, conformite: vConformite, habilitations: vHabilitations, audit: vAudit };
 
   // ------------------------------------------------------------ navigation
