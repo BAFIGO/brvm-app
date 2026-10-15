@@ -358,3 +358,31 @@ dialog.bravo .actions { justify-content: center; }
   .fab.fab-ok { animation: fab-ok 1.2s ease-out; }
   @keyframes fab-ok { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(23, 134, 111, .55); } 30% { transform: scale(1.15); } 100% { transform: scale(1); box-shadow: 0 0 0 22px rgba(23, 134, 111, 0); } }
 }
+
+/* Création de compte et assistant (onboarding) */
+.drapeau, .tel select, .recap { font-family: "Twemoji Country Flags", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+/* Une seule ligne : [drapeau +225 ▾][numéro]. Le menu des pays est un vrai <select> posé, transparent, sur le drapeau. */
+.tel { position: relative; display: flex; margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.tel:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tel .indicatif { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; min-height: 44px; white-space: nowrap; font-weight: 600;
+  border-right: 1px solid var(--border); background: var(--surface-2); border-radius: 10px 0 0 10px; }
+.tel .chevron { font-size: .75em; color: var(--muted); }
+.tel select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; margin: 0; min-height: 0; }
+.tel input { flex: 1; min-width: 0; margin: 0; border: 0; border-radius: 0 10px 10px 0; background: transparent; }
+.tel input:focus { outline: none; }
+@font-face { font-family: "Twemoji Country Flags"; src: url("vendor/TwemojiCountryFlags.woff2") format("woff2"); font-display: swap;
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F; }
+.auth-choix { display: flex; width: 100%; margin: 4px 0 14px; }
+.auth-choix button { flex: 1; }
+.auth-choix[hidden] { display: none; }
+#auth-titre { margin-top: 0; }
+#auth-cgu { margin: 12px 0 4px; }
+input.code { font-size: 1.4rem; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }
+.ob-barre { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 8px 0 4px; }
+.ob-barre span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .3s ease; }
+.recap { padding-left: 18px; }
+.sgi-pays { margin: 10px 0 2px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.sgi-pays:first-child { margin-top: 0; }
+.radios.sgi .drapeau { font-size: 1.1em; }
+.recap li { margin: 4px 0; }
+#v-onboarding { max-width: 560px; margin: 0 auto; }
