@@ -81,6 +81,7 @@
       univers: () => rpc("admin_univers"),
       modifierGestionnaire: (g, motif) => rpc("admin_modifier_gestionnaire", { p_gestionnaire: g.gestionnaire, p_sgo_directe: g.sgo_directe,
         p_distributeurs: g.distributeurs, p_confirme: g.confirme, p_note: g.note || null, p_motif: motif }),
+      pays: (type, code, pays, motif) => rpc("admin_pays", { p_type: type, p_code: code, p_pays: pays, p_motif: motif }),
       sgi: (nom, actif, motif, pays) => rpc("admin_sgi", { p_nom: nom, p_actif: actif, p_motif: motif, ...(pays ? { p_pays: pays } : {}) }),
       traitements: () => rpc("admin_traitements"),
       relancer: (motif) => rpc("admin_relancer", { p_motif: motif }),
@@ -142,7 +143,11 @@
       gestionnaires: [["ALPHA AM", ["Alpha Bourse"], 5], ["BETA GESTION", ["Beta Securities"], 4], ["DELTA ASSET", [], 3], ["GAMMA CAPITAL", ["Gamma Finance"], 4], ["OMEGA FINANCE", ["Omega Capital"], 4]]
         .map(([gestionnaire, distributeurs, fonds]) => ({ gestionnaire, distributeurs, fonds, sgo_directe: true, confirme: false,
           note: distributeurs.length ? "Lien de groupe supposé, à confirmer" : "Distributeurs à renseigner", modifie_le: null, modifie_par: null })),
-      inconnus: ["SIGMA AM"] };
+      inconnus: ["SIGMA AM"], titres_pays: [],
+      titres: [{ classe: "actions", code: "SNTS", nom: "SONATEL SENEGAL" }, { classe: "actions", code: "ORAC", nom: "ORANGE CI" },
+        { classe: "obligations", code: "TPCI.O1", nom: "TPCI 6,10 % 2023-2030", emetteur: "TPCI", categorie: "etat" },
+        { classe: "obligations", code: "BOAD.O3", nom: "BOAD 5,95 % 2021-2031", emetteur: "BOAD", categorie: "regional" },
+        { classe: "obligations", code: "PAD.O1", nom: "PAD 6,60 % 2020-2027", emetteur: "PAD", categorie: "prive" }] };
     const traitements = [1, 2, 3, 4].map((j, i) => ({ id: 10 - i, debut: d(j - 0.2), fin: d(j - 0.21), statut: j === 3 ? "echec" : "succes", declencheur: "planifié",
       seance: j === 3 ? null : d(j).slice(0, 10), details: j === 3 ? { erreur: "Échec de la collecte ou de l'analyse", duree_s: 412 } : { propositions: 6, utilisateurs: 6, duree_s: 268 } }));
     const annonces = [];
@@ -185,6 +190,15 @@
       },
       parametres: async () => { need("engine.params"); return params; },
       univers: async () => { need("engine.params"); return univers; },
+      pays: async (type, code, pays, motif) => {
+        need("engine.params");
+        if (type === "gestionnaire") { const g = univers.gestionnaires.find((x) => x.gestionnaire === code); if (!g) throw new Error("Gestionnaire inconnu"); g.pays = pays; }
+        else {
+          univers.titres_pays = univers.titres_pays.filter((x) => x.code !== code.toUpperCase());
+          if (pays) univers.titres_pays.push({ code: code.toUpperCase(), pays, modifie_le: new Date().toISOString(), modifie_par: "admin@exemple.org" });
+        }
+        log("engine.params", "pays : " + code, motif);
+      },
       modifierGestionnaire: async (g, motif) => {
         need("engine.params");
         if (g.distributeurs.some((x) => !univers.sgi.some((y) => y.nom === x))) throw new Error("SGI inconnue : ajoutez-la d'abord à la liste");
@@ -557,8 +571,28 @@
   // ------------------------------------------------------------ univers accessible : où souscrire les FCP (engine.params)
   const PAYS_UEMOA = { CI: "Côte d'Ivoire", SN: "Sénégal", ML: "Mali", BF: "Burkina Faso", NE: "Niger", TG: "Togo", BJ: "Bénin", GW: "Guinée-Bissau" };
   const drapeau = (iso) => (iso ? String.fromCodePoint(...[...iso].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)) : "");
-  const choixPays = (cur) => `<label>Pays du siège<select name="pays"><option value="">Non renseigné</option>${Object.entries(PAYS_UEMOA)
+  const choixPays = (cur, titre = "Pays du siège", vide = "Non renseigné", regional = false) => `<label>${titre}<select name="pays"><option value="">${vide}</option>
+    ${regional ? `<option value="UEMOA"${cur === "UEMOA" ? " selected" : ""}>UEMOA (émetteur régional)</option>` : ""}${Object.entries(PAYS_UEMOA)
     .map(([k, t]) => `<option value="${k}"${k === cur ? " selected" : ""}>${drapeau(k)} ${esc(t)}</option>`).join("")}</select></label>`;
+  const libPays = (c) => (c === "UEMOA" ? "UEMOA" : c ? `${drapeau(c)} ${PAYS_UEMOA[c] || c}` : "–");
+  // Pays des titres : ceux que l'application ne sait pas déduire, et les corrections déjà faites
+  function carteTitres(u) {
+    const P = window.BRVM_PAYS;
+    if (!P || !u.titres) return "";
+    const corr = new Map((u.titres_pays || []).map((x) => [x.code, x.pays]));
+    const manquants = u.titres.filter((t) => !corr.has(t.code) && !P.de(t.classe, t, corr, null));
+    return `<div class="card"><h2>Pays des titres</h2>
+      <p class="small muted">L'application déduit le drapeau du code des actions, de l'émetteur des obligations (UEMOA pour les émetteurs régionaux)
+        et du pays de la société de gestion pour les FCP. Corrigez ici ce qu'elle ne trouve pas ou trouve mal.</p>
+      ${manquants.length ? `<p class="small"><b>${N(manquants.length)} titre(s) sans pays :</b></p><div class="chips">${manquants.map((t) =>
+        `<button class="chip warn" type="button" data-titre="${esc(t.code)}" title="${esc(t.nom || "")}">${esc(t.code)}</button>`).join(" ")}</div>`
+        : `<p class="small">Tous les titres du jour ont un pays.</p>`}
+      ${corr.size ? `<p class="small" style="margin-top:12px"><b>Corrections (${N(corr.size)}) :</b></p><div class="chips">${[...corr].map(([c, p]) =>
+        `<button class="chip" type="button" data-titre="${esc(c)}">${esc(c)} · ${esc(libPays(p))}</button>`).join(" ")}</div>` : ""}
+      <form id="f-titre" class="grid2" novalidate style="margin-top:12px"><label>Corriger un titre (code BRVM)<input name="code" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="ex. SNTS"></label>
+        <div class="actions" style="align-self:end"><button class="btn" type="submit">Choisir le pays…</button></div></form></div>`;
+  }
+
   async function vUnivers() {
     const v = $("#v-univers");
     v.innerHTML = `<h1 id="h-univers">Univers accessible</h1><p class="muted">Chargement…</p>`;
@@ -573,24 +607,44 @@
       <div class="card"><h2>Gestionnaires d'OPCVM (${u.gestionnaires.length})</h2>
         <p class="small muted">${u.gestionnaires.filter((g) => g.confirme).length} confirmé(s) sur ${u.gestionnaires.length}. Les liens préremplis sont des liens de groupe probables : vérifiez-les auprès des sociétés de gestion.</p>
         <ul class="list">${u.gestionnaires.map((g, i) => `<li><div class="main"><div class="name">${esc(g.gestionnaire)} ${chip(g)}</div>
-          <div class="sub">${N(g.fonds)} fonds · ${g.distributeurs.length ? "via " + esc(g.distributeurs.join(", ")) : "aucune SGI renseignée"}${g.sgo_directe ? " · souscription directe possible" : ""}${g.note ? " · " + esc(g.note) : ""}</div></div>
+          <div class="sub">${g.pays ? drapeau(g.pays) + " · " : ""}${N(g.fonds)} fonds · ${g.distributeurs.length ? "via " + esc(g.distributeurs.join(", ")) : "aucune SGI renseignée"}${g.sgo_directe ? " · souscription directe possible" : ""}${g.note ? " · " + esc(g.note) : ""}</div></div>
           <div class="right"><button class="btn small" type="button" data-g="${i}">Modifier…</button></div></li>`).join("")}</ul></div>
+      ${carteTitres(u)}
       <div class="card"><h2>SGI proposées dans les profils (${actives.length})</h2>
         <p class="small muted">Le drapeau aide les utilisateurs à trouver les SGI de leur pays. Touchez une SGI pour indiquer son pays ou la retirer des profils.</p>
         <div class="chips">${u.sgi.map((x) => `<button class="chip drapeau${x.actif ? "" : " sell"}" type="button" data-sgi="${esc(x.nom)}">${x.pays ? drapeau(x.pays) + " " : "❔ "}${esc(x.nom)}${x.actif ? "" : " (retirée)"}</button>`).join(" ")}</div>
         <form id="f-sgi" class="grid2" novalidate style="margin-top:12px"><label>Ajouter une SGI<input name="nom" maxlength="80" autocomplete="off" placeholder="Nom de la SGI"></label>
           ${choixPays("")}<div class="actions" style="align-self:end"><button class="btn primary" type="submit">Ajouter…</button></div></form></div>`;
+    const editerTitre = async (code, cur, nom) => {
+      const r = await ask({ title: "Pays de " + code + (nom ? " · " + nom : ""), ok: "Enregistrer",
+        body: choixPays(cur || "", "Pays (drapeau dans l'application)", "Automatique (déduit du code ou de l'émetteur)", true) });
+      if (!r) return;
+      try { await api.pays("titre", code, r.form.pays.value || null, r.motif); toast("Pays enregistré."); vUnivers(); }
+      catch (e) { toast("Action refusée : " + msgErr(e)); }
+    };
+    v.querySelectorAll("[data-titre]").forEach((b) => b.addEventListener("click", () => {
+      const t = (u.titres || []).find((x) => x.code === b.dataset.titre);
+      editerTitre(b.dataset.titre, (u.titres_pays || []).find((x) => x.code === b.dataset.titre)?.pays, t?.nom);
+    }));
+    $("#f-titre", v)?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const code = ev.currentTarget.code.value.trim().toUpperCase();
+      if (!code) { toast("Indiquez le code du titre."); return; }
+      editerTitre(code, (u.titres_pays || []).find((x) => x.code === code)?.pays);
+    });
     const editer = async (g) => {
       const r = await ask({ title: "Où souscrire : " + g.gestionnaire, ok: "Enregistrer",
         body: `<fieldset class="fs"><legend>SGI qui distribuent ses fonds</legend>${actives.map((x) => `<label class="switch"><input type="checkbox" name="d" value="${esc(x.nom)}"${g.distributeurs.includes(x.nom) ? " checked" : ""}> ${esc(x.nom)}</label>`).join("")}</fieldset>
           <label class="switch"><input type="checkbox" name="sgo"${g.sgo_directe !== false ? " checked" : ""}> Souscription directe auprès de la société de gestion</label>
           <label class="switch"><input type="checkbox" name="conf"${g.confirme ? " checked" : ""}> Informations vérifiées</label>
+          ${"pays" in g || DEMO ? choixPays(g.pays || "", "Pays de la société de gestion (drapeau des FCP)") : ""}
           <label>Note (facultatif)<input name="note" maxlength="200" value="${esc(g.note || "")}"></label>` });
       if (!r) return;
       const f = r.form;
       try {
         await api.modifierGestionnaire({ gestionnaire: g.gestionnaire, distributeurs: [...f.querySelectorAll('[name="d"]:checked')].map((x) => x.value),
           sgo_directe: f.sgo.checked, confirme: f.conf.checked, note: f.note.value.trim() }, r.motif);
+        if (f.pays && (f.pays.value || null) !== (g.pays || null)) await api.pays("gestionnaire", g.gestionnaire, f.pays.value || null, r.motif);
         toast("Gestionnaire enregistré."); vUnivers();
       } catch (e) { toast("Action refusée : " + msgErr(e)); }
     };
