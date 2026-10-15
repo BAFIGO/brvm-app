@@ -35,24 +35,35 @@
         <h1>Bienvenue</h1>
         <p data-sim="Chaque soir, après la séance de la BRVM, simulez un portefeuille selon vos propres réglages (budget, profil) et suivez vos placements.">Recevez chaque soir, après la séance de la BRVM, une proposition de portefeuille adaptée à votre budget
           et à votre profil, et suivez vos placements.</p>
+        <div class="seg auth-choix" role="group" aria-label="Compte">
+          <button type="button" data-auth="inscription" aria-pressed="true">Créer un compte</button>
+          <button type="button" data-auth="connexion" aria-pressed="false">J'ai déjà un compte</button>
+        </div>
+        <h2 id="auth-titre">Créer mon compte gratuit</h2>
         <form id="f-login" novalidate>
           <label for="email">Votre adresse e-mail</label>
           <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
-          <button class="btn primary" type="submit">Recevoir mon lien de connexion</button>
+          <label class="switch" id="auth-cgu" hidden><input type="checkbox" name="cgu"> <span>J'accepte les <a href="#" id="lire-cgu">conditions d'utilisation</a></span></label>
+          <button class="btn primary" type="submit">Recevoir mon code</button>
           <p class="msg" role="status" aria-live="polite"></p>
+          <p class="small muted" id="auth-aide"></p>
         </form>
         <form id="f-code" novalidate hidden>
-          <label for="code">Ou saisissez le code reçu par e-mail</label>
-          <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}">
-          <button class="btn" type="submit">Valider le code</button>
+          <p class="small">Code envoyé à <b id="code-email"></b>. Pensez aux courriers indésirables.</p>
+          <label for="code">Code reçu par e-mail</label>
+          <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" pattern="[0-9 ]{6,12}" class="code">
+          <button class="btn primary" type="submit">Valider</button>
           <p class="msg" role="status" aria-live="polite"></p>
+          <p class="small"><button class="btn link" type="button" id="code-renvoi">Renvoyer le code</button> ·
+            <button class="btn link" type="button" id="code-modifier">Modifier l'adresse</button></p>
         </form>
-        <p class="small muted">Pas de mot de passe : un lien vous est envoyé à chaque connexion.
+        <p class="small muted">Vous pouvez aussi toucher le lien reçu dans l'e-mail.
           <a href="?demo=1">Essayer la démo</a> sans compte (données fictives).</p>
         <p class="small"><a href="../">← Découvrir BRVM Portefeuille</a></p>
       </div>
     </section>
 
+    <section id="v-onboarding" class="view" hidden aria-labelledby="h-ob"></section>
     <section id="v-aujourdhui" class="view" hidden aria-labelledby="h-auj"></section>
     <section id="v-portefeuille" class="view" hidden aria-labelledby="h-pf"></section>
     <section id="v-performance" class="view" hidden aria-labelledby="h-perf"></section>

@@ -97,7 +97,8 @@
     return {
       session: async () => (await sb.auth.getSession()).data.session,
       onAuth: (cb) => sb.auth.onAuthStateChange((_e, s) => cb(s)),
-      login: async (email) => r(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } })),
+      // creer = false : reconnexion seulement (erreur si aucun compte avec cette adresse)
+      login: async (email, creer) => r(await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: !!creer, emailRedirectTo: location.origin + location.pathname } })),
       verify: async (email, token) => r(await sb.auth.verifyOtp({ email, token, type: "email" })),
       logout: async () => { await sb.auth.signOut(); location.href = "../?deconnecte=1"; },   // retour à la page d'accueil
       profil: async (uid) => r(await sb.from("profils").select("*").eq("id", uid).maybeSingle()),
@@ -541,6 +542,7 @@
   // ---------------------------------------------------------------- vues
   function vAujourdhui() {
     const v = $("#v-aujourdhui");
+    v.onclick = (ev) => { if (ev.target.closest("[data-completer]")) onboarding(true); };
     const L = replay(S.ops);
     const c = S.prop?.contenu;
     const fresh = S.prop && S.seance && S.prop.date === S.seance.date;
@@ -551,6 +553,9 @@
       return;
     }
     h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}</p>`;
+    if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
+      h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
+        <button class="btn small" type="button" data-completer>Compléter mon profil</button></div>`;
     const alertes = [...L.errors, ...(fresh && c?.alertes ? c.alertes : [])];
     if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
     for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
@@ -837,20 +842,241 @@
       <div class="actions"><button class="btn primary" type="submit">Enregistrer mon plan</button></div></form>`;
   }
 
-  function formUnivers(p) {
-    const mes = new Set(p.mes_sgi || []);
-    const radios = (name, opts, cur) => `<div class="radios">${Object.entries(opts).map(([k, [t, d]]) => `<label><input type="radio" name="${name}" value="${k}"${cur === k ? " checked" : ""}>
+  const radios = (name, opts, cur) => `<div class="radios">${Object.entries(opts).map(([k, [t, d]]) => `<label><input type="radio" name="${name}" value="${k}"${cur === k ? " checked" : ""}>
       <span><b>${t}</b>${d ? `<br><span class="small muted">${d}</span>` : ""}</span></label>`).join("")}</div>`;
+  function formUnivers(p) {
     return `<form id="f-univers" class="card" novalidate><h2>Mes comptes et mes placements</h2>
       <p class="small muted">Le portefeuille ne retient que ce que vous pouvez et voulez acheter. Les titres que vous détenez déjà ne sont pas concernés.</p>
-      <fieldset class="fs"><legend>Mes SGI</legend><div class="radios sgi">${S.univ.sgi.map((n) => `<label><input type="checkbox" name="mes_sgi" value="${esc(n)}"${mes.has(n) ? " checked" : ""}><span>${esc(n)}</span></label>`).join("")
+      ${champsUnivers(p)}
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer mes choix</button></div></form>`;
+  }
+  function champsUnivers(p) {
+    const mes = new Set(p.mes_sgi || []);
+    return `<fieldset class="fs"><legend>Mes SGI</legend><div class="radios sgi">${S.univ.sgi.map((n) => `<label><input type="checkbox" name="mes_sgi" value="${esc(n)}"${mes.has(n) ? " checked" : ""}><span>${esc(n)}</span></label>`).join("")
         || `<p class="small muted">Liste pas encore disponible.</p>`}</div>
         <p class="small muted">Votre SGI n'est pas dans la liste ? Écrivez-nous : elle sera ajoutée.</p></fieldset>
       <label class="switch" style="margin-top:6px"><input type="checkbox" name="souscription_sgo"${p.souscription_sgo ? " checked" : ""}> Je peux aussi souscrire directement auprès des sociétés de gestion</label>
       <fieldset class="fs"><legend>FCP</legend>${radios("choix_fcp", CHOIX_FCP, p.choix_fcp || "accessibles")}</fieldset>
       <fieldset class="fs"><legend>Obligations</legend>${radios("choix_obligations", CHOIX_OBLIG, p.choix_obligations || "toutes")}</fieldset>
-      <label class="switch" style="margin-top:14px"><input type="checkbox" name="choix_actions"${p.choix_actions !== false ? " checked" : ""}> Actions cotées</label>
-      <div class="actions"><button class="btn primary" type="submit">Enregistrer mes choix</button></div></form>`;
+      <label class="switch" style="margin-top:14px"><input type="checkbox" name="choix_actions"${p.choix_actions !== false ? " checked" : ""}> Actions cotées</label>`;
+  }
+  // → champs du profil, ou message d'erreur
+  function lireUnivers(fu) {
+    const upd = { mes_sgi: [...fu.querySelectorAll('[name="mes_sgi"]:checked')].map((x) => x.value), souscription_sgo: fu.souscription_sgo.checked,
+      choix_fcp: fu.choix_fcp.value || "accessibles", choix_obligations: fu.choix_obligations.value || "toutes", choix_actions: fu.choix_actions.checked };
+    if (upd.choix_fcp === "aucun" && upd.choix_obligations === "aucune" && !upd.choix_actions) return "Gardez au moins une catégorie de placements.";
+    return upd;
+  }
+
+  // ---------------------------------------------------------------- création de compte guidée (onboarding)
+  const UEMOA = ["CI", "SN", "ML", "BF", "NE", "TG", "BJ", "GW"];
+  const DIASPORA = ["FR", "BE", "CH", "CA", "US", "GB", "DE", "IT", "ES", "MA", "GH", "NG", "GN", "CM", "GA"];
+  const FUSEAUX = { "Africa/Abidjan": "CI", "Africa/Dakar": "SN", "Africa/Bamako": "ML", "Africa/Ouagadougou": "BF", "Africa/Niamey": "NE",
+    "Africa/Lome": "TG", "Africa/Porto-Novo": "BJ", "Africa/Bissau": "GW", "Europe/Paris": "FR", "Europe/Brussels": "BE" };
+  const INDICATIFS = { CI: "225", SN: "221", ML: "223", BF: "226", NE: "227", TG: "228", BJ: "229", GW: "245" };   // secours sans la bibliothèque
+  const drapeau = (iso) => String.fromCodePoint(...[...iso].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  let telLib = null, noms = null;
+  // Bibliothèque des numéros de téléphone (vendor/), chargée seulement quand on en a besoin ; null si indisponible
+  function chargerTel() {
+    return telLib ??= new Promise((ok) => {
+      if (window.libphonenumber) return ok(window.libphonenumber);
+      const sc = document.createElement("script");
+      sc.src = "../vendor/libphonenumber-min.js";
+      sc.onload = () => ok(window.libphonenumber || null);
+      sc.onerror = () => ok(null);
+      document.head.appendChild(sc);
+    });
+  }
+  function nomPays(iso) {
+    try { noms ??= new Intl.DisplayNames(["fr"], { type: "region" }); return noms.of(iso) || iso; } catch (e) { return iso; }
+  }
+  function indicatif(lib, iso) { try { return lib ? lib.getCountryCallingCode(iso) : INDICATIFS[iso] || ""; } catch (e) { return INDICATIFS[iso] || ""; } }
+  function paysParDefaut() { try { return FUSEAUX[Intl.DateTimeFormat().resolvedOptions().timeZone] || "CI"; } catch (e) { return "CI"; } }
+  function optionsPays(lib, cur) {
+    const tous = lib ? lib.getCountries() : UEMOA;
+    const opt = (c) => `<option value="${c}"${c === cur ? " selected" : ""}>${drapeau(c)} ${esc(nomPays(c))} (+${indicatif(lib, c)})</option>`;
+    const reste = tous.filter((c) => !UEMOA.includes(c) && !DIASPORA.includes(c)).sort((a, b) => nomPays(a).localeCompare(nomPays(b), "fr"));
+    return `<optgroup label="UEMOA">${UEMOA.map(opt).join("")}</optgroup>` + (lib ? `<optgroup label="Diaspora">${DIASPORA.filter((c) => tous.includes(c)).map(opt).join("")}</optgroup>
+      <optgroup label="Tous les pays">${reste.map(opt).join("")}</optgroup>` : "");
+  }
+  // Prénom, nom, pays (drapeau + indicatif) et téléphone sans indicatif : assistant et Profil
+  function champsIdentite(p, lib) {
+    const pays = p.pays || paysParDefaut();
+    let tel = "";
+    try { tel = p.telephone && lib ? lib.parsePhoneNumberFromString(p.telephone)?.formatNational() || "" : p.telephone || ""; } catch (e) { tel = p.telephone || ""; }
+    return `<div class="grid2"><label>Prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}"></label>
+        <label>Nom <span class="muted">(facultatif)</span><input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
+      <label>Pays de résidence<span class="pays"><span class="drapeau" aria-hidden="true">${drapeau(pays)}</span><select name="pays">${optionsPays(lib, pays)}</select></span></label>
+      <label>Téléphone <span class="muted">(facultatif)</span><span class="tel"><span class="indicatif drapeau">${drapeau(pays)} +${indicatif(lib, pays)}</span>
+        <input name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" value="${esc(tel)}" placeholder="Numéro sans l'indicatif"></span></label>
+      <p class="small muted">Utilisé seulement pour vous recontacter si vous demandez de l'aide, par exemple pour ouvrir un compte chez une SGI. Jamais transmis à des tiers.</p>`;
+  }
+  function brancherIdentite(f, lib) {
+    f.pays.addEventListener("change", () => {
+      const c = f.pays.value;
+      $(".pays .drapeau", f).textContent = drapeau(c);
+      $(".indicatif", f).textContent = `${drapeau(c)} +${indicatif(lib, c)}`;
+    });
+    f.telephone.addEventListener("blur", () => {
+      const t = f.telephone.value.trim();
+      if (lib && t) try { f.telephone.value = new lib.AsYouType(f.pays.value).input(t); } catch (e) { /* laissé tel quel */ }
+    });
+  }
+  // → { prenom, nom, pays, telephone } (téléphone au format international), ou message d'erreur
+  function lireIdentite(f, lib) {
+    const prenom = f.prenom.value.trim(), nom = f.nom.value.trim(), pays = f.pays.value, brut = f.telephone.value.trim();
+    if (!prenom) return "Indiquez votre prénom.";
+    let telephone = null;
+    if (brut) {
+      if (lib) {
+        let n = null;
+        try { n = lib.parsePhoneNumberFromString(brut, pays); } catch (e) { n = null; }
+        if (!n || !n.isValid()) return `Ce numéro ne correspond pas à un numéro de ${nomPays(pays)} : saisissez-le sans l'indicatif +${indicatif(lib, pays)}.`;
+        telephone = n.number;
+      } else {
+        const d = brut.replace(/\D/g, "");
+        if (d.length < 6 || d.length > 12) return "Numéro de téléphone invalide.";
+        telephone = "+" + indicatif(null, pays) + d;
+      }
+    }
+    return { prenom, nom: nom || null, pays, telephone };
+  }
+
+  // Profil de risque déduit de 3 questions (plutôt qu'un choix direct)
+  const QUESTIONS = [
+    { id: "horizon", q: "Dans combien de temps pourriez-vous avoir besoin de cet argent ?", r: [["moins2", "Dans moins de 2 ans"], ["2a5", "Entre 2 et 5 ans"], ["plus5", "Dans plus de 5 ans"]] },
+    { id: "baisse", q: "Votre placement perd 20 % en quelques mois. Que faites-vous ?", r: [["vendre", "Je vends pour limiter la perte"], ["attendre", "J'attends que ça remonte"], ["racheter", "J'en profite pour en racheter"]] },
+    { id: "priorite", q: "Quelle est votre priorité ?", r: [["proteger", "Protéger mon capital"], ["equilibre", "Un équilibre entre sécurité et rendement"], ["croissance", "Faire croître mon épargne sur le long terme"]] }];
+  function profilDepuis(rep) {
+    if (rep.horizon === "moins2") return "prudent";                  // argent nécessaire bientôt : pas de risque
+    const sc = QUESTIONS.reduce((t, q) => t + Math.max(0, q.r.findIndex(([k]) => k === rep[q.id])), 0);
+    return sc <= 2 ? "prudent" : sc <= 4 ? "equilibre" : "dynamique";
+  }
+
+  // Assistant en 5 étapes : chaque étape est enregistrée tout de suite (reprise là où on s'est arrêté)
+  async function onboarding(completer = false) {
+    const v = $("#v-onboarding"), p = S.profil;
+    document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = true));
+    document.querySelectorAll("main > .view").forEach((n) => (n.hidden = n !== v));
+    v.hidden = false;
+    v.innerHTML = `<p class="center muted">Chargement…</p>`;
+    const lib = await chargerTel();
+    const etapes = [
+      { n: 1, titre: "Vous", oblig: true },
+      { n: 2, titre: "Votre objectif", oblig: true },
+      { n: 3, titre: "Votre épargne" },
+      ...(S.univ ? [{ n: 4, titre: "Vos comptes" }] : []),
+      { n: 5, titre: "Vos préférences", oblig: true }];
+    let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.n > (+p.onboarding_etape || 0)));
+    const rep = { ...(p.questionnaire || {}) };
+    return new Promise((fini) => {
+      const finir = (msg) => {
+        v.hidden = true;
+        document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
+        history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
+        render();
+        if (msg) toast(msg);
+        fini();
+      };
+      const corps = (e) => {
+        if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace. Votre adresse : <b>${esc(S.user.email || p.email || "")}</b></p>` + champsIdentite(p, lib);
+        if (e.n === 2) return QUESTIONS.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
+          + `<p class="notice info small" id="ob-profil"${rep.horizon && rep.baisse && rep.priorite ? "" : " hidden"}></p>`;
+        if (e.n === 3) {
+          const pl = S.coffre?.plan || {};
+          return (S.coffre ? `<p class="small muted">Mettez de côté un peu, régulièrement : c'est la clé. L'argent reste chez vous (espèces, banque, mobile money).</p>
+            <div class="grid2"><label>Je mets de côté (F)<input name="montant" type="number" min="0" step="500" inputmode="numeric" value="${pl.montant || ""}" placeholder="ex. 5000"></label>
+              <label>Rythme<select name="rythme">${Object.entries({ quotidien: "Chaque jour", hebdo: "Chaque semaine", mensuel: "Chaque mois" })
+                .map(([k, t]) => `<option value="${k}"${(pl.rythme || "mensuel") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label></div>
+            <label>Objectif à atteindre (F, facultatif)<input name="objectif" type="number" min="0" step="10000" inputmode="numeric" value="${pl.objectif || ""}" placeholder="ex. 500000"></label>` : "")
+            + `<label>Montant que vous souhaitez investir en bourse (F, facultatif)<input name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${+p.budget || ""}" placeholder="ex. 500000"></label>
+            <p class="small muted">Vous pourrez le changer à tout moment${S.coffre ? ", ou le faire suivre automatiquement votre épargne (Profil)" : ""}.</p>`;
+        }
+        if (e.n === 4) return champsUnivers(p) + `<p class="small muted">Pas encore de compte chez une SGI ? Passez cette étape : vous pourrez l'indiquer plus tard dans votre profil.</p>`;
+        return `<label class="switch"><input type="checkbox" name="recevoir_email"${p.recevoir_email !== false ? " checked" : ""}> Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
+          ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:12px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}> Animations de félicitations (confettis)</label>` : ""}
+          <h3 style="margin-top:18px">Récapitulatif</h3><ul class="recap small">
+            <li><b>${esc(p.prenom || "")}${p.nom ? " " + esc(p.nom) : ""}</b>${p.pays ? ` · ${drapeau(p.pays)} ${esc(nomPays(p.pays))}` : ""}</li>
+            <li>Profil de risque : <b>${esc(PROFILS[p.profil]?.t || p.profil || "–")}</b></li>
+            ${S.coffre?.plan?.montant ? `<li>Épargne : <b>${F(S.coffre.plan.montant)}</b> ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[S.coffre.plan.rythme] || ""}</li>` : ""}
+            ${+p.budget ? `<li>Montant à investir : <b>${F(p.budget)}</b></li>` : ""}
+            ${(p.mes_sgi || []).length ? `<li>SGI : <b>${esc(p.mes_sgi.join(", "))}</b></li>` : ""}</ul>
+          <p class="small muted">Tout se modifie ensuite dans l'onglet Profil.</p>`;
+      };
+      const lire = async (e, f) => {
+        if (e.n === 1) return lireIdentite(f, lib);
+        if (e.n === 2) {
+          for (const q of QUESTIONS) { rep[q.id] = f[q.id].value; if (!rep[q.id]) return "Répondez aux trois questions."; }
+          return { questionnaire: { ...rep }, profil: profilDepuis(rep) };
+        }
+        if (e.n === 3) {
+          const montant = S.coffre ? Math.max(0, +f.montant.value || 0) : 0;
+          if (montant) {
+            const pl = { ...(S.coffre.plan || {}), montant, rythme: f.rythme.value, jours_ouvres: S.coffre.plan?.jours_ouvres ?? true,
+              objectif: +f.objectif.value || null, debut: S.coffre.plan?.debut || new Date().toISOString().slice(0, 10) };
+            await api.savePlan(pl);
+            S.coffre.plan = pl;
+          }
+          const budget = Math.max(0, +f.budget.value || 0);
+          return budget ? { budget } : {};
+        }
+        if (e.n === 4) return lireUnivers(f);
+        const upd = { recevoir_email: f.recevoir_email.checked };
+        if (f.felicitations) upd.felicitations = f.felicitations.checked;
+        if (!p.onboarding_fini_le) upd.onboarding_fini_le = new Date().toISOString();
+        return upd;
+      };
+      const afficher = () => {
+        const e = etapes[i], dernier = i === etapes.length - 1;
+        v.innerHTML = `<h1 id="h-ob">${completer ? "Compléter mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
+          <div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
+            <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
+          <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
+          <form id="f-ob" class="card" novalidate><h2>${e.titre}</h2>${corps(e)}<p class="msg" role="status" aria-live="polite"></p>
+            <div class="actions">${i > 0 ? `<button class="btn" type="button" data-retour>Retour</button>` : ""}
+              ${e.oblig ? "" : `<button class="btn" type="button" data-passer>Passer</button>`}
+              <button class="btn primary" type="submit">${dernier ? "Terminer" : "Continuer"}</button></div></form>
+          ${i > 0 || completer ? `<p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard</button></p>` : ""}`;
+        const f = $("#f-ob", v), msg = $(".msg", f);
+        if (e.n === 1) brancherIdentite(f, lib);
+        if (e.n === 2) {
+          const maj = () => {
+            QUESTIONS.forEach((q) => { rep[q.id] = f[q.id].value || rep[q.id]; });
+            const el = $("#ob-profil", f);
+            if (!(rep.horizon && rep.baisse && rep.priorite)) return;
+            const pr = PROFILS[profilDepuis(rep)];
+            el.hidden = false;
+            el.innerHTML = `Votre profil : <b>${esc(pr.t)}</b>. ${esc(pr.d)}`;
+          };
+          f.addEventListener("change", maj); maj();
+        }
+        f.addEventListener("submit", async (ev) => {
+          ev.preventDefault();
+          const b = $("button[type=submit]", f);
+          b.disabled = true;
+          try {
+            const upd = await lire(e, f);
+            if (typeof upd === "string") { msg.textContent = upd; b.disabled = false; return; }
+            if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.n);
+            await api.saveProfil(S.user.id, upd);
+            const avant = p.profil;
+            Object.assign(p, upd);
+            if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await api.cibles(S.seance.date, upd.profil);
+            if (dernier) return finir(completer ? "Profil complété." : `Bienvenue${p.prenom ? ", " + p.prenom : ""} ! Votre espace est prêt.`);
+            i++; afficher();
+            window.scrollTo(0, 0);
+          } catch (err) { msg.textContent = "Enregistrement impossible : " + err.message; b.disabled = false; }
+        });
+        $("[data-retour]", v)?.addEventListener("click", () => { i--; afficher(); });
+        $("[data-passer]", v)?.addEventListener("click", () => { i++; afficher(); });
+        $("[data-plus-tard]", v)?.addEventListener("click", () => {
+          try { sessionStorage.setItem("brvm-ob-plus-tard", "1"); } catch (e) { /* stockage indisponible */ }
+          finir(completer ? "" : "D'accord : vous reprendrez votre profil à la prochaine connexion.");
+        });
+        $("input, select", f)?.focus();
+      };
+      afficher();
+    });
   }
 
   function vProfil() {
@@ -876,6 +1102,8 @@
           Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
         <div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form>
+      ${DEMO || "prenom" in p ? `<form id="f-identite" class="card" novalidate><h2>Mes coordonnées</h2><div class="ident"><p class="muted small">Chargement…</p></div>
+        <p class="msg" role="status" aria-live="polite"></p><div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div></form>` : ""}
       ${S.univ && (DEMO || "mes_sgi" in p) ? formUnivers(p) : ""}
       ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
       ${DEMO && S.coffre ? `<div class="card"><h2>Essayer les félicitations</h2><p class="small muted">Démonstration uniquement.</p>
@@ -908,12 +1136,24 @@
         toast(`Profil enregistré. La ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir.`);
       } catch (err) { toast("Enregistrement impossible : " + err.message); }
     });
+    const fi = $("#f-identite", v);
+    if (fi) chargerTel().then((lib) => {
+      if (!fi.isConnected) return;
+      $(".ident", fi).innerHTML = champsIdentite(p, lib);
+      brancherIdentite(fi, lib);
+      fi.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const upd = lireIdentite(fi, lib), msg = $(".msg", fi);
+        if (typeof upd === "string") { msg.textContent = upd; return; }
+        msg.textContent = "";
+        try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); toast("Coordonnées enregistrées."); }
+        catch (err) { msg.textContent = "Enregistrement impossible : " + err.message; }
+      });
+    });
     $("#f-univers", v)?.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const fu = ev.currentTarget;
-      const upd = { mes_sgi: [...fu.querySelectorAll('[name="mes_sgi"]:checked')].map((x) => x.value), souscription_sgo: fu.souscription_sgo.checked,
-        choix_fcp: fu.choix_fcp.value || "accessibles", choix_obligations: fu.choix_obligations.value || "toutes", choix_actions: fu.choix_actions.checked };
-      if (upd.choix_fcp === "aucun" && upd.choix_obligations === "aucune" && !upd.choix_actions) { toast("Gardez au moins une catégorie de placements."); return; }
+      const upd = lireUnivers(ev.currentTarget);
+      if (typeof upd === "string") { toast(upd); return; }
       try {
         await api.saveProfil(S.user.id, upd);
         Object.assign(S.profil, upd);
@@ -1377,8 +1617,20 @@
       return;
     }
     $("#loading").hidden = true;
-    const cgu = S.docs?.cgu;
+    const ss = (k) => { try { const x = sessionStorage.getItem(k); sessionStorage.removeItem(k); return x; } catch (e) { return null; } };
+    try { localStorage.setItem("brvm-a-un-compte", "1"); } catch (e) { /* stockage indisponible */ }
+    const cgu = S.docs?.cgu, accepte = +ss("brvm-cgu-acceptee") || 0, inscription = ss("brvm-inscription");
+    if (cgu && accepte === cgu.version && (+S.profil.cgu_version || 0) < cgu.version) {      // case cochée à la création du compte
+      const upd = { cgu_version: cgu.version, cgu_acceptee_le: new Date().toISOString() };
+      try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); } catch (e) { /* demandée ci-dessous */ }
+    }
     if (cgu && (+S.profil.cgu_version || 0) < cgu.version && !(await showCgu(cgu, true))) return;
+    const plusTard = (() => { try { return sessionStorage.getItem("brvm-ob-plus-tard"); } catch (e) { return null; } })();
+    if (("onboarding_etape" in S.profil && !S.profil.onboarding_fini_le && !plusTard) || (DEMO && new URLSearchParams(location.search).has("onboarding"))) {
+      await onboarding();
+      return;
+    }
+    if (inscription && S.profil.onboarding_fini_le) setTimeout(() => toast("Vous aviez déjà un compte avec cette adresse : bienvenue !"), 600);
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
     if (!TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
     render();
@@ -1421,47 +1673,86 @@
     } catch (e) { /* table pas encore créée : pas de bannière */ }
   }
 
+  // Connexion : « Créer mon compte » ou « J'ai déjà un compte » ; code à 6 chiffres reçu par e-mail (le lien marche aussi)
   function showLogin() {
     $("#loading").hidden = true;
     $("#v-connexion").hidden = false;
-    const fl = $("#f-login"), fc = $("#f-code");
-    fl.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const email = fl.email.value.trim(), m = $(".msg", fl);
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { m.textContent = "Adresse e-mail invalide."; return; }
-      const btn = fl.querySelector("button");
-      btn.disabled = true;
-      let wait = 0;
-      try {
-        await api.login(email);
-        m.textContent = "C'est envoyé : ouvrez l'e-mail et touchez le lien (pensez aux courriers indésirables).";
-        fc.hidden = false;
-        wait = 60;                                   // évite les demandes répétées (limite d'envoi)
-      } catch (e) {
-        const msg = String(e.message || e);
-        if (/rate limit|too many|429|security purposes/i.test(msg)) {
-          m.textContent = "Trop de demandes de connexion en peu de temps. Si vous avez déjà reçu un lien ou un code, "
-            + "utilisez-le ; sinon réessayez dans quelques minutes.";
-          fc.hidden = false;
-          wait = 60;
-        } else m.textContent = "Envoi impossible : " + msg;
-      }
-      if (!wait) { btn.disabled = false; return; }
-      const label = btn.textContent;
+    const fl = $("#f-login"), fc = $("#f-code"), m = $(".msg", fl);
+    let mode = location.hash === "#connexion" ? "connexion" : location.hash === "#inscription" ? "inscription"
+      : (() => { try { return localStorage.getItem("brvm-a-un-compte") ? "connexion" : "inscription"; } catch (e) { return "inscription"; } })();
+    let cgu = null, wait = 0;
+    const regler = () => {
+      const ins = mode === "inscription";
+      document.querySelectorAll("[data-auth]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.auth === mode)));
+      $("#auth-titre").textContent = ins ? "Créer mon compte gratuit" : "Me connecter";
+      $("#auth-aide").textContent = ins ? "Votre adresse e-mail sert d'identifiant : pas de mot de passe à retenir."
+        : "Saisissez l'adresse de votre compte : nous vous envoyons un code de connexion.";
+      $("#auth-cgu").hidden = !ins || !cgu;
+      if (cgu) $("#lire-cgu").textContent = cgu.titre || "conditions d'utilisation";
+      m.textContent = "";
+    };
+    document.querySelectorAll("[data-auth]").forEach((b) => b.addEventListener("click", () => {
+      mode = b.dataset.auth; fc.hidden = true; fl.hidden = false; regler();
+      history.replaceState(null, "", location.pathname + location.search + "#" + mode);
+      fl.email.focus();
+    }));
+    $("#lire-cgu").addEventListener("click", (ev) => { ev.preventDefault(); if (cgu) showCgu(cgu, false); });
+    api.documents().then((docs) => { cgu = (docs || []).find((d) => d.type === "cgu") || null; regler(); }).catch(() => {});
+    regler();
+    const bouton = fl.querySelector("button[type=submit]"), label = bouton.textContent, renvoi = $("#code-renvoi");
+    const attendre = (sec) => {
+      wait = sec;
       const tick = () => {
-        if (wait <= 0) { btn.disabled = false; btn.textContent = label; return; }
-        btn.textContent = `Nouvel envoi possible dans ${wait--} s`;
+        if (wait <= 0) { bouton.disabled = renvoi.disabled = false; bouton.textContent = label; renvoi.textContent = "Renvoyer le code"; return; }
+        bouton.textContent = `Nouvel envoi possible dans ${wait} s`;
+        renvoi.textContent = `Renvoyer le code (${wait--} s)`;
         setTimeout(tick, 1000);
       };
-      tick();
-    });
+      bouton.disabled = renvoi.disabled = true; tick();
+    };
+    const envoyer = async () => {
+      const email = fl.email.value.trim(), creer = mode === "inscription";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { m.textContent = "Adresse e-mail invalide."; return; }
+      if (creer && cgu && !fl.cgu.checked) { m.textContent = "Acceptez les conditions d'utilisation pour créer votre compte."; return; }
+      bouton.disabled = true;
+      try {
+        await api.login(email, creer);
+        try {
+          if (creer && cgu) sessionStorage.setItem("brvm-cgu-acceptee", String(cgu.version));
+          if (creer) sessionStorage.setItem("brvm-inscription", "1");
+        } catch (e) { /* stockage indisponible */ }
+        m.textContent = "";
+        $("#code-email").textContent = email;
+        $(".msg", fc).textContent = "";
+        fl.hidden = true; $(".auth-choix").hidden = true;          // une seule chose à faire : saisir le code
+        fc.hidden = false;
+        fc.code.value = "";
+        fc.code.focus();
+        attendre(60);                                  // évite les demandes répétées (limite d'envoi)
+      } catch (e) {
+        const msg = String(e.message || e);
+        bouton.disabled = false;
+        if (!creer && /signup|not allowed|not found|otp_disabled/i.test(msg)) {
+          m.innerHTML = `Aucun compte avec cette adresse. <button class="btn link" type="button" id="vers-inscription">Créer un compte avec cette adresse</button>`;
+          $("#vers-inscription").addEventListener("click", () => { mode = "inscription"; regler(); history.replaceState(null, "", location.pathname + location.search + "#inscription"); });
+        } else if (/rate limit|too many|429|security purposes/i.test(msg)) {
+          m.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un code, saisissez-le ; sinon réessayez dans quelques minutes.";
+          fc.hidden = false; attendre(60);
+        } else m.textContent = "Envoi impossible : " + msg;
+      }
+    };
+    fl.addEventListener("submit", (ev) => { ev.preventDefault(); envoyer(); });
+    $("#code-renvoi").addEventListener("click", () => envoyer());
+    $("#code-modifier").addEventListener("click", () => { fc.hidden = true; fl.hidden = false; $(".auth-choix").hidden = false; fl.email.focus(); });
     fc.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const m = $(".msg", fc);
-      try { await api.verify(fl.email.value.trim(), fc.code.value.trim()); }
-      catch (e) { m.textContent = "Code refusé : " + e.message; }
+      const mc = $(".msg", fc), code = fc.code.value.replace(/\s/g, "");
+      if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = "Saisissez le code à 6 chiffres reçu par e-mail."; return; }
+      try { await api.verify(fl.email.value.trim(), code); }
+      catch (e) { mc.textContent = /expired|invalid/i.test(String(e.message)) ? "Code incorrect ou expiré : vérifiez-le, ou demandez un nouveau code." : "Code refusé : " + e.message; }
     });
   }
+
 
   async function init() {
     $("#badge-demo").hidden = !DEMO;
