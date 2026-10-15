@@ -904,18 +904,21 @@
     const pays = p.pays || paysParDefaut();
     let tel = "";
     try { tel = p.telephone && lib ? lib.parsePhoneNumberFromString(p.telephone)?.formatNational() || "" : p.telephone || ""; } catch (e) { tel = p.telephone || ""; }
+    // Pays et téléphone sur une seule ligne : le sélecteur (drapeau + indicatif) donne aussi le pays enregistré
     return `<div class="grid2"><label>Prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}"></label>
-        <label>Nom <span class="muted">(facultatif)</span><input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
-      <label>Pays de résidence<span class="pays"><span class="drapeau" aria-hidden="true">${drapeau(pays)}</span><select name="pays">${optionsPays(lib, pays)}</select></span></label>
-      <label>Téléphone <span class="muted">(facultatif)</span><span class="tel"><span class="indicatif drapeau">${drapeau(pays)} +${indicatif(lib, pays)}</span>
-        <input name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" value="${esc(tel)}" placeholder="Numéro sans l'indicatif"></span></label>
-      <p class="small muted">Utilisé seulement pour vous recontacter si vous demandez de l'aide, par exemple pour ouvrir un compte chez une SGI. Jamais transmis à des tiers.</p>`;
+        <label>Nom<input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
+      <label for="ob-tel">Pays et téléphone <span class="muted">(numéro facultatif)</span></label>
+      <div class="tel"><span class="indicatif"><span class="drapeau" aria-hidden="true">${drapeau(pays)} +${indicatif(lib, pays)} <span class="chevron">▾</span></span>
+        <select name="pays" aria-label="Pays (et indicatif)">${optionsPays(lib, pays)}</select></span>
+        <input id="ob-tel" name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" value="${esc(tel)}" placeholder="Numéro sans l'indicatif"></div>
+      <p class="small muted">Touchez le drapeau pour choisir votre pays. Le numéro sert seulement à vous recontacter si vous demandez de l'aide
+        (par exemple pour ouvrir un compte chez une SGI) ; il n'est jamais transmis à des tiers.</p>`;
   }
   function brancherIdentite(f, lib) {
     f.pays.addEventListener("change", () => {
       const c = f.pays.value;
-      $(".pays .drapeau", f).textContent = drapeau(c);
-      $(".indicatif", f).textContent = `${drapeau(c)} +${indicatif(lib, c)}`;
+      $(".indicatif .drapeau", f).innerHTML = `${drapeau(c)} +${esc(indicatif(lib, c))} <span class="chevron">▾</span>`;
+      f.telephone.focus();
     });
     f.telephone.addEventListener("blur", () => {
       const t = f.telephone.value.trim();
@@ -925,7 +928,7 @@
   // → { prenom, nom, pays, telephone } (téléphone au format international), ou message d'erreur
   function lireIdentite(f, lib) {
     const prenom = f.prenom.value.trim(), nom = f.nom.value.trim(), pays = f.pays.value, brut = f.telephone.value.trim();
-    if (!prenom) return "Indiquez votre prénom.";
+    if (!prenom || !nom) return "Indiquez votre prénom et votre nom.";
     let telephone = null;
     if (brut) {
       if (lib) {
@@ -939,7 +942,7 @@
         telephone = "+" + indicatif(null, pays) + d;
       }
     }
-    return { prenom, nom: nom || null, pays, telephone };
+    return { prenom, nom, pays, telephone };
   }
 
   // Profil de risque déduit de 3 questions (plutôt qu'un choix direct)
