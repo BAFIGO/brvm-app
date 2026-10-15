@@ -123,7 +123,9 @@
                                   jours_ouvres: pl.jours_ouvres, objectif: pl.objectif, debut: pl.debut }, { onConflict: "user_id" })),
       mode: async () => r(await sb.rpc("mode_recommandation")),
       // Univers accessible (supabase/univers.sql) : erreur si le fichier n'est pas installé → rubrique masquée
-      sgi: async () => r(await sb.from("sgi").select("nom").eq("actif", true).order("nom")),
+      // pays des SGI (drapeaux) : colonne ajoutée par une version plus récente de univers.sql → repli sans elle
+      sgi: async () => { const q = await sb.from("sgi").select("nom,pays").eq("actif", true).order("nom");
+        return q.error ? r(await sb.from("sgi").select("nom").eq("actif", true).order("nom")) : q.data; },
       gestionnaires: async () => r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
@@ -142,7 +144,7 @@
       saveProfil: async (_u, p) => { Object.assign((await load()).profil, p); },
       seance: async () => (await load()).seance,
       proposition: async () => (await load()).proposition,
-      sgi: async () => ["Alpha Bourse", "Beta Securities", "Gamma Finance", "Omega Capital"].map((nom) => ({ nom })),
+      sgi: async () => [["Alpha Bourse", "CI"], ["Beta Securities", "SN"], ["Gamma Finance", "CI"], ["Omega Capital", "BF"]].map(([nom, pays]) => ({ nom, pays })),
       gestionnaires: async () => [["ALPHA AM", ["Alpha Bourse"]], ["BETA GESTION", ["Beta Securities"]], ["DELTA ASSET", []],
         ["GAMMA CAPITAL", ["Gamma Finance"]], ["OMEGA FINANCE", ["Omega Capital"]], ["SIGMA AM", []]]
         .map(([gestionnaire, distributeurs]) => ({ gestionnaire, distributeurs, sgo_directe: true, confirme: false })),
@@ -852,13 +854,27 @@
   }
   function champsUnivers(p) {
     const mes = new Set(p.mes_sgi || []);
-    return `<fieldset class="fs"><legend>Mes SGI</legend><div class="radios sgi">${S.univ.sgi.map((n) => `<label><input type="checkbox" name="mes_sgi" value="${esc(n)}"${mes.has(n) ? " checked" : ""}><span>${esc(n)}</span></label>`).join("")
-        || `<p class="small muted">Liste pas encore disponible.</p>`}</div>
+    return `<fieldset class="fs"><legend>Mes SGI</legend><div class="radios sgi">${listeSgi(mes) || `<p class="small muted">Liste pas encore disponible.</p>`}</div>
         <p class="small muted">Votre SGI n'est pas dans la liste ? Écrivez-nous : elle sera ajoutée.</p></fieldset>
       <label class="switch" style="margin-top:6px"><input type="checkbox" name="souscription_sgo"${p.souscription_sgo ? " checked" : ""}> Je peux aussi souscrire directement auprès des sociétés de gestion</label>
       <fieldset class="fs"><legend>FCP</legend>${radios("choix_fcp", CHOIX_FCP, p.choix_fcp || "accessibles")}</fieldset>
       <fieldset class="fs"><legend>Obligations</legend>${radios("choix_obligations", CHOIX_OBLIG, p.choix_obligations || "toutes")}</fieldset>
       <label class="switch" style="margin-top:14px"><input type="checkbox" name="choix_actions"${p.choix_actions !== false ? " checked" : ""}> Actions cotées</label>`;
+  }
+  // SGI regroupées par pays, celui de l'utilisateur en premier ; drapeau devant chaque nom
+  function listeSgi(mes) {
+    const pref = S.profil?.pays || paysParDefaut(), groupes = new Map();
+    for (const n of S.univ.sgi) {
+      const c = S.univ.paysSgi?.get(n) || "";
+      if (!groupes.has(c)) groupes.set(c, []);
+      groupes.get(c).push(n);
+    }
+    const ordre = [...groupes.keys()].sort((a, b) => (b === pref) - (a === pref) || !a - !b || nomPays(a).localeCompare(nomPays(b), "fr"));
+    const titres = ordre.length > 1 || (ordre[0] && ordre[0] !== pref);
+    return ordre.map((c) => (titres ? `<p class="sgi-pays small"><span class="drapeau" aria-hidden="true">${c ? drapeau(c) : ""}</span>
+        ${c ? esc(nomPays(c)) : "Autres SGI"}${c === pref ? ` <span class="muted">· votre pays</span>` : ""}</p>` : "")
+      + groupes.get(c).map((n) => `<label><input type="checkbox" name="mes_sgi" value="${esc(n)}"${mes.has(n) ? " checked" : ""}>
+        <span>${c ? `<span class="drapeau" aria-hidden="true">${drapeau(c)}</span> ` : ""}${esc(n)}${c ? `<span class="sr-only"> (${esc(nomPays(c))})</span>` : ""}</span></label>`).join("")).join("");
   }
   // → champs du profil, ou message d'erreur
   function lireUnivers(fu) {
@@ -1573,7 +1589,7 @@
     await chargerMode();
     try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
     if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
-    try { const [sg, ge] = await Promise.all([api.sgi(), api.gestionnaires()]); S.univ = { sgi: (sg || []).map((x) => x.nom), gest: ge || [] }; }
+    try { const [sg, ge] = await Promise.all([api.sgi(), api.gestionnaires()]); S.univ = { sgi: (sg || []).map((x) => x.nom), paysSgi: new Map((sg || []).map((x) => [x.nom, x.pays || ""])), gest: ge || [] }; }
     catch (e) { S.univ = null; }     // univers.sql pas encore installé
     try {                                                              // versions les plus récentes de chaque texte
       const docs = await api.documents();

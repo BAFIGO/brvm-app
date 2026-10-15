@@ -81,7 +81,7 @@
       univers: () => rpc("admin_univers"),
       modifierGestionnaire: (g, motif) => rpc("admin_modifier_gestionnaire", { p_gestionnaire: g.gestionnaire, p_sgo_directe: g.sgo_directe,
         p_distributeurs: g.distributeurs, p_confirme: g.confirme, p_note: g.note || null, p_motif: motif }),
-      sgi: (nom, actif, motif) => rpc("admin_sgi", { p_nom: nom, p_actif: actif, p_motif: motif }),
+      sgi: (nom, actif, motif, pays) => rpc("admin_sgi", { p_nom: nom, p_actif: actif, p_motif: motif, ...(pays ? { p_pays: pays } : {}) }),
       traitements: () => rpc("admin_traitements"),
       relancer: (motif) => rpc("admin_relancer", { p_motif: motif }),
       annonces: () => rpc("admin_annonces"),
@@ -138,7 +138,7 @@
         options: [{ valeur: "proposition", libelle: "Proposition : l'application propose un portefeuille" }, { valeur: "simulation", libelle: "Simulation : l'utilisateur fixe ses règles, l'outil calcule" }],
         aide: "Bascule de prudence réglementaire. En simulation, l'application et l'e-mail du soir présentent un calcul fait à partir des réglages de l'utilisateur, jamais une recommandation. Effet immédiat dans l'application, au prochain traitement pour l'e-mail." }]
       .map((p) => ({ ...p, valeur: null, modifie_le: null, modifie_par: null }));
-    const univers = { sgi: ["Alpha Bourse", "Beta Securities", "Gamma Finance", "Omega Capital"].map((nom) => ({ nom, actif: true })),
+    const univers = { sgi: [["Alpha Bourse", "CI"], ["Beta Securities", "SN"], ["Gamma Finance", "CI"], ["Omega Capital", null]].map(([nom, pays]) => ({ nom, pays, actif: true })),
       gestionnaires: [["ALPHA AM", ["Alpha Bourse"], 5], ["BETA GESTION", ["Beta Securities"], 4], ["DELTA ASSET", [], 3], ["GAMMA CAPITAL", ["Gamma Finance"], 4], ["OMEGA FINANCE", ["Omega Capital"], 4]]
         .map(([gestionnaire, distributeurs, fonds]) => ({ gestionnaire, distributeurs, fonds, sgo_directe: true, confirme: false,
           note: distributeurs.length ? "Lien de groupe supposé, à confirmer" : "Distributeurs à renseigner", modifie_le: null, modifie_par: null })),
@@ -194,11 +194,12 @@
         univers.inconnus = univers.inconnus.filter((x) => x !== g.gestionnaire);
         log("engine.params", "univers : " + g.gestionnaire, motif);
       },
-      sgi: async (nom, actif, motif) => {
+      sgi: async (nom, actif, motif, pays) => {
         need("engine.params");
         if (nom.trim().length < 2) throw new Error("Nom de SGI attendu (2 à 80 caractères)");
         const x = univers.sgi.find((y) => y.nom === nom.trim());
-        if (x) x.actif = actif; else univers.sgi.push({ nom: nom.trim(), actif }), univers.sgi.sort((a, b) => a.nom.localeCompare(b.nom));
+        if (x) Object.assign(x, { actif, pays: pays || x.pays });
+        else univers.sgi.push({ nom: nom.trim(), actif, pays: pays || null }), univers.sgi.sort((a, b) => a.nom.localeCompare(b.nom));
         log("engine.params", "univers : SGI " + nom, motif);
       },
       modifierParametre: async (cle, val, motif) => {
@@ -554,6 +555,10 @@
   }
 
   // ------------------------------------------------------------ univers accessible : où souscrire les FCP (engine.params)
+  const PAYS_UEMOA = { CI: "Côte d'Ivoire", SN: "Sénégal", ML: "Mali", BF: "Burkina Faso", NE: "Niger", TG: "Togo", BJ: "Bénin", GW: "Guinée-Bissau" };
+  const drapeau = (iso) => (iso ? String.fromCodePoint(...[...iso].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)) : "");
+  const choixPays = (cur) => `<label>Pays du siège<select name="pays"><option value="">Non renseigné</option>${Object.entries(PAYS_UEMOA)
+    .map(([k, t]) => `<option value="${k}"${k === cur ? " selected" : ""}>${drapeau(k)} ${esc(t)}</option>`).join("")}</select></label>`;
   async function vUnivers() {
     const v = $("#v-univers");
     v.innerHTML = `<h1 id="h-univers">Univers accessible</h1><p class="muted">Chargement…</p>`;
@@ -571,9 +576,10 @@
           <div class="sub">${N(g.fonds)} fonds · ${g.distributeurs.length ? "via " + esc(g.distributeurs.join(", ")) : "aucune SGI renseignée"}${g.sgo_directe ? " · souscription directe possible" : ""}${g.note ? " · " + esc(g.note) : ""}</div></div>
           <div class="right"><button class="btn small" type="button" data-g="${i}">Modifier…</button></div></li>`).join("")}</ul></div>
       <div class="card"><h2>SGI proposées dans les profils (${actives.length})</h2>
-        <div class="chips">${u.sgi.map((x) => `<button class="chip${x.actif ? "" : " sell"}" type="button" data-sgi="${esc(x.nom)}" title="${x.actif ? "Retirer des profils" : "Proposer à nouveau"}">${esc(x.nom)}${x.actif ? "" : " (retirée)"}</button>`).join(" ")}</div>
+        <p class="small muted">Le drapeau aide les utilisateurs à trouver les SGI de leur pays. Touchez une SGI pour indiquer son pays ou la retirer des profils.</p>
+        <div class="chips">${u.sgi.map((x) => `<button class="chip drapeau${x.actif ? "" : " sell"}" type="button" data-sgi="${esc(x.nom)}">${x.pays ? drapeau(x.pays) + " " : "❔ "}${esc(x.nom)}${x.actif ? "" : " (retirée)"}</button>`).join(" ")}</div>
         <form id="f-sgi" class="grid2" novalidate style="margin-top:12px"><label>Ajouter une SGI<input name="nom" maxlength="80" autocomplete="off" placeholder="Nom de la SGI"></label>
-          <div class="actions" style="align-self:end"><button class="btn primary" type="submit">Ajouter…</button></div></form></div>`;
+          ${choixPays("")}<div class="actions" style="align-self:end"><button class="btn primary" type="submit">Ajouter…</button></div></form></div>`;
     const editer = async (g) => {
       const r = await ask({ title: "Où souscrire : " + g.gestionnaire, ok: "Enregistrer",
         body: `<fieldset class="fs"><legend>SGI qui distribuent ses fonds</legend>${actives.map((x) => `<label class="switch"><input type="checkbox" name="d" value="${esc(x.nom)}"${g.distributeurs.includes(x.nom) ? " checked" : ""}> ${esc(x.nom)}</label>`).join("")}</fieldset>
@@ -593,18 +599,20 @@
       editer({ gestionnaire: b.dataset.nouveau, distributeurs: [], sgo_directe: true, confirme: false, note: "" })));
     v.querySelectorAll("[data-sgi]").forEach((b) => b.addEventListener("click", async () => {
       const x = u.sgi.find((y) => y.nom === b.dataset.sgi);
-      const r = await ask({ title: x.actif ? "Retirer une SGI des profils" : "Proposer à nouveau une SGI", ok: "Confirmer",
-        body: `<p>${esc(x.nom)} ${x.actif ? "ne sera plus proposée aux utilisateurs (ceux qui l'ont déjà choisie la gardent)." : "sera de nouveau proposée."}</p>` });
+      const r = await ask({ title: x.nom, ok: "Enregistrer",
+        body: `${choixPays(x.pays || "")}<label class="switch"><input type="checkbox" name="actif"${x.actif ? " checked" : ""}> Proposée dans les profils</label>
+          <p class="small muted">Retirée, elle n'est plus proposée ; les utilisateurs qui l'ont déjà choisie la gardent.</p>` });
       if (!r) return;
-      try { await api.sgi(x.nom, !x.actif, r.motif); toast("SGI mise à jour."); vUnivers(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
+      try { await api.sgi(x.nom, r.form.actif.checked, r.motif, r.form.pays.value || null); toast("SGI mise à jour."); vUnivers(); }
+      catch (e) { toast("Action refusée : " + msgErr(e)); }
     }));
     $("#f-sgi", v).addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const nom = ev.currentTarget.nom.value.trim();
+      const nom = ev.currentTarget.nom.value.trim(), pays = ev.currentTarget.pays.value;
       if (nom.length < 2) { toast("Indiquez le nom de la SGI."); return; }
-      const r = await ask({ title: "Ajouter une SGI", ok: "Ajouter", body: `<p><b>${esc(nom)}</b> sera proposée dans les profils.</p>` });
+      const r = await ask({ title: "Ajouter une SGI", ok: "Ajouter", body: `<p>${pays ? drapeau(pays) + " " : ""}<b>${esc(nom)}</b> sera proposée dans les profils.</p>` });
       if (!r) return;
-      try { await api.sgi(nom, true, r.motif); toast("SGI ajoutée."); vUnivers(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
+      try { await api.sgi(nom, true, r.motif, pays || null); toast("SGI ajoutée."); vUnivers(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
     });
   }
 

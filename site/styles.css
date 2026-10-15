@@ -381,5 +381,8 @@ input.code { font-size: 1.4rem; letter-spacing: .3em; text-align: center; font-v
 .ob-barre { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 8px 0 4px; }
 .ob-barre span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .3s ease; }
 .recap { padding-left: 18px; }
+.sgi-pays { margin: 10px 0 2px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.sgi-pays:first-child { margin-top: 0; }
+.radios.sgi .drapeau { font-size: 1.1em; }
 .recap li { margin: 4px 0; }
 #v-onboarding { max-width: 560px; margin: 0 auto; }
