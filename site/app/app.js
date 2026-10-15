@@ -126,7 +126,9 @@
       // pays des SGI (drapeaux) : colonne ajoutée par une version plus récente de univers.sql → repli sans elle
       sgi: async () => { const q = await sb.from("sgi").select("nom,pays").eq("actif", true).order("nom");
         return q.error ? r(await sb.from("sgi").select("nom").eq("actif", true).order("nom")) : q.data; },
-      gestionnaires: async () => r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")),
+      gestionnaires: async () => { const q = await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme,pays");
+        return q.error ? r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")) : q.data; },
+      titresPays: async () => r(await sb.from("titres_pays").select("code,pays")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
     };
   }
@@ -147,7 +149,8 @@
       sgi: async () => [["Alpha Bourse", "CI"], ["Beta Securities", "SN"], ["Gamma Finance", "CI"], ["Omega Capital", "BF"]].map(([nom, pays]) => ({ nom, pays })),
       gestionnaires: async () => [["ALPHA AM", ["Alpha Bourse"]], ["BETA GESTION", ["Beta Securities"]], ["DELTA ASSET", []],
         ["GAMMA CAPITAL", ["Gamma Finance"]], ["OMEGA FINANCE", ["Omega Capital"]], ["SIGMA AM", []]]
-        .map(([gestionnaire, distributeurs]) => ({ gestionnaire, distributeurs, sgo_directe: true, confirme: false })),
+        .map(([gestionnaire, distributeurs], i) => ({ gestionnaire, distributeurs, sgo_directe: true, confirme: false, pays: ["CI", "SN", "CI", "BF", "CI", "TG"][i] })),
+      titresPays: async () => [],
       operations: async () => (await load()).operations.slice(),
       addOperation: async (op) => {
         const d = await load();
@@ -273,6 +276,13 @@
     return `<div class="card"><h2>FCP bien notés, non souscriptibles par vos SGI</h2><ul class="list">${hors.map((f) => `<li><div class="main">
       <div class="name">${esc(f.nom)}</div><div class="sub">${esc(f.gestionnaire)} · se souscrit chez ${esc((f.ou || []).join(" ou ") || "–")}${f.confirme ? "" : " (à confirmer)"}</div></div></li>`).join("")}</ul>
       <p class="small muted">Pour les inclure, ajoutez une SGI qui les distribue dans votre profil.</p></div>`;
+  }
+
+  // Drapeau du pays d'un titre (déduit par pays.js, corrections de la console d'abord)
+  function mq(code) {
+    const P = window.BRVM_PAYS, x = S.lignesMk?.get(code);
+    if (!P || !x) return "";
+    return P.marque(P.de(x[0], x[1], S.paysTitres, S.paysGest), nomPays);
   }
 
   function estimate(budget, detenus) {
@@ -590,7 +600,7 @@
       } else {
         h += `<p class="small muted">${SIM() ? "Pour rejoindre la cible calculée selon vos réglages" : "Pour rejoindre votre portefeuille cible"} (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p><ul class="list">`;
         ordres.forEach((o, i) => {
-          h += `<li><div class="main"><div class="name">${esc(o.libelle || o.code)}</div>
+          h += `<li><div class="main"><div class="name">${mq(o.code)}${esc(o.libelle || o.code)}</div>
             <div class="sub">${chip(o.sens)} ${esc(o.code)} · ${esc(o.motif || "")}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
             <div class="right num"><b>${N(o.quantite)}</b><div class="sub">limite ${F(o.prix_limite)}</div>
             <button class="btn small" data-ordre="${i}">J'ai passé l'ordre</button></div></li>`;
@@ -626,7 +636,7 @@
           ${nightly ? (SIM() ? "Simulation calculée ce soir." : "Proposition calculée ce soir.")
             : `Estimation immédiate ; la ${SIM() ? "simulation" : "proposition"} détaillée est recalculée chaque soir.`}</p><ul class="list">`;
         e.lines.forEach((l, i) => {
-          h += `<li><div class="main"><div class="name">${esc(l.libelle || l.code)}</div>
+          h += `<li><div class="main"><div class="name">${mq(l.code)}${esc(l.libelle || l.code)}</div>
             <div class="sub">${esc(CLASSES[l.classe] || l.classe)} · ${esc(l.code)} ${chip(l.decision)}</div></div>
             <div class="right num"><b>× ${N(l.quantite)}</b><div class="sub">${F(l.montant)}</div>
             <button class="btn small" data-ligne="${i}">J'ai acheté</button></div></li>`;
@@ -758,7 +768,7 @@
       for (const p of L.positions) {
         const d = S.decisions?.get(p.code);
         const act = S.actions?.get(p.code);
-        h += `<li><div class="main"><div class="name">${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
+        h += `<li><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} × PRU ${F(p.pru)} ${chip(d)}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
@@ -817,7 +827,7 @@
       }
       const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Note financière">${esc(r.analyse.note)}</span>` : "";
       if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
-      h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${esc(r.nom || r.code)}${note}</div>
+      h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}${note}</div>
           <div class="sub">${esc(r.code)} · score ${N(r.score)} ${chip(r.decision)}</div></div>
           <div class="right num">${px}</div></summary>
           <div class="why">${det}</div></details></li>`;
@@ -1591,6 +1601,8 @@
     if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
     try { const [sg, ge] = await Promise.all([api.sgi(), api.gestionnaires()]); S.univ = { sgi: (sg || []).map((x) => x.nom), paysSgi: new Map((sg || []).map((x) => [x.nom, x.pays || ""])), gest: ge || [] }; }
     catch (e) { S.univ = null; }     // univers.sql pas encore installé
+    S.paysGest = new Map((S.univ?.gest || []).filter((g) => g.pays).map((g) => [g.gestionnaire, g.pays]));
+    try { S.paysTitres = new Map(((await api.titresPays()) || []).map((x) => [x.code, x.pays])); } catch (e) { S.paysTitres = new Map(); }
     try {                                                              // versions les plus récentes de chaque texte
       const docs = await api.documents();
       S.docs = {};
@@ -1610,6 +1622,8 @@
       for (const r of S.mk.actions) { S.prices.set(r.code, r.cours); S.names.set(r.code, r.nom); S.classes.set(r.code, "actions"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.obligations) { S.prices.set(r.code, r.prix); S.names.set(r.code, r.nom); S.classes.set(r.code, "obligations"); S.decisions.set(r.code, r.decision); }
       for (const r of S.mk.opcvm) { S.prices.set(r.code, r.vl); S.names.set(r.code, r.nom); S.classes.set(r.code, r.classe); S.decisions.set(r.code, r.decision); }
+      S.lignesMk = new Map([...S.mk.actions.map((r) => [r.code, ["actions", r]]), ...S.mk.obligations.map((r) => [r.code, ["obligations", r]]),
+        ...S.mk.opcvm.map((r) => [r.code, ["opcvm", r]])]);
     }
   }
 
@@ -1705,7 +1719,7 @@
       document.querySelectorAll("[data-auth]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.auth === mode)));
       $("#auth-titre").textContent = ins ? "Créer mon compte gratuit" : "Me connecter";
       $("#auth-aide").textContent = ins ? "Votre adresse e-mail sert d'identifiant : pas de mot de passe à retenir."
-        : "Saisissez l'adresse de votre compte : nous vous envoyons un code de connexion.";
+        : "Saisissez l'adresse de votre compte : nous vous envoyons un lien de connexion.";
       $("#auth-cgu").hidden = !ins || !cgu;
       if (cgu) $("#lire-cgu").textContent = cgu.titre || "conditions d'utilisation";
       m.textContent = "";
@@ -1722,9 +1736,9 @@
     const attendre = (sec) => {
       wait = sec;
       const tick = () => {
-        if (wait <= 0) { bouton.disabled = renvoi.disabled = false; bouton.textContent = label; renvoi.textContent = "Renvoyer le code"; return; }
+        if (wait <= 0) { bouton.disabled = renvoi.disabled = false; bouton.textContent = label; renvoi.textContent = "Renvoyer l'e-mail"; return; }
         bouton.textContent = `Nouvel envoi possible dans ${wait} s`;
-        renvoi.textContent = `Renvoyer le code (${wait--} s)`;
+        renvoi.textContent = `Renvoyer l'e-mail (${wait--} s)`;
         setTimeout(tick, 1000);
       };
       bouton.disabled = renvoi.disabled = true; tick();
@@ -1743,10 +1757,9 @@
         m.textContent = "";
         $("#code-email").textContent = email;
         $(".msg", fc).textContent = "";
-        fl.hidden = true; $(".auth-choix").hidden = true;          // une seule chose à faire : saisir le code
+        fl.hidden = true; $(".auth-choix").hidden = true;          // une seule chose à faire : ouvrir l'e-mail
         fc.hidden = false;
         fc.code.value = "";
-        fc.code.focus();
         attendre(60);                                  // évite les demandes répétées (limite d'envoi)
       } catch (e) {
         const msg = String(e.message || e);
@@ -1755,7 +1768,7 @@
           m.innerHTML = `Aucun compte avec cette adresse. <button class="btn link" type="button" id="vers-inscription">Créer un compte avec cette adresse</button>`;
           $("#vers-inscription").addEventListener("click", () => { mode = "inscription"; regler(); history.replaceState(null, "", location.pathname + location.search + "#inscription"); });
         } else if (/rate limit|too many|429|security purposes/i.test(msg)) {
-          m.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un code, saisissez-le ; sinon réessayez dans quelques minutes.";
+          m.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un e-mail, touchez son lien ; sinon réessayez dans quelques minutes.";
           fc.hidden = false; attendre(60);
         } else m.textContent = "Envoi impossible : " + msg;
       }
@@ -1766,9 +1779,9 @@
     fc.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const mc = $(".msg", fc), code = fc.code.value.replace(/\s/g, "");
-      if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = "Saisissez le code à 6 chiffres reçu par e-mail."; return; }
+      if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = "Saisissez le code reçu par e-mail (6 chiffres), ou touchez simplement le lien de l'e-mail."; return; }
       try { await api.verify(fl.email.value.trim(), code); }
-      catch (e) { mc.textContent = /expired|invalid/i.test(String(e.message)) ? "Code incorrect ou expiré : vérifiez-le, ou demandez un nouveau code." : "Code refusé : " + e.message; }
+      catch (e) { mc.textContent = /expired|invalid/i.test(String(e.message)) ? "Code incorrect ou expiré : touchez plutôt le lien de l'e-mail, ou demandez un nouvel e-mail." : "Code refusé : " + e.message; }
     });
   }
 
