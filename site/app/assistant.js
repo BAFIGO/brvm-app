@@ -176,7 +176,7 @@
     dernierCompte = n;
   }
   // ---------------------------------------------------------------- petites animations d'ambiance (robot et coffre)
-  // Discrètes et limitées : une toutes les 20 à 45 s, 6 au plus par visite, jamais pendant que l'utilisateur
+  // Discrètes et limitées : la première vers 10 s, puis une toutes les 20 à 40 s, 6 au plus par visite, jamais pendant que l'utilisateur
   // fait défiler, touche l'écran ou tape, ni quand la fenêtre est ouverte ou l'onglet caché.
   // Rien du tout si le téléphone demande de réduire les animations.
   const MAX_AMBIANCE = 6;
@@ -188,9 +188,8 @@
   function jouerAmbiance() {
     if (CALME || ambianceFaites >= MAX_AMBIANCE) return;
     if (document.hidden || dlg.open || fab.hidden || Date.now() - derniereActivite < 4000) { planifierAmbiance(); return; }
-    const choix = ["cligne", "regarde"];
-    if (coffre()) choix.push("coffre", "coffre");          // le coffre a autant de chances que le robot
-    const c = choix[Math.floor(Math.random() * choix.length)];
+    // le robot et le coffre jouent chacun leur tour ; le robot alterne clin d'œil et coup d'œil
+    const c = coffre() && ambianceFaites % 2 === 0 ? "coffre" : (ambianceFaites % 4 < 2 ? "cligne" : "regarde");
     if (c === "coffre") {
       const cadran = coffre().querySelector("svg circle");
       if (cadran) { cadran.classList.add("cadran"); rejouer(coffre(), "allume"); }
@@ -198,7 +197,9 @@
     ambianceFaites++;
     planifierAmbiance();
   }
-  function planifierAmbiance() { if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, 20000 + Math.random() * 25000); }
+  function planifierAmbiance() {          // la première arrive vite (8 à 12 s), les suivantes toutes les 20 à 40 s
+    if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, ambianceFaites ? 20000 + Math.random() * 20000 : 8000 + Math.random() * 4000);
+  }
 
   window.addEventListener("brvm:pret", () => { majBouton(); setTimeout(cligner, 900); planifierAmbiance(); });
   window.addEventListener("brvm:maj", majBouton);

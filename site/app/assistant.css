@@ -53,12 +53,13 @@ body.has-ia.has-fab main { padding-bottom: 154px; }
   .fab-ia.regarde .yeux { animation: ia-yeux 1.6s ease-in-out; }
   @keyframes ia-tete { 25% { transform: rotate(-9deg); } 65% { transform: rotate(7deg); } }
   @keyframes ia-yeux { 25% { transform: translateX(-1.6px); } 65% { transform: translateX(1.6px); } }
-  /* le cadran du coffre s'allume doucement puis s'éteint (1,8 s), sans clignoter */
-  .fab .cadran { transition: none; }
-  .fab.allume .cadran { animation: coffre-cadran 1.8s ease-in-out; }
-  .fab.allume svg { animation: coffre-halo 1.8s ease-in-out; }
-  @keyframes coffre-cadran { 45% { fill: currentColor; fill-opacity: .45; } }
-  @keyframes coffre-halo { 45% { filter: drop-shadow(0 0 5px rgba(255, 255, 255, .85)); } }
+  /* le cadran du coffre s'allume doucement, un halo l'entoure, puis tout s'éteint (2,2 s), sans clignoter */
+  .fab.allume { animation: coffre-anneau 2.2s ease-in-out; }
+  .fab.allume .cadran { animation: coffre-cadran 2.2s ease-in-out; }
+  .fab.allume svg { animation: coffre-halo 2.2s ease-in-out; }
+  @keyframes coffre-cadran { 40%, 60% { fill: currentColor; fill-opacity: .85; } }
+  @keyframes coffre-halo { 40%, 60% { filter: drop-shadow(0 0 6px rgba(255, 255, 255, .95)); } }
+  @keyframes coffre-anneau { 40%, 60% { box-shadow: 0 0 0 6px var(--accent-soft), 0 6px 18px rgba(0, 0, 0, .22); } }
 }
 
 /* ---------------------------------------------------------------- fenêtre de discussion */
