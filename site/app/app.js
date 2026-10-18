@@ -130,6 +130,18 @@
         return q.error ? r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")) : q.data; },
       titresPays: async () => r(await sb.from("titres_pays").select("code,pays")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
+      // Alertes des positions (vue v_alertes_positions, fichier alertes.sql) : erreur si la vue n'est pas installée → rubrique masquée
+      alertes: async () => r(await sb.from("v_alertes_positions").select("classe_actif,ticker,alerte,motif,plancher,jours_echeance,perf_pct,dernier_cours")),
+      // Assistant : fonction Supabase « assistant » (la clé de l'API Claude reste sur le serveur)
+      assistant: async (body) => {
+        const { data, error } = await sb.functions.invoke("assistant", { body });
+        if (error) {
+          let msg = error.message || "erreur inconnue", code = error.context?.status;
+          try { const j = await error.context.json(); if (j?.erreur) msg = j.erreur; } catch (e) { /* réponse non JSON */ }
+          const err = new Error(msg); err.status = code; throw err;
+        }
+        return data;
+      },
     };
   }
 
@@ -191,6 +203,15 @@
       savePlan: async (pl) => { (await load()).coffre.plan = { ...pl }; },
       annonce: async () => (await load()).annonce || null,
       documents: async () => (await load()).documents || [],
+      alertes: async () => alertesDemo(),
+      assistant: async (body) => {
+        await new Promise((ok) => setTimeout(ok, 700));
+        const c = body.contexte || {}, pf = c.portefeuille || {}, al = c.alertes_titres || [];
+        return { texte: `En démonstration, je réponds seulement avec les données fictives de l'écran.\n\n`
+          + `- Votre portefeuille de démonstration vaut **${F(pf.valeur_totale)}**, dont ${F(pf.disponible)} disponibles chez la SGI.\n`
+          + `- ${al.length ? `${al.length} alerte${al.length > 1 ? "s" : ""} à regarder, par exemple ${al[0].code} : ${al[0].motif}` : "Aucune alerte sur vos titres."}\n\n`
+          + `Avec un compte, je réponds à votre question réelle et je peux chercher l'actualité publiée des sociétés.`, sources: [] };
+      },
     };
   }
 
@@ -571,6 +592,7 @@
     const alertes = [...L.errors, ...(fresh && c?.alertes ? c.alertes : [])];
     if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
     for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
+    h += blocAlertes();
     const ep = epargne();
     if (ep?.aFaire && ep.plan?.montant)
       h += `<div class="notice rappel"><span><b>Vos ${F(ep.plan.montant)} ${RYTHMES[ep.plan.rythme][1] === "aujourd'hui" ? "d'aujourd'hui" : RYTHMES[ep.plan.rythme][1]} ?</b>
@@ -730,6 +752,136 @@
     $("#dlg-info").showModal();
   }
 
+  // ---------------------------------------------------------------- alertes des positions (vue v_alertes_positions)
+  // urgent : affiché en clair dans Aujourd'hui ; les autres sont regroupés dans une liste repliable
+  const NIVEAUX = {
+    ROUGE: { t: "Sortie à examiner", c: "rouge", urgent: true, o: 1 },
+    ORANGE: { t: "À surveiller de près", c: "orange", urgent: true, o: 2 },
+    BLEU: { t: "Échéance proche", c: "bleu", urgent: true, o: 3 },
+    VERT: { t: "Objectif atteint", c: "vert", urgent: true, o: 4 },
+    JAUNE: { t: "Vigilance", c: "jaune", o: 5 },
+    GRIS: { t: "Donnée ancienne", c: "gris", o: 6 },
+    INFO: { t: "Information", c: "info", o: 7 },
+    INCONNU: { t: "À vérifier", c: "gris", o: 8 },
+  };
+  const cleJournal = () => S.ops.length + ":" + (S.ops[S.ops.length - 1]?.id ?? "");
+  async function chargerAlertes() {
+    S.alertesCle = cleJournal();
+    try {
+      const rows = (await api.alertes()) || [];
+      S.alertes = rows.filter((a) => a.alerte && a.alerte !== "OK")
+        .sort((a, b) => (NIVEAUX[a.alerte]?.o || 9) - (NIVEAUX[b.alerte]?.o || 9) || String(a.ticker).localeCompare(b.ticker));
+    } catch (e) { S.alertes = null; }                                  // vue pas encore installée → rien n'est affiché
+    S.alertesMap = new Map((S.alertes || []).map((a) => [a.ticker, a]));
+  }
+  // En mode simulation, le moteur ne « recommande » rien
+  const motifAlerte = (m) => SIM() ? String(m || "").replace("Le moteur recommande désormais de vendre", "L'analyse du soir classe désormais ce titre en vente") : String(m || "");
+  function ligneAlerte(a) {
+    const n = NIVEAUX[a.alerte] || NIVEAUX.INFO;
+    return `<li class="al al-${n.c}"><span class="al-pt" aria-hidden="true"></span><div class="main">
+      <div class="name">${mq(a.ticker)}${esc(S.names.get(a.ticker) || a.ticker)} <span class="al-niv">${esc(n.t)}</span></div>
+      <div class="sub">${esc(motifAlerte(a.motif))}</div></div></li>`;
+  }
+  function blocAlertes() {
+    const A = S.alertes;
+    if (!A || !A.length) return "";
+    const urg = A.filter((a) => NIVEAUX[a.alerte]?.urgent), aut = A.filter((a) => !NIVEAUX[a.alerte]?.urgent);
+    let h = `<div class="card alertes"><h2>Alertes sur mes titres</h2>`;
+    if (urg.length) h += `<ul class="list">${urg.map(ligneAlerte).join("")}</ul>`;
+    else h += `<p class="small muted">Rien d'urgent sur vos titres ce soir.</p>`;
+    if (aut.length) h += `<details class="aide"><summary>${aut.length} point${aut.length > 1 ? "s" : ""} de vigilance</summary><ul class="list">${aut.map(ligneAlerte).join("")}</ul></details>`;
+    return h + `<p class="small muted">Calculées après chaque séance. Une alerte est un signal à examiner, jamais une vente automatique : chaque vente coûte environ ${nf1.format(FEES * 100)} % de frais.</p></div>`;
+  }
+  function pastille(a) {
+    if (!a) return "";
+    const n = NIVEAUX[a.alerte] || NIVEAUX.INFO;
+    return ` <button type="button" class="al-btn al-${n.c}" data-alerte="${esc(a.ticker)}" aria-label="Alerte : ${esc(n.t)}. Voir le détail"><span class="al-pt" aria-hidden="true"></span>${esc(n.t)}</button>`;
+  }
+  // Démo : quelques alertes calculées sur les données fictives (même logique simplifiée que la vue)
+  function alertesDemo() {
+    const out = [];
+    for (const p of replay(S.ops).positions) {
+      const [cat, r] = S.lignesMk?.get(p.code) || [];
+      if (cat === "actions" && ok(r.cours)) {
+        const plancher = p.pru * 0.85;                           // la vue suit aussi le plus haut depuis l'achat
+        if (r.cours <= plancher) out.push({ ticker: p.code, alerte: "ORANGE", plancher, motif: `Clôture sous le plancher (${N(plancher)}) : à confirmer à la prochaine séance` });
+        else if (r.cours <= plancher * 1.05) out.push({ ticker: p.code, alerte: "JAUNE", plancher, motif: `Moins de 5 % au-dessus du plancher (${N(plancher)}) : vigilance` });
+        else if (ok(r.objectif) && r.cours >= r.objectif) out.push({ ticker: p.code, alerte: "VERT", plancher, motif: `Objectif atteint (${N(r.objectif)}) : prise de bénéfice partielle possible` });
+      } else if (cat === "obligations" && r.echeance) {
+        const j = Math.round((new Date(r.echeance) - new Date()) / 864e5);
+        if (j <= 90) out.push({ ticker: p.code, alerte: "BLEU", jours_echeance: j, motif: `Échéance dans ${j} jours : préparer le réinvestissement` });
+      }
+    }
+    const act = replay(S.ops).positions.find((p) => S.classes.get(p.code) === "actions");
+    if (!out.length && act) out.push({ ticker: act.code, alerte: "JAUNE", plancher: act.pru * 0.9,
+      motif: `Exemple de démonstration : le cours approche du plancher (${N(act.pru * 0.9)}), vigilance` });
+    return out;
+  }
+
+  // ---------------------------------------------------------------- assistant : données envoyées avec chaque question
+  // Uniquement ce que l'utilisateur voit déjà dans l'application (ses données et les analyses du soir).
+  const norm = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  function ligneTitre(cat, r) {
+    const x = { categorie: cat, ...r };
+    delete x.courbe; delete x.date;
+    const s = JSON.stringify(x);
+    return s.length > 6000 ? { ...x, analyse: JSON.stringify(x.analyse || "").slice(0, 3000) + "…" } : x;
+  }
+  const MOTS_COMMUNS = new Set(["societe", "banque", "generale", "internationale", "afrique", "africaine", "industrielle", "compagnie",
+    "senegal", "ivoire", "nationale", "regionale", "commerciale", "distribution", "obligation", "obligations", "tresor", "public",
+    "placement", "actions", "diversifie", "monetaire", "epargne", "capital", "finance", "financiere", "portefeuille", "marche"]);
+  const echap = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const contient = (t, w) => new RegExp(`(^|[^a-z0-9])${echap(w)}([^a-z0-9]|$)`).test(t);     // mot entier, pas un morceau de mot
+  function titresCites(q) {
+    const t = norm(q), out = [];
+    for (const [code, [cat, r]] of S.lignesMk || []) {
+      const nom = norm(r.nom);
+      const vu = contient(t, norm(code)) || (nom.length >= 4 && contient(t, nom))
+        || nom.split(/[\s\-']+/).some((w) => w.length >= 5 && !MOTS_COMMUNS.has(w) && contient(t, w));
+      if (vu) out.push(ligneTitre(cat, r));
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+  function contexteAssistant(question) {
+    const L = replay(S.ops), c = S.prop?.contenu;
+    const r0 = (v) => (ok(v) ? Math.round(+v) : null);
+    const derniers = {};
+    for (const i of S.indices || []) derniers[i.code] = i;
+    const top = (rows, n) => rows.filter((r) => BUY.includes(r.decision)).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, n)
+      .map((r) => ({ code: r.code, nom: r.nom, score: r.score, decision: r.decision, cours: r.cours ?? r.prix ?? r.vl,
+                     rendement: r.rendement_div ?? r.rendement_actuariel ?? r.rendement_attendu }));
+    return {
+      date_du_jour: today(), seance_analysee: S.seance?.date || null,
+      mode: SIM() ? "simulation" : "proposition", demo: DEMO,
+      utilisateur: { prenom: S.profil?.prenom || null, profil_de_risque: S.profil?.profil, budget: S.profil?.budget },
+      portefeuille: { valeur_totale: r0(L.valeur), disponible: r0(L.cash), place_en_bourse: r0(L.investi), gain_latent: r0(L.latent),
+                      gain_total_depuis_debut: r0(L.gainTotal), dividendes_recus: r0(L.dividendes),
+                      performance: c?.performance ? { portefeuille: c.performance.twr_total, indice: c.performance.bench_total } : null },
+      positions: L.positions.slice(0, 30).map((p) => ({ code: p.code, nom: S.names.get(p.code) || p.code, classe: CLASSES[p.classe] || p.classe,
+        quantite: p.quantite, prix_achat_moyen: r0(p.pru), cours: p.cours, valeur: r0(p.valeur), gain_latent: r0(p.pv),
+        decision_du_soir: S.decisions?.get(p.code) || null })),
+      alertes_titres: (S.alertes || []).map((a) => ({ code: a.ticker, niveau: NIVEAUX[a.alerte]?.t || a.alerte, motif: motifAlerte(a.motif) })),
+      alertes_journal: [...L.errors, ...((S.prop?.date === S.seance?.date && c?.alertes) || [])],
+      ordres_du_soir: (S.ordres || []).slice(0, 10).map((o) => ({ code: o.code, sens: o.sens, quantite: o.quantite, prix_limite: o.prix_limite, motif: o.motif })),
+      indices: Object.values(derniers).map((i) => ({ code: i.code, date: i.date, cloture: i.cloture, variation: i.variation })),
+      meilleures_analyses: { actions: top(S.mk.actions, 5), obligations: top(S.mk.obligations, 3), opcvm: top(S.mk.opcvm, 3) },
+      titres_cites: titresCites(question),
+    };
+  }
+  function suggestionsAssistant() {
+    const L = replay(S.ops);
+    const s = [L.positions.length ? "Où en est mon portefeuille ?" : "Par où commencer avec mon budget ?", "Comment va le marché aujourd'hui ?"];
+    if ((S.alertes || []).length) s.push("Que faire de mes alertes ?");
+    s.push(SIM() ? "Que dit la simulation du soir ?" : "Que me recommandez-vous ?");
+    const act = L.positions.find((p) => S.classes.get(p.code) === "actions");
+    if (act) s.push(`Perspectives de ${S.names.get(act.code) || act.code}`);
+    const obl = L.positions.find((p) => S.classes.get(p.code) === "obligations");
+    if (obl) s.push(`Que vaut mon obligation ${obl.code} ?`);
+    return s.slice(0, 5);
+  }
+  function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
+
   function vPortefeuille() {
     const v = $("#v-portefeuille");
     const L = replay(S.ops);
@@ -768,8 +920,9 @@
       for (const p of L.positions) {
         const d = S.decisions?.get(p.code);
         const act = S.actions?.get(p.code);
-        h += `<li><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
-          <div class="sub">${esc(p.code)} · ${N(p.quantite)} × PRU ${F(p.pru)} ${chip(d)}</div></div>
+        const al = S.alertesMap?.get(p.code);
+        h += `<li><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}${pastille(al)}</div>
+          <div class="sub">${esc(p.code)} · ${N(p.quantite)} × PRU ${F(p.pru)}${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""} ${chip(d)}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
@@ -1532,6 +1685,12 @@
     if (!b) return;
     if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
     else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); openCoffre(b.dataset.coffre); }
+    else if (b.dataset.alerte !== undefined) {
+      const a = S.alertesMap?.get(b.dataset.alerte);
+      if (a) showInfo(`${S.names.get(a.ticker) || a.ticker} : ${NIVEAUX[a.alerte]?.t || a.alerte}`,
+        `<p>${esc(motifAlerte(a.motif))}</p>${ok(a.plancher) ? `<p class="small muted">Plancher suiveur : ${F(a.plancher)}. Il monte avec le plus haut cours atteint depuis l'achat et ne redescend jamais.</p>` : ""}
+        <p class="small muted">Une alerte est un signal à examiner, jamais une vente automatique. ${AVERT()}</p>`);
+    }
     else if (b.dataset.op !== undefined) openOp(b.dataset.op ? { type: b.dataset.op } : {});
     else if (b.dataset.ordre !== undefined) {
       const o = S.ordres[+b.dataset.ordre];
@@ -1590,6 +1749,8 @@
     }
     if (current && current !== t) { $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
     current = t;
+    if (S.alertesCle !== cleJournal()) chargerAlertes().then(() => { if (S.user && tab() === t && ["aujourdhui", "portefeuille"].includes(t)) VIEWS[t](); signalerAssistant(); });
+    signalerAssistant();
   }
   window.addEventListener("hashchange", () => { if (S.user) render(); });
 
@@ -1625,6 +1786,7 @@
       S.lignesMk = new Map([...S.mk.actions.map((r) => [r.code, ["actions", r]]), ...S.mk.obligations.map((r) => [r.code, ["obligations", r]]),
         ...S.mk.opcvm.map((r) => [r.code, ["opcvm", r]])]);
     }
+    await chargerAlertes();
   }
 
   // Lit le mode (lisible sans connexion) et adapte les textes statiques marqués data-sim ; « proposition » par défaut
@@ -1667,6 +1829,9 @@
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
     if (!TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
     render();
+    window.BRVM_APP = { demo: DEMO, demander: (body) => api.assistant(body), contexte: contexteAssistant, suggestions: suggestionsAssistant,
+                        prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length };
+    window.dispatchEvent(new Event("brvm:pret"));
   }
 
   // Conditions d'utilisation : lecture seule, ou acceptation obligatoire d'une nouvelle version (true si acceptée)

@@ -1,0 +1,110 @@
+/* BRVM Portefeuille – alertes des titres et assistant. Utilise les couleurs de styles.css (clair et sombre). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------------------------------------------------------------- alertes des titres */
+.alertes { --al: var(--muted); }
+.al-rouge { --al: var(--bad); }
+.al-orange { --al: #c2560c; }
+.al-bleu { --al: var(--s3); }
+.al-vert { --al: var(--good); }
+.al-jaune { --al: var(--warn); }
+.al-gris, .al-info { --al: var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al-orange { --al: #ff9d5c; } }
+:root[data-theme="dark"] .al-orange { --al: #ff9d5c; }
+
+.al-pt { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--al); }
+.list > li.al { align-items: flex-start; }
+.list > li.al .al-pt { margin-top: 6px; }
+.al-niv { font-size: .78rem; font-weight: 700; color: var(--al); white-space: nowrap; }
+.alertes details { margin-top: 6px; }
+
+/* pastille cliquable dans Portefeuille (cible ≥ 24 px) */
+.al-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; margin-left: 4px; padding: 1px 8px 1px 6px;
+  border: 1px solid var(--al); border-radius: 999px; background: var(--surface); color: var(--al);
+  font: inherit; font-size: .74rem; font-weight: 700; cursor: pointer; vertical-align: middle; }
+.al-btn .al-pt { width: 9px; height: 9px; }
+
+/* ---------------------------------------------------------------- bouton de l'assistant */
+.fab-ia { position: fixed; right: 16px; bottom: calc(72px + 16px + env(safe-area-inset-bottom)); z-index: 6;
+  width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--accent); background: var(--surface); color: var(--accent);
+  display: grid; place-items: center; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, .22); }
+body.has-fab .fab-ia { bottom: calc(72px + 16px + 58px + 12px + env(safe-area-inset-bottom)); }   /* au-dessus de « J'ai épargné » */
+@media (min-width: 760px) {
+  .fab-ia { right: 28px; bottom: 28px; }
+  body.has-fab .fab-ia { bottom: calc(28px + 58px + 12px); }
+}
+body.has-ia main { padding-bottom: 84px; }
+body.has-ia.has-fab main { padding-bottom: 154px; }
+
+.ia-visage { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ia-visage .plein { fill: currentColor; stroke: none; }
+.ia-visage .yeux { transform-origin: 16px 15.6px; }
+.ia-badge { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  background: var(--bad); color: #fff; font-size: .75rem; font-weight: 700; line-height: 22px; text-align: center;
+  border: 2px solid var(--surface); }
+@media (prefers-reduced-motion: no-preference) {
+  .fab-ia { transition: transform .12s ease; }
+  .fab-ia:active { transform: scale(.94); }
+  .fab-ia.cligne .yeux { animation: ia-cligne .5s ease-in-out 2; }    /* deux clins d'œil, puis plus rien */
+  @keyframes ia-cligne { 40%, 60% { transform: scaleY(.12); } }
+}
+
+/* ---------------------------------------------------------------- fenêtre de discussion */
+dialog.ia { padding: 0; width: 100vw; max-width: 100vw; height: min(86vh, 680px); max-height: 86vh;
+  margin: auto 0 0 0; border-radius: 18px 18px 0 0; border-bottom: 0; overflow: hidden; }
+dialog.ia[open] { display: flex; flex-direction: column; }
+@media (min-width: 760px) {
+  dialog.ia { width: 420px; height: min(78vh, 640px); margin: auto 28px 100px auto; border-radius: 18px; border-bottom: 1px solid var(--border); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog.ia[open] { animation: ia-entree .18s ease-out; }
+  @keyframes ia-entree { from { opacity: 0; transform: translateY(16px); } }
+}
+
+.ia-tete { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--border); }
+.ia-avatar { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.ia-avatar .ia-visage { width: 26px; height: 26px; }
+.ia-titres { flex: 1; min-width: 0; }
+.ia-titres h2 { margin: 0; font-size: 1.05rem; }
+.ia-titres p { margin: 0; }
+.ia-fermer { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--text); cursor: pointer; }
+.ia-fermer svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+.ia-fil { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ia-msg { max-width: 88%; padding: 10px 13px; border-radius: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.ia-msg p { margin: 0; }
+.ia-msg p + p, .ia-msg ul + p, .ia-msg p + ul { margin-top: 6px; }
+.ia-msg ul { margin: 4px 0 0; padding-left: 18px; }
+.ia-msg.moi { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 4px; }
+.ia-msg.ia { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+.ia-msg.erreur { background: var(--warn-bg); }
+.ia-sources { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: .82rem; }
+.ia-sources > span { font-weight: 700; color: var(--muted); }
+.ia-sources ul { margin: 2px 0 0; padding-left: 16px; }
+.ia-sources a { color: var(--accent); }
+
+.ia-points { display: inline-flex; gap: 4px; padding: 4px 0; }
+.ia-points i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .ia-points i { animation: ia-point 1s ease-in-out infinite; }
+  .ia-points i:nth-child(2) { animation-delay: .15s; }
+  .ia-points i:nth-child(3) { animation-delay: .3s; }
+  @keyframes ia-point { 40% { opacity: .25; } }
+}
+
+/* questions proposées : une rangée qui défile sur elle-même, jamais la page */
+.ia-sugg { display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px 4px; scrollbar-width: none; }
+.ia-sugg::-webkit-scrollbar { display: none; }
+.ia-chip { flex: none; min-height: 36px; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 999px;
+  background: var(--accent-soft); color: var(--text); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+
+.ia-saisie { display: flex; align-items: flex-end; gap: 6px; padding: 8px 12px 4px 16px; margin: 0; }
+.ia-saisie textarea { flex: 1; min-height: 44px; max-height: 120px; resize: none; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; line-height: 1.35; }
+.ia-micro, .ia-envoyer { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; cursor: pointer; }
+.ia-micro { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.ia-micro[aria-pressed="true"] { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+.ia-envoyer { border: 0; background: var(--accent); color: var(--accent-text); }
+.ia-envoyer:disabled { opacity: .55; cursor: default; }
+.ia-micro svg, .ia-envoyer svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ia-avert { margin: 0; padding: 2px 16px calc(10px + env(safe-area-inset-bottom)); font-size: .75rem; color: var(--muted); }
