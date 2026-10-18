@@ -54,7 +54,7 @@
             « me connecter » : vous êtes connecté automatiquement. Pensez aux courriers indésirables.</div>
           <label for="code" class="small">Vous avez reçu un code à la place ? Saisissez-le ici</label>
           <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" pattern="[0-9 ]{6,12}" class="code">
-          <button class="btn primary" type="submit">Valider</button>
+          <button class="btn primary" type="submit">Me connecter</button>
           <p class="msg" role="status" aria-live="polite"></p>
           <p class="small"><button class="btn link" type="button" id="code-renvoi">Renvoyer l'e-mail</button> ·
             <button class="btn link" type="button" id="code-modifier">Modifier l'adresse</button></p>
@@ -129,7 +129,7 @@
       <p class="msg err" role="alert"></p>
       <div class="actions">
         <button class="btn" value="annuler" formnovalidate>Annuler</button>
-        <button class="btn primary" value="ok">Enregistrer</button>
+        <button class="btn primary" value="ok" id="op-ok">Enregistrer</button>
       </div>
     </form>
   </dialog>

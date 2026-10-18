@@ -82,10 +82,42 @@
     return h + `</div>`;
   }
 
-  function toast(msg) {
-    const t = $("#toast");
-    t.textContent = msg; t.hidden = false;
-    clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3500);
+  // Message de confirmation : texte, détail facultatif et boutons d'action (« Annuler », « Voir »).
+  // Avec des boutons, il reste 8 s, et ne disparaît pas tant que le doigt ou le clavier est dessus.
+  function toast(msg, o = {}) {
+    const t = $("#toast"), actions = o.actions || [];
+    const cacher = () => { clearTimeout(toast.t); t.hidden = true; };
+    const lancer = () => { clearTimeout(toast.t); toast.t = setTimeout(cacher, o.duree || (actions.length ? 8000 : 4000)); };
+    t.innerHTML = `<div class="toast-txt"><b>${esc(msg)}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ""}</div>`
+      + (actions.length ? `<div class="toast-act">${actions.map((a, i) => `<button type="button" class="btn link" data-i="${i}">${esc(a.label)}</button>`).join("")}</div>` : "");
+    t.classList.toggle("riche", !!(o.detail || actions.length));
+    actions.forEach((a, i) => t.querySelector(`[data-i="${i}"]`).addEventListener("click", () => { cacher(); a.fn(); }));
+    t.onpointerenter = t.onfocusin = () => clearTimeout(toast.t);
+    t.onpointerleave = t.onfocusout = lancer;
+    t.hidden = false;
+    lancer();
+  }
+  // Bouton « occupé » pendant l'envoi : il ne réagit plus (pas de double enregistrement) et le dit.
+  // fin("✓ Enregistré") affiche brièvement le succès sur le bouton ; fin() le remet tel quel.
+  function occupe(b, texte = "Enregistrement…") {
+    if (!b) return () => {};
+    const avant = b.textContent;
+    b.disabled = true; b.setAttribute("aria-busy", "true"); b.textContent = texte;
+    return (succes) => {
+      b.removeAttribute("aria-busy");
+      if (!succes) { b.textContent = avant; b.disabled = false; return; }
+      b.textContent = succes;
+      setTimeout(() => { b.textContent = avant; b.disabled = false; }, 1500);
+    };
+  }
+  // Confirmation qui reste sous le bouton d'un formulaire du Profil, jusqu'à la prochaine modification
+  function confirmeForm(f, suite) {
+    if (!f || !$(".actions", f)) return;
+    let m = $(".ok-msg", f);
+    if (!m) { m = document.createElement("p"); m.className = "ok-msg"; m.setAttribute("role", "status"); $(".actions", f).before(m); }
+    const h = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
+    setTimeout(() => { m.textContent = `✓ Enregistré à ${h}${suite ? " : " + suite : ""}`; }, 60);
+    f.addEventListener("input", () => { m.textContent = ""; }, { once: true });
   }
 
   // ---------------------------------------------------------------- accès aux données
@@ -933,7 +965,7 @@
       h += `<ul class="list">`;
       for (const o of [...S.ops].reverse()) {
         const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
-        h += `<li><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker || "")}</div>
+        h += `<li data-op-row="${esc(o.id)}"><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker || "")}</div>
           <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
           <div class="right num">${what}<div><button class="btn link small" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
       }
@@ -1282,10 +1314,10 @@
           Animations de félicitations (confettis)</label>` : ""}
         <label class="switch" style="margin-top:14px"><input type="checkbox" name="recevoir_email"${p.recevoir_email ? " checked" : ""}>
           Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
-        <div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div>
+        <div class="actions"><button class="btn primary" type="submit">Enregistrer mes réglages</button></div>
       </form>
       ${DEMO || "prenom" in p ? `<form id="f-identite" class="card" novalidate><h2>Mes coordonnées</h2><div class="ident"><p class="muted small">Chargement…</p></div>
-        <p class="msg" role="status" aria-live="polite"></p><div class="actions"><button class="btn primary" type="submit">Enregistrer</button></div></form>` : ""}
+        <p class="msg" role="status" aria-live="polite"></p><div class="actions"><button class="btn primary" type="submit">Enregistrer mes coordonnées</button></div></form>` : ""}
       ${S.univ && (DEMO || "mes_sgi" in p) ? formUnivers(p) : ""}
       ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
       ${DEMO && S.coffre ? `<div class="card"><h2>Essayer les félicitations</h2><p class="small muted">Démonstration uniquement.</p>
@@ -1310,13 +1342,15 @@
       ev.preventDefault();
       const upd = { budget: Math.max(0, +f.budget.value || 0), profil: f.profil.value || "equilibre", recevoir_email: f.recevoir_email.checked };
       if (S.coffre) { upd.budget_mode = f.budget_mode.value; if (f.felicitations) upd.felicitations = f.felicitations.checked; }
+      const fin = occupe(ev.submitter || $('[type="submit"]', f));
       try {
         await api.saveProfil(S.user.id, upd);
         const changed = upd.profil !== S.profil.profil;
         Object.assign(S.profil, upd);
         if (changed && S.seance) S.cibles = await api.cibles(S.seance.date, upd.profil);
-        toast(`Profil enregistré. La ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir.`);
-      } catch (err) { toast("Enregistrement impossible : " + err.message); }
+        fin("✓ Enregistré");
+        confirmeForm(f, `la ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir`);
+      } catch (err) { fin(); toast("Enregistrement impossible : " + err.message); }
     });
     const fi = $("#f-identite", v);
     if (fi) chargerTel().then((lib) => {
@@ -1328,19 +1362,22 @@
         const upd = lireIdentite(fi, lib), msg = $(".msg", fi);
         if (typeof upd === "string") { msg.textContent = upd; return; }
         msg.textContent = "";
-        try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); toast("Coordonnées enregistrées."); }
-        catch (err) { msg.textContent = "Enregistrement impossible : " + err.message; }
+        const fin = occupe(ev.submitter || $('[type="submit"]', fi));
+        try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); fin("✓ Enregistré"); confirmeForm(fi, ""); }
+        catch (err) { fin(); msg.textContent = "Enregistrement impossible : " + err.message; }
       });
     });
     $("#f-univers", v)?.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const upd = lireUnivers(ev.currentTarget);
+      const fu = ev.currentTarget, upd = lireUnivers(fu);
       if (typeof upd === "string") { toast(upd); return; }
+      const fin = occupe(ev.submitter || $('[type="submit"]', fu));
       try {
         await api.saveProfil(S.user.id, upd);
         Object.assign(S.profil, upd);
-        toast(`Choix enregistrés. ${SIM() ? "La simulation" : "La proposition"} en tiendra compte ce soir ; l'estimation immédiate, tout de suite.`);
-      } catch (err) { toast("Enregistrement impossible : " + err.message); }
+        fin("✓ Enregistré");
+        confirmeForm(fu, `${SIM() ? "la simulation" : "la proposition"} en tiendra compte ce soir, l'estimation immédiate tout de suite`);
+      } catch (err) { fin(); toast("Enregistrement impossible : " + err.message); }
     });
     $("#logout", v).addEventListener("click", () => api.logout());
     $("#voir-cgu", v)?.addEventListener("click", () => showCgu(S.docs.cgu, false));
@@ -1363,8 +1400,9 @@
         if (montant <= 0) { toast("Indiquez le montant à mettre de côté."); return; }
         const plan = { montant, rythme: fp.rythme.value, jours_ouvres: fp.jours_ouvres.checked, objectif: Math.round(+fp.objectif.value || 0) || null,
                        debut: S.coffre.plan?.debut || today() };
-        try { await api.savePlan(plan); S.coffre.plan = plan; toast("Plan d'épargne enregistré."); vProfil(); }
-        catch (e) { toast("Enregistrement impossible : " + e.message); }
+        const fin = occupe(ev.submitter || $('[type="submit"]', fp));
+        try { await api.savePlan(plan); S.coffre.plan = plan; vProfil(); confirmeForm($("#f-plan"), "votre rythme d'épargne est mis à jour"); }
+        catch (e) { fin(); toast("Enregistrement impossible : " + e.message); }
       });
     }
   }
@@ -1545,6 +1583,18 @@
       if (brut + fee > dispo + 1) { out.classList.add("warn"); out.innerHTML += `<br><span class="small">Le disponible ne suffit pas : enregistrez d'abord l'argent versé à votre SGI.</span>`; }
     } else if (t === "VENTE" && brut > 0) out.innerHTML = `Vous recevez environ <b>${F(brut - fee)}</b> (${F(brut)} − frais ${F(fee)})`;
     else out.textContent = "";
+    libelleOp();
+  }
+  // Le bouton dit ce qui va être enregistré, avec le montant : « Enregistrer l'achat · 503 250 F »
+  const LIB_OP = { ACHAT: "l'achat", VENTE: "la vente", DIVIDENDE: "le dividende", DEPOT: "le dépôt", RETRAIT: "le retrait", FRAIS: "les frais", SOLDE: "le solde" };
+  function libelleOp() {
+    const b = $("#op-ok");
+    if (!b || b.getAttribute("aria-busy")) return;
+    if (fop.dataset.dupOk) { b.textContent = "Enregistrer quand même"; return; }
+    const t = opType(), q = +fop.quantite.value || 0, p = +fop.prix.value || 0, brut = q * p;
+    const fee = fop.frais.value !== "" ? +fop.frais.value : brut * FEES, m = +fop.montant.value || 0;
+    const montant = t === "ACHAT" ? brut + fee : t === "VENTE" ? brut - fee : m;
+    b.textContent = `Enregistrer ${LIB_OP[t] || "l'opération"}${montant > 0 ? " · " + F(montant) : ""}`;
   }
   function syncOpForm() {
     const t = opType();
@@ -1582,6 +1632,8 @@
   fop.prix.addEventListener("input", () => { delete fop.dataset.prixAuto; total(); });
   fop.quantite.addEventListener("input", total);
   fop.frais.addEventListener("input", total);
+  fop.montant.addEventListener("input", libelleOp);
+  fop.addEventListener("input", () => { if (fop.dataset.dupOk) { delete fop.dataset.dupOk; $(".msg", fop).textContent = ""; libelleOp(); } });
   fop.addEventListener("submit", async (ev) => {
     if (ev.submitter?.value !== "ok") return;                    // « Annuler » ferme simplement la fenêtre
     ev.preventDefault();
@@ -1608,20 +1660,59 @@
     }
     const dup = S.ops.some((o) => o.date === op.date && o.type === op.type && (o.ticker || null) === op.ticker
       && +o.quantite === +op.quantite && +o.prix === +op.prix && +o.montant === +op.montant);
-    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; return err("Une opération identique existe déjà ce jour-là. Appuyez de nouveau sur Enregistrer pour confirmer."); }
+    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; libelleOp(); return err("Une opération identique existe déjà ce jour-là. Si c'est bien une deuxième opération, appuyez sur « Enregistrer quand même »."); }
     delete fop.dataset.dupOk;
+    const versEpargne = t === "RETRAIT" && S.coffre && fop.vers_epargne.checked;
+    const avant = replay(S.ops).cash, ids = new Set(S.ops.map((o) => o.id));
+    const fin = occupe($("#op-ok"));
     try {
       await api.addOperation(op);
-      if (t === "RETRAIT" && S.coffre && fop.vers_epargne.checked) {
+      if (versEpargne) {
         await api.addMouvement({ date: op.date, type: "VERSEMENT", montant: op.montant, source: "banque", note: "Retiré de ma SGI" });
         S.coffre = await api.coffre(S.user.id);
       }
       S.ops = await api.operations(S.user.id);
+      fin();
       dlg.close();
-      toast("Opération enregistrée.");
       render();
-    } catch (e) { err("Enregistrement impossible : " + e.message); }
+      const nouvelle = S.ops.find((o) => !ids.has(o.id));
+      confirmerOperation(op, nouvelle, avant, !versEpargne);
+      if (nouvelle && tab() === "portefeuille") montrerOperation(nouvelle.id);
+    } catch (e) { fin(); libelleOp(); err("Enregistrement impossible : " + e.message); }
   });
+  function confirmerOperation(op, o, avant, annulable) {
+    const apres = replay(S.ops).cash;
+    const msg = {
+      ACHAT: `Achat de ${N(op.quantite)} ${op.ticker} à ${F(op.prix)} enregistré`,
+      VENTE: `Vente de ${N(op.quantite)} ${op.ticker} à ${F(op.prix)} enregistrée`,
+      DIVIDENDE: `Dividende de ${F(op.montant)}${op.ticker ? " sur " + op.ticker : ""} enregistré`,
+      DEPOT: `Dépôt de ${F(op.montant)} enregistré`, RETRAIT: `Retrait de ${F(op.montant)} enregistré`,
+      FRAIS: `Frais de ${F(op.montant)} enregistrés`, SOLDE: `Solde de ${F(op.montant)} enregistré`,
+    }[op.type] || "Opération enregistrée";
+    const actions = [];
+    if (o && annulable) actions.push({ label: "Annuler", fn: () => annulerOperation(o) });
+    if (o) actions.push({ label: "Voir", fn: () => montrerOperation(o.id) });
+    toast(msg, { detail: Math.abs(apres - avant) >= 1 ? `Disponible chez ma SGI : ${F(avant)} → ${F(apres)}` : "", actions });
+  }
+  async function annulerOperation(o) {
+    try {
+      await api.deleteOperation(o.id);
+      S.ops = await api.operations(S.user.id);
+      render();
+      toast("Opération annulée : elle a été retirée du journal.");
+    } catch (e) { toast("Annulation impossible : " + e.message); }
+  }
+  // Va au journal, fait défiler jusqu'à la ligne et la surligne un instant
+  function montrerOperation(id) {
+    const aller = () => {
+      const li = document.querySelector(`[data-op-row="${CSS.escape(String(id))}"]`);
+      if (!li) return;
+      li.scrollIntoView({ block: "center", behavior: CALME ? "auto" : "smooth" });
+      li.classList.remove("surligne"); void li.offsetWidth; li.classList.add("surligne");
+      li.setAttribute("tabindex", "-1"); li.focus({ preventScroll: true });
+    };
+    if (tab() !== "portefeuille") { location.hash = "portefeuille"; setTimeout(aller, 350); } else setTimeout(aller, 50);
+  }
 
   // ---------------------------------------------------------------- saisie rapide : « J'ai épargné » / « J'ai envoyé à ma SGI »
   const dcf = $("#dlg-coffre"), fcf = $("#f-coffre");
@@ -1659,6 +1750,7 @@
     const err = (t) => ($(".msg", fcf).textContent = t);
     if (montant <= 0) return err("Indiquez un montant.");
     if (date > today()) return err("La date ne peut pas être dans le futur.");
+    const fin = occupe($("#cf-ok"));
     try {
       if (cfMode === "verser") {
         await api.addMouvement({ date, type: "VERSEMENT", montant, source: fcf.source.value });
@@ -1678,6 +1770,7 @@
       render();
       feter(cfMode === "verser" ? S.feteMontant : 0);
     } catch (e) { err("Enregistrement impossible : " + e.message); }
+    finally { fin(); }
   });
 
   document.addEventListener("click", async (ev) => {
