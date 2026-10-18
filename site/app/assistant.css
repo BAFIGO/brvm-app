@@ -47,6 +47,18 @@ body.has-ia.has-fab main { padding-bottom: 154px; }
   .fab-ia:active { transform: scale(.94); }
   .fab-ia.cligne .yeux { animation: ia-cligne .5s ease-in-out 2; }    /* deux clins d'œil, puis plus rien */
   @keyframes ia-cligne { 40%, 60% { transform: scaleY(.12); } }
+  /* le robot regarde à gauche puis à droite en penchant un peu la tête (1,6 s) */
+  .fab-ia .ia-visage { transform-origin: 16px 18px; }
+  .fab-ia.regarde .ia-visage { animation: ia-tete 1.6s ease-in-out; }
+  .fab-ia.regarde .yeux { animation: ia-yeux 1.6s ease-in-out; }
+  @keyframes ia-tete { 25% { transform: rotate(-9deg); } 65% { transform: rotate(7deg); } }
+  @keyframes ia-yeux { 25% { transform: translateX(-1.6px); } 65% { transform: translateX(1.6px); } }
+  /* le cadran du coffre s'allume doucement puis s'éteint (1,8 s), sans clignoter */
+  .fab .cadran { transition: none; }
+  .fab.allume .cadran { animation: coffre-cadran 1.8s ease-in-out; }
+  .fab.allume svg { animation: coffre-halo 1.8s ease-in-out; }
+  @keyframes coffre-cadran { 45% { fill: currentColor; fill-opacity: .45; } }
+  @keyframes coffre-halo { 45% { filter: drop-shadow(0 0 5px rgba(255, 255, 255, .85)); } }
 }
 
 /* ---------------------------------------------------------------- fenêtre de discussion */

@@ -162,7 +162,7 @@
   // ---------------------------------------------------------------- bouton : badge des alertes, clin d'œil discret
   function cligner() {
     if (CALME) return;
-    fab.classList.remove("cligne"); void fab.offsetWidth; fab.classList.add("cligne");
+    fab.classList.remove("cligne", "regarde"); void fab.offsetWidth; fab.classList.add("cligne");
   }
   function majBouton() {
     const app = window.BRVM_APP;
@@ -175,7 +175,32 @@
     if (n > dernierCompte) cligner();          // une seule animation, seulement quand il y a du nouveau
     dernierCompte = n;
   }
-  window.addEventListener("brvm:pret", () => { majBouton(); setTimeout(cligner, 900); });
+  // ---------------------------------------------------------------- petites animations d'ambiance (robot et coffre)
+  // Discrètes et limitées : une toutes les 20 à 45 s, 6 au plus par visite, jamais pendant que l'utilisateur
+  // fait défiler, touche l'écran ou tape, ni quand la fenêtre est ouverte ou l'onglet caché.
+  // Rien du tout si le téléphone demande de réduire les animations.
+  const MAX_AMBIANCE = 6;
+  let ambianceFaites = 0, derniereActivite = Date.now();
+  for (const ev of ["scroll", "touchstart", "keydown", "pointerdown"])
+    window.addEventListener(ev, () => { derniereActivite = Date.now(); }, { passive: true });
+  const coffre = () => { const f = document.getElementById("fab-coffre"); return f && !f.hidden ? f : null; };
+  function rejouer(el, classe) { el.classList.remove("cligne", "regarde", "allume"); void el.offsetWidth; el.classList.add(classe); }
+  function jouerAmbiance() {
+    if (CALME || ambianceFaites >= MAX_AMBIANCE) return;
+    if (document.hidden || dlg.open || fab.hidden || Date.now() - derniereActivite < 4000) { planifierAmbiance(); return; }
+    const choix = ["cligne", "regarde"];
+    if (coffre()) choix.push("coffre", "coffre");          // le coffre a autant de chances que le robot
+    const c = choix[Math.floor(Math.random() * choix.length)];
+    if (c === "coffre") {
+      const cadran = coffre().querySelector("svg circle");
+      if (cadran) { cadran.classList.add("cadran"); rejouer(coffre(), "allume"); }
+    } else rejouer(fab, c);
+    ambianceFaites++;
+    planifierAmbiance();
+  }
+  function planifierAmbiance() { if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, 20000 + Math.random() * 25000); }
+
+  window.addEventListener("brvm:pret", () => { majBouton(); setTimeout(cligner, 900); planifierAmbiance(); });
   window.addEventListener("brvm:maj", majBouton);
   if (window.BRVM_APP) majBouton();
 })();
