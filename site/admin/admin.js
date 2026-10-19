@@ -1,4 +1,4 @@
-/* Console d'administration BRVM Portefeuille.
+/* Console d'administration BafiBourse.
  * Aucune décision de sécurité n'est prise ici : chaque action appelle une fonction admin_* de Supabase,
  * qui vérifie la permission et la double authentification (supabase/admin.sql). L'interface ne fait
  * qu'afficher ou masquer selon les permissions renvoyées par admin_moi().
