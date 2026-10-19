@@ -65,6 +65,7 @@
       refresh: async () => sb.auth.refreshSession(),
       moi: () => rpc("admin_moi"),
       tableau: () => rpc("admin_tableau_de_bord"),
+      priseEnMain: (j) => rpc("admin_prise_en_main", { p_jours: j }),
       utilisateurs: (q) => rpc("admin_utilisateurs", { p_recherche: q || null }),
       portefeuille: (u, motif) => rpc("admin_portefeuille", { p_user: u, p_motif: motif }),
       suspendre: (u, s, motif) => rpc("admin_suspendre", { p_user: u, p_suspendre: s, p_motif: motif }),
@@ -156,6 +157,16 @@
       session: async () => ({ user: { id: "f6", email: "admin@exemple.org" } }), login: async () => {}, logout: async () => { location.href = location.pathname; },
       aal: async () => ({ currentLevel: "aal2", nextLevel: "aal2" }), factors: async () => ({ totp: [], all: [] }),
       moi: async () => ({ email: "admin@exemple.org", mfa: true, roles: [roles.find((r) => r.code === role).libelle], permissions: M[role] }),
+      priseEnMain: async (j) => {
+        const k = j / 30, x = (v) => Math.round(v * k);
+        return { jours: j, cohorte: x(40), visite: { proposee: x(38), commencee: x(29), terminee: x(19), passee: x(8), plus_tard: x(9) },
+          entonnoir: [29, 27, 24, 21, 19].map((n, i) => ({ etape: i + 1, n: x(n) })),
+          premiers_pas: { depot: x(26), achat: x(15), alertes: x(18), robot: x(12), plan: x(14), liste: x(7) },
+          activation_7j: x(22), achat_14j: x(13), delai_depot_h: 30, delai_achat_h: 120, relances: x(4), liste_masquee: x(5),
+          guides: { depot: x(14), achat: x(11), alertes: x(16), robot: x(9), epargne: x(8) },
+          astuces: { portefeuille: x(30), marche: x(26), performance: x(17) },
+          semaines: [4, 3, 2, 1].map((w, i) => ({ semaine: d(w * 7).slice(0, 10), inscrits: 8 + i * 2, visite_terminee: 3 + i, activation_7j: 4 + i, achat_14j: 2 + i })) };
+      },
       tableau: async () => ({ utilisateurs: users.length, nouveaux_7j: 2, actifs_7j: 4, actifs_30j: 6, avec_portefeuille: 4, operations: 55, email_soir: 5,
         suspendus: users.filter((u) => u.suspendu).length, profils: { equilibre: 3, dynamique: 2, prudent: 1 }, budget_total: 17000000,
         derniere_seance: d(1).slice(0, 10), publie_le: d(0.6), propositions_seance: 6,
@@ -308,7 +319,71 @@
         <thead><tr><th>Séance</th><th>Publiée le</th><th class="num">Actions</th><th class="num">Obligations</th><th class="num">OPCVM</th><th class="num">Propositions</th><th>Modèle prédictif</th></tr></thead>
         <tbody>${(t.seances || []).map((s) => `<tr><td>${D(s.date)}</td><td>${DT(s.publie_le)}</td><td class="num">${N(s.nb_actions)}</td>
           <td class="num">${N(s.nb_obligations)}</td><td class="num">${N(s.nb_opcvm)}</td><td class="num">${N(s.propositions)}</td>
-          <td>${s.modele_valide ? "validé" : "non validé"}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aucune séance.</td></tr>`}</tbody></table></div></div>`;
+          <td>${s.modele_valide ? "validé" : "non validé"}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aucune séance.</td></tr>`}</tbody></table></div></div>
+      <div class="card" id="pem" aria-labelledby="h-pem"><h2 id="h-pem">Prise en main des nouveaux utilisateurs</h2><p class="muted">Chargement…</p></div>`;
+    afficherPriseEnMain(30);
+  }
+
+  // ---------------------------------------------------------------- suivi de qualité de la prise en main (tutoriel.sql)
+  // Cohorte : comptes ayant terminé leur inscription sur la période. Objectifs indicatifs, à ajuster avec l'expérience.
+  const OBJ_PEM = [
+    { cle: "demarrage", lbl: "Visite commencée", obj: 0.7, aide: "parmi les visites proposées" },
+    { cle: "completion", lbl: "Visite terminée", obj: 0.6, aide: "parmi les visites commencées" },
+    { cle: "activation", lbl: "Activation sous 7 jours", obj: 0.5, aide: "au moins une opération notée" },
+    { cle: "achat", lbl: "Premier achat sous 14 jours", obj: 0.35, aide: "parmi les nouveaux comptes" },
+    { cle: "liste", lbl: "Premiers pas tous faits", obj: 0.3, aide: "parmi les nouveaux comptes" },
+    { cle: "masquee", lbl: "Liste masquée", obj: 0.2, inverse: true, aide: "signal de gêne : plus bas, c'est mieux" },
+  ];
+  const ETAPES_PEM = ["Aujourd'hui", "Noter vos opérations", "Le marché", "Votre coffre", "Votre assistant"];
+  const PAS_PEM = { depot: "Noter l'argent versé à la SGI", achat: "Premier achat", alertes: "Découvrir les alertes",
+                    robot: "Question au robot", plan: "Rythme d'épargne", liste: "Tous les premiers pas" };
+  const duree = (h) => (h === null || h === undefined ? "–" : h < 48 ? `${Math.round(h)} h` : `${(h / 24).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} j`);
+  async function afficherPriseEnMain(j) {
+    const c = $("#pem");
+    if (!c) return;
+    const titre = `<h2 id="h-pem">Prise en main des nouveaux utilisateurs</h2>`;
+    let t;
+    try { t = await api.priseEnMain(j); }
+    catch (e) { c.innerHTML = `${titre}<p class="small muted">Indicateurs indisponibles : exécutez le fichier tutoriel.sql dans Supabase. (${esc(e.message)})</p>`; return; }
+    if (!c.isConnected) return;
+    const n = +t.cohorte || 0, v = t.visite || {}, pp = t.premiers_pas || {};
+    const taux = { demarrage: [v.commencee, v.proposee], completion: [v.terminee, v.commencee], activation: [t.activation_7j, n],
+                   achat: [t.achat_14j, n], liste: [pp.liste, n], masquee: [t.liste_masquee, n] };
+    const tuile = (o) => {
+      const [a, b] = taux[o.cle], r = b ? a / b : null;
+      const etat = r === null ? ["att", "pas encore de données"]
+        : (o.inverse ? r <= o.obj : r >= o.obj) ? ["ok", "objectif atteint"]
+        : (o.inverse ? r <= o.obj * 1.5 : r >= o.obj * 0.75) ? ["att", "proche de l'objectif"] : ["ko", "sous l'objectif"];
+      return `<div class="tile"><div class="lbl">${esc(o.lbl)}</div><div class="val">${P(r, 0)}</div>
+        <div class="sub">${N(a)} sur ${N(b)} · ${esc(o.aide)}</div>
+        <div class="sub"><span class="status ${etat[0]}">${esc(etat[1])}</span> · objectif ${o.inverse ? "≤" : "≥"} ${P(o.obj, 0)}</div></div>`;
+    };
+    const periode = [7, 30, 90].map((x) => `<button type="button" class="btn small${x === j ? " primary" : ""}" data-pem="${x}" aria-pressed="${x === j}">${x} jours</button>`).join(" ");
+    const ent = t.entonnoir || [], dep = +v.commencee || 0;
+    c.innerHTML = `${titre}
+      <p class="small muted">Comptes ayant terminé leur inscription sur les ${N(t.jours)} derniers jours : <b>${N(n)}</b>.
+        ${n && n < 10 ? "Échantillon encore faible : interpréter avec prudence." : ""}</p>
+      <div class="actions" role="group" aria-label="Période">${periode}</div>
+      <div class="tiles">${OBJ_PEM.map(tuile).join("")}</div>
+      <h3>Visite guidée : où les utilisateurs s'arrêtent</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Étape</th><th class="num">Utilisateurs</th><th class="num">Part des visites commencées</th><th class="num">Perte depuis l'étape précédente</th></tr></thead>
+        <tbody>${ent.map((e, i) => `<tr><td>${e.etape}. ${esc(ETAPES_PEM[i] || "")}</td><td class="num">${N(e.n)}</td><td class="num">${P(dep ? e.n / dep : null, 0)}</td>
+          <td class="num">${i ? P(ent[i - 1].n ? (ent[i - 1].n - e.n) / ent[i - 1].n : null, 0) : "–"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted">Proposées ${N(v.proposee)} · commencées ${N(v.commencee)} · terminées ${N(v.terminee)} · passées en cours ${N(v.passee)} · « plus tard » ${N(v.plus_tard)} · relancées depuis le Profil ${N(t.relances)}</p>
+      <h3>Premiers pas</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Premier pas</th><th class="num">Faits</th><th class="num">Part des nouveaux comptes</th><th class="num">Guide ouvert</th></tr></thead>
+        <tbody>${Object.entries(PAS_PEM).map(([k, lbl]) => `<tr><td>${esc(lbl)}</td><td class="num">${N(pp[k])}</td><td class="num">${P(n ? pp[k] / n : null, 0)}</td>
+          <td class="num">${k === "liste" ? "–" : N((t.guides || {})[k === "plan" ? "epargne" : k] || 0)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted">Délai médian entre l'inscription et le premier versement noté : <b>${duree(t.delai_depot_h)}</b> ; et le premier achat : <b>${duree(t.delai_achat_h)}</b>.
+        Astuces vues : ${Object.entries(t.astuces || {}).map(([k, x]) => `${esc(k)} ${N(x)}`).join(" · ") || "–"}.</p>
+      <h3>Évolution par semaine d'inscription</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Semaine du</th><th class="num">Inscrits</th><th class="num">Visite terminée</th><th class="num">Activation 7 j</th><th class="num">Achat 14 j</th></tr></thead>
+        <tbody>${(t.semaines || []).map((w) => `<tr><td>${D(w.semaine)}</td><td class="num">${N(w.inscrits)}</td><td class="num">${P(w.inscrits ? w.visite_terminee / w.inscrits : null, 0)}</td>
+          <td class="num">${P(w.inscrits ? w.activation_7j / w.inscrits : null, 0)}</td><td class="num">${P(w.inscrits ? w.achat_14j / w.inscrits : null, 0)}</td></tr>`).join("")
+          || `<tr><td colspan="5" class="muted">Aucune inscription sur la période.</td></tr>`}</tbody></table></div>
+      <p class="small muted">Lecture : une forte perte à une étape de la visite signale un texte à revoir ; un guide souvent ouvert mais rarement suivi d'effet signale une action trop difficile.
+        Aucune donnée individuelle n'est affichée.</p>`;
+    c.querySelectorAll("[data-pem]").forEach((b) => b.addEventListener("click", () => afficherPriseEnMain(+b.dataset.pem)));
   }
 
   async function vUtilisateurs(reload = true) {
