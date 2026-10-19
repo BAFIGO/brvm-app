@@ -10,8 +10,10 @@
   <meta name="theme-color" content="#0f5c4d">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
+  <script src="charte.js"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="vitrine.css">
+  <link rel="stylesheet" href="charte-indigo.css">
   <script src="boot.js"></script>
   <script src="config.js" defer></script>
   <script src="vendor/gsap.min.js" defer></script>
@@ -48,6 +50,29 @@
         <div><dt>OPCVM comparés</dt><dd><span class="odo" data-k="nb_opcvm">24</span></dd></div>
       </dl>
       <p id="stats-src" class="small muted stats-src">Exemple tiré des données de démonstration.</p>
+      <!-- Aperçu de l'application (illustration, données de démonstration), visible sur grand écran -->
+      <div class="hero-apercu" aria-hidden="true">
+        <div class="tel"><div class="tel-ecran">
+          <p class="ha-titre">Aujourd'hui</p>
+          <div class="ha-syn">
+            <span class="ha-lbl">Total chez ma SGI</span>
+            <b class="ha-val">2 661 821<small> F</small></b>
+            <span class="ha-up">+60 F sur la séance</span>
+            <div class="ha-g"><span><i>Disponible</i><b>1 877 765 F</b></span><span><i>Performance</i><b class="ha-up">+2,8 %</b></span></div>
+          </div>
+          <div class="ha-carte">
+            <p class="ha-h">À faire</p>
+            <div class="ha-li"><i class="ha-pt o"></i><span><b>Sonatel Sénégal</b><small>Clôture sous le plancher : à confirmer</small></span></div>
+            <div class="ha-li"><i class="ha-pt v"></i><span><b>Vos 5 000 F d'aujourd'hui ?</b><small>Votre série de 6 jours vous attend</small></span></div>
+          </div>
+          <div class="ha-carte">
+            <p class="ha-h">Achats simulés <small>14 ordres</small></p>
+            <div class="ha-li"><span><b>Société Générale CI</b><small>SGBC · renforcer</small></span><em>6 titres</em></div>
+            <div class="ha-li"><span><b>Orange CI</b><small>ORAC · renforcer</small></span><em>30 titres</em></div>
+            <div class="ha-li"><span><b>État du Niger 6,50 %</b><small>D08.O8 · renforcer</small></span><em>46 titres</em></div>
+          </div>
+        </div></div>
+      </div>
     </section>
 
     <!-- 2. Méthode -->
