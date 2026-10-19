@@ -8,7 +8,7 @@
  *   ?charte=defaut  (oublie le choix et revient à la charte choisie ci-dessous)
  * Chargé en premier, de façon synchrone, pour éviter tout clignotement de couleurs. */
 (function () {
-  var DEFAUT = "vert";
+  var DEFAUT = "indigo";
   var CHARTES = { vert: "#0f5c4d", indigo: "#25347e" };
   var choix = DEFAUT, cle = "brvm-charte";
   try {
