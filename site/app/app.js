@@ -162,6 +162,8 @@
         return q.error ? r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")) : q.data; },
       titresPays: async () => r(await sb.from("titres_pays").select("code,pays")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
+      // Prise en main : événements pour les indicateurs de la console (tutoriel.sql) ; sans effet si la table manque
+      evenementTutoriel: async (evenement, etape) => { await sb.from("tutoriel_evenements").insert({ evenement, etape }); },
       // Alertes des positions (vue v_alertes_positions, fichier alertes.sql) : erreur si la vue n'est pas installée → rubrique masquée
       alertes: async () => r(await sb.from("v_alertes_positions").select("classe_actif,ticker,alerte,motif,plancher,jours_echeance,perf_pct,dernier_cours")),
       // Assistant : fonction Supabase « assistant » (la clé de l'API Claude reste sur le serveur)
@@ -236,6 +238,7 @@
       annonce: async () => (await load()).annonce || null,
       documents: async () => (await load()).documents || [],
       alertes: async () => alertesDemo(),
+      evenementTutoriel: async () => {},
       assistant: async (body) => {
         await new Promise((ok) => setTimeout(ok, 700));
         const c = body.contexte || {}, pf = c.portefeuille || {}, al = c.alertes_titres || [];
@@ -913,6 +916,20 @@
     return s.slice(0, 5);
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
+  let tutoDemo = {};
+  const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
+  function etatTutoriel() {
+    if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
+    if (DEMO) return tutoDemo;
+    try { return JSON.parse(localStorage.getItem(cleTuto()) || "{}"); } catch (e) { return {}; }
+  }
+  async function sauverTutoriel(e) {
+    if (S.profil && "tutoriel" in S.profil) {
+      S.profil.tutoriel = e;
+      try { await api.saveProfil(S.user.id, { tutoriel: e }); } catch (err) { /* réessayé à la prochaine étape */ }
+    } else if (DEMO) tutoDemo = e;
+    else try { localStorage.setItem(cleTuto(), JSON.stringify(e)); } catch (err) { /* navigateur sans stockage */ }
+  }
 
   function vPortefeuille() {
     const v = $("#v-portefeuille");
@@ -1923,6 +1940,13 @@
     if (!TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
     render();
     window.BRVM_APP = { demo: DEMO, demander: (body) => api.assistant(body), contexte: contexteAssistant, suggestions: suggestionsAssistant,
+                        // prise en main (tutoriel.js)
+                        tab, aller: (t) => { if (location.hash.slice(1) !== t) location.hash = t; }, render, toast, sim: () => SIM(),
+                        ouvrirOperation: (type) => openOp({ type }), nbOps: () => S.ops.length,
+                        faits: () => ({ depot: S.ops.some((o) => o.type === "DEPOT" || o.type === "SOLDE"), achat: S.ops.some((o) => o.type === "ACHAT"),
+                                        plan: S.coffre ? !!S.coffre.plan : null }),
+                        tutoriel: etatTutoriel, sauverTutoriel,
+                        evenement: (e, x) => { api.evenementTutoriel(e, x ?? null).catch(() => {}); },
                         prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length };
     window.dispatchEvent(new Event("brvm:pret"));
   }

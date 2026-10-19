@@ -99,6 +99,7 @@
       const texte = rep?.texte || "Je n'ai pas de réponse pour le moment.";
       bulle("ia", formater(texte) + sources(rep?.sources));
       histo.push({ role: "user", content: question }, { role: "assistant", content: texte });
+      window.dispatchEvent(new Event("brvm:question"));      // prise en main : « poser une question au robot » est fait
     } catch (e) {
       attente.remove();
       const absent = e.status === 404 || /not found|failed to send|fetch/i.test(e.message || "");
@@ -155,6 +156,7 @@
     if (!matchMedia("(pointer: coarse)").matches) champ.focus();
   }
   fab.addEventListener("click", ouvrir);
+  window.addEventListener("brvm:ouvrir-assistant", () => { if (!fab.hidden) ouvrir(); });
   $(".ia-fermer", dlg).addEventListener("click", () => dlg.close());
   dlg.addEventListener("click", (ev) => { if (ev.target === dlg) dlg.close(); });     // toucher le fond ferme
   dlg.addEventListener("close", () => fab.focus());
