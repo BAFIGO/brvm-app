@@ -49,7 +49,8 @@
   const chip = (d) => {
     if (!d) return "";
     const k = BUY.includes(d) ? "buy" : /VENDRE|ÉVITER|RACHETER/.test(d) ? "sell" : /ALLÉGER|SURVEILLER/.test(d) ? "warn" : "";
-    return `<span class="chip ${k}">${esc(d)}</span>`;
+    const lib = String(d).charAt(0) + String(d).slice(1).toLowerCase();      // « ACHAT FORT » → « Achat fort »
+    return `<span class="chip ${k}">${esc(lib)}</span>`;
   };
   function spark(c, w = 96, h = 30) {
     const pts = c?.points;
@@ -1015,7 +1016,7 @@
     h += `
       <div class="actions"><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
-    h += `<div class="card"><h2>Positions</h2>`;
+    h += `<div class="card"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
     if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
     else {
       h += `<ul class="list">`;
@@ -1023,8 +1024,9 @@
         const d = S.decisions?.get(p.code);
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
-        h += `<li><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}${pastille(al)}</div>
-          <div class="sub">${esc(p.code)} · ${N(p.quantite)} × PRU ${F(p.pru)}${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""} ${chip(d)}</div></div>
+        h += `<li${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
+          <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
+          <div class="sub etats">${chip(d)}${pastille(al)}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
@@ -1037,7 +1039,7 @@
         const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
         h += `<li data-op-row="${esc(o.id)}"><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker ? (S.names.get(o.ticker) || o.ticker) : "")}</div>
           <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
-          <div class="right num">${what}<div><button class="btn link small" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
+          <div class="right num">${what}<div><button class="btn link small del" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
       }
       h += `</ul><p class="small muted">Une erreur de saisie se corrige en supprimant la ligne, jamais par une opération inverse.</p>`;
     }
