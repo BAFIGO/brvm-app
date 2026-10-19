@@ -50,7 +50,7 @@
 [data-charte="indigo"] .fab-dot { border-color: var(--ambre); background: var(--accent); }
 [data-charte="indigo"] .fab.allume svg { animation-name: coffre-halo-indigo; }
 @keyframes coffre-halo-indigo { 45% { filter: drop-shadow(0 0 5px hsl(232 34% 12% / .55)); } }
-[data-charte="indigo"] #badge-demo { background: var(--ambre); color: var(--sur-ambre); }
+[data-charte="indigo"] #badge-demo { background: var(--accent-soft); color: var(--accent); }   /* l'ambre reste réservé à « Bafi » et au coffre */
 [data-charte="indigo"] .ia-badge { background: var(--ambre); color: var(--sur-ambre); }
 /* bouton principal du premier écran de la vitrine : seule ombre colorée, au survol */
 @media (hover: hover) {
@@ -60,3 +60,8 @@
 /* ---------------------------------------------------------------- éléments codés en dur dans l'ancienne charte */
 [data-charte="indigo"] .tel { background: hsl(232 34% 12%); }
 [data-charte="indigo"] .syn-grid { border-top-color: hsl(230 55% 32% / .18); }
+
+/* ---------------------------------------------------------------- nom de marque : « Bafi » en ambre doré, « Bourse » en indigo
+ * (le texte d'un logo ou d'un nom de marque n'est pas soumis aux exigences de contraste WCAG) */
+[data-charte="indigo"] .brand .marque { color: var(--brand); font-weight: 800; letter-spacing: -.01em; }
+[data-charte="indigo"] .brand .m-bafi { color: hsl(35 92% 55%); font-weight: inherit; }
