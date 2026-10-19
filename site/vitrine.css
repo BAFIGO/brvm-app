@@ -47,7 +47,7 @@ body.vitrine { padding-bottom: 0; overflow-x: hidden; }
 .m-num { font-size: .8rem; font-weight: 800; letter-spacing: .1em; color: var(--accent); font-variant-numeric: tabular-nums; }
 .m-viz { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: clamp(18px, 3vw, 28px); }
 .m-viz .seg { display: flex; width: 100%; }
-.m-viz .seg button { flex: 1; }
+.m-viz .seg button { flex: 1 1 0; min-width: 0; padding: 8px 1px; font-size: clamp(.7rem, 3.5vw, 1rem); letter-spacing: -.01em; }   /* les trois profils tiennent dès 320 px */
 .donut-wrap { position: relative; width: min(100%, 300px); margin: 22px auto 10px; aspect-ratio: 1; }
 .donut { width: 100%; height: 100%; display: block; }
 .donut circle { fill: none; stroke-width: 14; }
@@ -65,7 +65,12 @@ body.vitrine { padding-bottom: 0; overflow-x: hidden; }
 .alloc th, .alloc td, .apercu-tbl th, .apercu-tbl td { padding: 9px 8px; border-bottom: 1px solid var(--border); text-align: left; }
 .alloc thead th, .apercu-tbl thead th { font-size: .78rem; color: var(--muted); font-weight: 600; }
 .alloc td.num, .alloc th.num, .apercu-tbl .num { text-align: right; }
-.alloc tbody th { font-weight: 600; white-space: nowrap; }
+.alloc tbody th { font-weight: 600; }
+@media (max-width: 480px) {                                        /* tableau entier visible sans défilement */
+  .alloc { font-size: .86rem; }
+  .alloc th, .alloc td { padding: 8px 4px; }
+  .alloc thead th { white-space: normal; }
+}
 @media (min-width: 900px) {
   .m-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 64px; align-items: start; }
   .m-steps { gap: 0; }
