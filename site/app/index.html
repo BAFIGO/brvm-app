@@ -9,10 +9,12 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="../icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../icon.svg">
+  <script src="../charte.js"></script>
   <link rel="stylesheet" href="../styles.css">
   <link rel="stylesheet" href="assistant.css">
   <link rel="stylesheet" href="tutoriel.css">
   <link rel="stylesheet" href="finitions.css">
+  <link rel="stylesheet" href="../charte-indigo.css">
 </head>
 <body>
   <a class="skip" href="#main">Aller au contenu</a>
@@ -93,14 +95,18 @@
     <form id="f-op" method="dialog" novalidate>
       <h2 id="dlg-op-title">Opération chez ma SGI</h2>
       <fieldset class="fs"><legend>Que s'est-il passé ?</legend>
+        <p class="choix-t">Mes titres</p>
         <div class="choix">
-          <label><input type="radio" name="type" value="ACHAT" checked><span>J'ai acheté</span></label>
-          <label><input type="radio" name="type" value="VENTE"><span>J'ai vendu</span></label>
-          <label><input type="radio" name="type" value="DIVIDENDE"><span>Dividende ou coupon reçu</span></label>
-          <label><input type="radio" name="type" value="DEPOT"><span>Argent versé à ma SGI</span></label>
-          <label><input type="radio" name="type" value="RETRAIT"><span>Argent retiré de ma SGI</span></label>
-          <label><input type="radio" name="type" value="FRAIS"><span>Frais prélevés</span></label>
-          <label><input type="radio" name="type" value="SOLDE"><span>Solde relevé chez ma SGI</span></label>
+          <label><input type="radio" name="type" value="ACHAT" checked><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>J'ai acheté</span></label>
+          <label><input type="radio" name="type" value="VENTE"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>J'ai vendu</span></label>
+          <label><input type="radio" name="type" value="DIVIDENDE"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h3.8a1.7 1.7 0 0 1 0 3.4H10"/></svg>Dividende ou coupon reçu</span></label>
+        </div>
+        <p class="choix-t">Mon argent</p>
+        <div class="choix">
+          <label><input type="radio" name="type" value="DEPOT"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 5v14"/></svg>Argent versé à ma SGI</span></label>
+          <label><input type="radio" name="type" value="RETRAIT"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H8M12 6l-6 6 6 6"/><path d="M4 5v14"/></svg>Argent retiré de ma SGI</span></label>
+          <label><input type="radio" name="type" value="FRAIS"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7"/><circle cx="7.5" cy="7.5" r="2"/><circle cx="16.5" cy="16.5" r="2"/></svg>Frais prélevés</span></label>
+          <label><input type="radio" name="type" value="SOLDE"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>Solde relevé chez ma SGI</span></label>
         </div>
       </fieldset>
       <div data-for="titre">
