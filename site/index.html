@@ -3,232 +3,216 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>BafiBourse – votre portefeuille recalculé chaque soir de séance</title>
-  <meta name="description" content="Chaque soir de séance BRVM : analyse des actions, obligations et OPCVM, portefeuille cible selon votre profil et ordres pour le rejoindre. Gratuit, sans mot de passe.">
+  <title>BafiBourse</title>
+  <meta name="description" content="Votre portefeuille BRVM : proposition du soir, ordres, suivi et analyses du marché.">
   <meta name="theme-color" content="#0f5c4d">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
-  <script src="charte.js"></script>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="vitrine.css">
-  <link rel="stylesheet" href="charte-indigo.css">
-  <script src="boot.js"></script>
-  <script src="config.js" defer></script>
-  <script src="vendor/gsap.min.js" defer></script>
-  <script src="vendor/ScrollTrigger.min.js" defer></script>
-  <script src="vitrine.js" defer></script>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon.svg">
+  <script src="../charte.js"></script>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="assistant.css">
+  <link rel="stylesheet" href="tutoriel.css">
+  <link rel="stylesheet" href="finitions.css">
+  <link rel="stylesheet" href="../charte-indigo.css">
 </head>
-<body class="vitrine">
+<body>
   <a class="skip" href="#main">Aller au contenu</a>
 
-  <header class="v-top">
-    <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
-    <nav class="v-nav" aria-label="Sections">
-      <a href="#methode">Méthode</a><a href="#epargne">Épargne</a><a href="#apercu">Aperçu</a><a href="#confiance">Confiance</a>
+  <header class="topbar">
+    <a class="brand" href="../" title="Page d'accueil"><img src="../icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
+    <span id="badge-demo" class="chip warn" hidden>Démo</span>
+    <nav class="tabs-top" aria-label="Navigation principale" hidden>
+      <a href="#aujourdhui" data-tab="aujourdhui">Aujourd'hui</a>
+      <a href="#portefeuille" data-tab="portefeuille">Portefeuille</a>
+      <a href="#performance" data-tab="performance">Performance</a>
+      <a href="#marche" data-tab="marche">Marché</a>
+      <a href="#profil" data-tab="profil">Profil</a>
     </nav>
-    <a class="btn primary small" href="app/#connexion" data-espace>Se connecter</a>
   </header>
 
-  <p class="v-msg" id="v-msg" role="status" hidden></p>
+  <div id="annonce" class="annonce" role="status" hidden></div>
 
   <main id="main" tabindex="-1">
-    <!-- 1. Hero -->
-    <section class="hero" aria-labelledby="hero-title">
-      <p class="eyebrow">Épargne et suivi de portefeuille · zone UEMOA</p>
-      <h1 id="hero-title" class="hero-title">Votre portefeuille BRVM, recalculé chaque soir de séance.</h1>
-      <p class="lead" data-sim="Mettez de côté à votre rythme, même 1 000 F par jour. Chaque soir de séance, l'outil analyse le marché et calcule une simulation de portefeuille selon vos propres réglages. Vous décidez, vous passez les ordres chez votre SGI.">Mettez de côté à votre rythme, même 1 000 F par jour. Chaque soir de séance, l'outil analyse le marché, construit
-        un portefeuille adapté à votre profil et vous dit quand et quoi acheter. Vous décidez, vous passez les ordres chez votre SGI.</p>
-      <div class="cta">
-        <a class="btn primary" href="app/#inscription" data-espace-cta>Créer mon compte</a>
-        <a class="btn" href="app/?demo=1">Essayer la démo</a>
-      </div>
-      <dl class="stats" aria-describedby="stats-src">
-        <div><dt>actions analysées</dt><dd><span class="odo" data-k="nb_actions">49</span></dd></div>
-        <div><dt>obligations suivies</dt><dd><span class="odo" data-k="nb_obligations">18</span></dd></div>
-        <div><dt>OPCVM comparés</dt><dd><span class="odo" data-k="nb_opcvm">24</span></dd></div>
-      </dl>
-      <p id="stats-src" class="small muted stats-src">Exemple tiré des données de démonstration.</p>
-      <!-- Aperçu de l'application (illustration, données de démonstration), visible sur grand écran -->
-      <div class="hero-apercu" aria-hidden="true">
-        <div class="tel"><div class="tel-ecran">
-          <p class="ha-titre">Aujourd'hui</p>
-          <div class="ha-syn">
-            <span class="ha-lbl">Total chez ma SGI</span>
-            <b class="ha-val">2 661 821<small> F</small></b>
-            <span class="ha-up">+60 F sur la séance</span>
-            <div class="ha-g"><span><i>Disponible</i><b>1 877 765 F</b></span><span><i>Performance</i><b class="ha-up">+2,8 %</b></span></div>
-          </div>
-          <div class="ha-carte">
-            <p class="ha-h">À faire</p>
-            <div class="ha-li"><i class="ha-pt o"></i><span><b>Sonatel Sénégal</b><small>Clôture sous le plancher : à confirmer</small></span></div>
-            <div class="ha-li"><i class="ha-pt v"></i><span><b>Vos 5 000 F d'aujourd'hui ?</b><small>Votre série de 6 jours vous attend</small></span></div>
-          </div>
-          <div class="ha-carte">
-            <p class="ha-h">Achats simulés <small>14 ordres</small></p>
-            <div class="ha-li"><span><b>Société Générale CI</b><small>SGBC · renforcer</small></span><em>6 titres</em></div>
-            <div class="ha-li"><span><b>Orange CI</b><small>ORAC · renforcer</small></span><em>30 titres</em></div>
-            <div class="ha-li"><span><b>État du Niger 6,50 %</b><small>D08.O8 · renforcer</small></span><em>46 titres</em></div>
-          </div>
-        </div></div>
-      </div>
-    </section>
-
-    <!-- 2. Méthode -->
-    <section id="methode" class="methode" aria-labelledby="methode-title">
-      <div class="m-intro" data-reveal>
-        <p class="eyebrow">Méthode</p>
-        <h2 id="methode-title" class="display">Vous épargnez, l'outil fait le reste chaque soir.</h2>
-      </div>
-      <div class="m-grid">
-        <ol class="m-steps">
-          <li class="m-step" data-step="0" data-reveal>
-            <span class="m-num" aria-hidden="true">01</span>
-            <h3>J'épargne à mon rythme</h3>
-            <p>Chaque jour, chaque semaine ou chaque mois, vous notez l'argent mis de côté en deux gestes. L'application suit votre régularité
-              et vous prévient quand la somme suffit pour investir.</p>
-          </li>
-          <li class="m-step" data-step="1" data-reveal>
-            <span class="m-num" aria-hidden="true">02</span>
-            <h3>Collecte de la séance</h3>
-            <p>Cours de clôture, volumes, indices BRVM 30 et Composite, obligations cotées et valeurs liquidatives des OPCVM.</p>
-          </li>
-          <li class="m-step" data-step="2" data-reveal>
-            <span class="m-num" aria-hidden="true">03</span>
-            <h3>Analyse et score</h3>
-            <p>Chaque titre reçoit un score : tendance, fondamentaux, dividende, valorisation, liquidité. Les titres à éviter sont écartés.</p>
-          </li>
-          <li class="m-step" data-step="3" data-reveal>
-            <span class="m-num" aria-hidden="true">04</span>
-            <h3>Portefeuille cible selon votre profil</h3>
-            <p data-sim="Selon le budget et le profil que vous choisissez, l'outil simule une répartition entre actions, OPCVM et obligations, avec un montant minimal par ligne pour limiter les frais.">Le budget est réparti entre actions, OPCVM et obligations, dans les fourchettes de votre profil, avec un montant minimal par ligne pour limiter les frais.</p>
-          </li>
-          <li class="m-step" data-step="4" data-reveal>
-            <span class="m-num" aria-hidden="true">05</span>
-            <h3>Ordres et suivi</h3>
-            <p data-sim="La simulation indique les ajustements pour rejoindre la cible calculée, avec un prix limite indicatif. Votre journal d'opérations alimente le suivi de performance face au BRVM 30.">Vous recevez les achats et ventes pour rejoindre la cible, avec un prix limite. Votre journal d'opérations alimente le suivi de performance face au BRVM 30.</p>
-          </li>
-        </ol>
-        <figure class="m-viz" aria-labelledby="alloc-cap">
-          <div class="seg" role="group" aria-label="Profil de risque">
-            <button type="button" data-profil="prudent" aria-pressed="false">Prudent</button>
-            <button type="button" data-profil="equilibre" aria-pressed="true">Équilibré</button>
-            <button type="button" data-profil="dynamique" aria-pressed="false">Dynamique</button>
-          </div>
-          <div class="donut-wrap">
-            <svg class="donut" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
-              <circle class="donut-track" cx="60" cy="60" r="46"></circle>
-              <g class="donut-arcs" transform="rotate(-90 60 60)">
-                <circle class="arc c1" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="30.2 69.8" stroke-dashoffset="0"></circle>
-                <circle class="arc c2" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="9.2 90.8" stroke-dashoffset="-31"></circle>
-                <circle class="arc c3" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="37.2 62.8" stroke-dashoffset="-41"></circle>
-                <circle class="arc c4" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="20.2 79.8" stroke-dashoffset="-79"></circle>
-              </g>
-            </svg>
-            <div class="donut-center" aria-hidden="true"><span class="donut-pct" data-center>31 %</span><span class="small muted">actions</span></div>
-          </div>
-          <figcaption id="alloc-cap" class="small muted">Répartition indicative par profil : milieu des fourchettes appliquées par le moteur.
-            Le portefeuille réel dépend chaque soir du marché et de votre budget.</figcaption>
-          <div class="tbl-wrap">
-            <table class="alloc">
-              <caption class="sr-only">Répartition indicative du profil <span data-profil-label>Équilibré</span></caption>
-              <thead><tr><th scope="col">Classe d'actifs</th><th scope="col" class="num">Fourchette</th><th scope="col" class="num">Repère</th></tr></thead>
-              <tbody>
-                <tr class="r1" data-prudent="10" data-prudent-f="0–20 %" data-equilibre="31" data-equilibre-f="20–40 %" data-dynamique="52" data-dynamique-f="40–70 %"><th scope="row"><span class="sw c1" aria-hidden="true"></span>Actions</th><td class="num f">20–40 %</td><td class="num w">31 %</td></tr>
-                <tr class="r2" data-prudent="5" data-prudent-f="0–10 %" data-equilibre="10" data-equilibre-f="0–20 %" data-dynamique="19" data-dynamique-f="10–30 %"><th scope="row"><span class="sw c2" aria-hidden="true"></span>OPCVM actions</th><td class="num f">0–20 %</td><td class="num w">10 %</td></tr>
-                <tr class="r3" data-prudent="52" data-prudent-f="40–70 %" data-equilibre="38" data-equilibre-f="25–50 %" data-dynamique="19" data-dynamique-f="10–30 %"><th scope="row"><span class="sw c3" aria-hidden="true"></span>Obligations</th><td class="num f">25–50 %</td><td class="num w">38 %</td></tr>
-                <tr class="r4" data-prudent="33" data-prudent-f="20–50 %" data-equilibre="21" data-equilibre-f="10–30 %" data-dynamique="10" data-dynamique-f="0–20 %"><th scope="row"><span class="sw c4" aria-hidden="true"></span>OPCVM taux</th><td class="num f">10–30 %</td><td class="num w">21 %</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </figure>
-      </div>
-    </section>
-
-    <!-- 3. Épargne mise de côté -->
-    <section id="epargne" class="epargne-v" aria-labelledby="epargne-title">
-      <div data-reveal>
-        <p class="eyebrow">Votre coffre d'épargne</p>
-        <h2 id="epargne-title" class="display">La discipline d'abord, la bourse ensuite.</h2>
-        <p class="lead">Le coffre suit l'argent que vous gardez pour la bourse, où qu'il soit : espèces, banque ou mobile money.
-          L'application ne garde rien : elle vous aide à tenir votre rythme et vous dit quand passer à l'action.</p>
-      </div>
-      <div class="ev-grid">
-        <figure class="card ev-demo" data-reveal aria-labelledby="ev-cap">
-          <div class="ev-head"><b>Mon épargne</b><span class="chip">5 000 F par jour</span></div>
-          <div class="ev-jauge" aria-hidden="true"><i data-fill="25"></i></div>
-          <p class="small">125 000 F épargnés sur un objectif de 500 000 F</p>
-          <div class="ev-stats">
-            <div><span class="small muted">Régularité</span><b>18 / 20 jours</b></div>
-            <div><span class="small muted">Série en cours</span><b>8 jours</b></div>
-          </div>
-          <p class="small ev-pret">Prêt à investir : envoyez votre épargne à votre SGI.</p>
-          <span class="ev-fab" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/></svg></span>
-          <figcaption id="ev-cap" class="small muted">Exemple : un plan de 5 000 F par jour, du lundi au vendredi.</figcaption>
-        </figure>
-        <ol class="ev-chemin" data-reveal>
-          <li><span class="ev-pt c3" aria-hidden="true"></span><div><b>Mis de côté</b><p>« J'ai épargné » : un bouton toujours à portée de pouce.</p></div></li>
-          <li><span class="ev-pt c2" aria-hidden="true"></span><div><b>Chez ma SGI</b><p>Dès 100 000 F, l'application vous invite à envoyer votre épargne à votre SGI ; le dépôt s'inscrit tout seul dans votre journal.</p></div></li>
-          <li><span class="ev-pt c1" aria-hidden="true"></span><div><b>Placé en bourse</b><p>Les ordres sont recalculés pour ce nouvel apport, selon votre profil.</p></div></li>
-        </ol>
-        <div class="ev-barre" data-reveal aria-hidden="true"><i class="c3" data-fill="20"></i><i class="c2" data-fill="35"></i><i class="c1" data-fill="45"></i></div>
-      </div>
-    </section>
-
-    <!-- 4. Aperçu des données -->
-    <section id="apercu" class="apercu" aria-labelledby="apercu-title">
-      <div data-reveal>
-        <p class="eyebrow">Aperçu</p>
-        <h2 id="apercu-title" class="display">Tout le marché, lisible sur un téléphone.</h2>
-        <p class="lead">Actions, obligations et OPCVM au même endroit, avec pour chaque titre l'analyse de l'outil, une courbe sur un an et les chiffres clés.</p>
-      </div>
-      <div class="card apercu-card" data-reveal>
-        <div class="seg" role="group" aria-label="Classe d'actifs">
-          <button type="button" data-cl="actions" aria-pressed="true">Actions</button>
-          <button type="button" data-cl="obligations" aria-pressed="false">Obligations</button>
-          <button type="button" data-cl="opcvm" aria-pressed="false">OPCVM</button>
+    <!-- Connexion -->
+    <section id="v-connexion" class="view" hidden>
+      <div class="card narrow">
+        <h1>Bienvenue</h1>
+        <p data-sim="Chaque soir, après la séance de la BRVM, simulez un portefeuille selon vos propres réglages (budget, profil) et suivez vos placements.">Recevez chaque soir, après la séance de la BRVM, une proposition de portefeuille adaptée à votre budget
+          et à votre profil, et suivez vos placements.</p>
+        <div class="seg auth-choix" role="group" aria-label="Compte">
+          <button type="button" data-auth="inscription" aria-pressed="true">Créer un compte</button>
+          <button type="button" data-auth="connexion" aria-pressed="false">J'ai déjà un compte</button>
         </div>
-        <div class="tbl-wrap apercu-tbl">
-          <table data-tbl="actions"><caption class="sr-only">Actions (démonstration)</caption><thead><tr><th scope="col">Code</th><th scope="col">Société</th><th scope="col" class="num">Cours</th><th scope="col" class="num">Var. jour</th></tr></thead><tbody><tr><td><b>ABJC</b></td><td>SERVAIR ABIDJAN CI</td><td class="num">2 961 F</td><td class="num ">0,0 %</td></tr><tr><td><b>BBGC</b></td><td>BRIDGE BANK GROUP CI</td><td class="num">9 324 F</td><td class="num bad">-0,3 %</td></tr><tr><td><b>BICB</b></td><td>BIIC BENIN</td><td class="num">10 308 F</td><td class="num ">0,0 %</td></tr><tr><td><b>BICC</b></td><td>BICI CI</td><td class="num">1 157 F</td><td class="num bad">-0,8 %</td></tr><tr><td><b>BNBC</b></td><td>BERNABE CI</td><td class="num">7 856 F</td><td class="num ">0,0 %</td></tr><tr><td><b>BOAB</b></td><td>BANK OF AFRICA BENIN</td><td class="num">11 504 F</td><td class="num bad">-0,8 %</td></tr></tbody></table>
-          <table data-tbl="obligations" hidden><caption class="sr-only">Obligations (démonstration)</caption><thead><tr><th scope="col">Code</th><th scope="col">Emprunt</th><th scope="col" class="num">Prix</th><th scope="col" class="num">Rendement</th></tr></thead><tbody><tr><td><b>D08.O8</b></td><td>ETAT DU NIGER 6.50% 2020-2027</td><td class="num">4 947 F</td><td class="num">11,8 %</td></tr><tr><td><b>D10.O10</b></td><td>ETAT DU TOGO 6.75% 2021-2028</td><td class="num">4 901 F</td><td class="num">9,7 %</td></tr><tr><td><b>D06.O6</b></td><td>ETAT DU BURKINA 6.10% 2020-2027</td><td class="num">2 520 F</td><td class="num">9,1 %</td></tr><tr><td><b>D15.O15</b></td><td>CRRH 6.40% 2025-2032</td><td class="num">9 845 F</td><td class="num">8,0 %</td></tr><tr><td><b>D16.O16</b></td><td>BANQUE ALPHA 6.75% 2019-2028</td><td class="num">7 507 F</td><td class="num">8,3 %</td></tr><tr><td><b>D07.O7</b></td><td>ETAT DU BURKINA 6.25% 2025-2030</td><td class="num">5 011 F</td><td class="num">7,4 %</td></tr></tbody></table>
-          <table data-tbl="opcvm" hidden><caption class="sr-only">OPCVM (démonstration)</caption><thead><tr><th scope="col">Fonds</th><th scope="col">Catégorie</th><th scope="col" class="num">Valeur liquidative</th></tr></thead><tbody><tr><td>FCP GAMMA ACTIONS 02</td><td>Actions</td><td class="num">20 052 F</td></tr><tr><td>FCP ALPHA ACTIONS 00</td><td>Actions</td><td class="num">19 627 F</td></tr><tr><td>FCP ALPHA DIVERSIFIÉ 10</td><td>Diversifié</td><td class="num">15 299 F</td></tr><tr><td>FCP BETA DIVERSIFIÉ 11</td><td>Diversifié</td><td class="num">14 778 F</td></tr><tr><td>FCP SIGMA MONÉTAIRE 35</td><td>Monétaire</td><td class="num">11 543 F</td></tr><tr><td>FCP GAMMA MONÉTAIRE 32</td><td>Monétaire</td><td class="num">11 639 F</td></tr></tbody></table>
-        </div>
-        <p class="small muted">Valeurs de démonstration, à titre d'illustration : ce ne sont ni des cours du jour ni une recommandation.</p>
+        <h2 id="auth-titre">Créer mon compte gratuit</h2>
+        <form id="f-login" novalidate>
+          <label for="email">Votre adresse e-mail</label>
+          <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
+          <label class="switch" id="auth-cgu" hidden><input type="checkbox" name="cgu"> <span>J'accepte les <a href="#" id="lire-cgu">conditions d'utilisation</a></span></label>
+          <button class="btn primary" type="submit">Recevoir mon lien de connexion</button>
+          <p class="msg" role="status" aria-live="polite"></p>
+          <p class="small muted" id="auth-aide"></p>
+        </form>
+        <form id="f-code" novalidate hidden>
+          <div class="notice info"><b>C'est envoyé à <span id="code-email"></span>.</b> Ouvrez l'e-mail et touchez le lien
+            « me connecter » : vous êtes connecté automatiquement. Pensez aux courriers indésirables.</div>
+          <label for="code" class="small">Vous avez reçu un code à la place ? Saisissez-le ici</label>
+          <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" pattern="[0-9 ]{6,12}" class="code">
+          <button class="btn primary" type="submit">Me connecter</button>
+          <p class="msg" role="status" aria-live="polite"></p>
+          <p class="small"><button class="btn link" type="button" id="code-renvoi">Renvoyer l'e-mail</button> ·
+            <button class="btn link" type="button" id="code-modifier">Modifier l'adresse</button></p>
+        </form>
+        <p class="small muted">Pas de mot de passe : un lien de connexion vous est envoyé par e-mail.
+          <a href="?demo=1">Essayer la démo</a> sans compte (données fictives).</p>
+        <p class="small"><a href="../">← Découvrir BafiBourse</a></p>
       </div>
     </section>
 
-    <!-- 4. Confiance -->
-    <section id="confiance" class="confiance" aria-labelledby="confiance-title">
-      <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
-      <ul class="points">
-        <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
-        <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
-        <li data-reveal><h3>Pas de mot de passe</h3><p>Connexion par lien envoyé à votre adresse e-mail, sur téléphone comme sur ordinateur.</p></li>
-        <li data-reveal><h3>L'argent reste chez vous</h3><p>Le coffre d'épargne suit vos sommes mises de côté ; l'application ne détient ni ne déplace aucun argent.</p></li>
-        <li data-reveal><h3>Vous gardez la main</h3><p data-sim="Vous fixez les règles, l'outil calcule, vous décidez : les ordres sont passés par vous, chez votre SGI.">L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
-      </ul>
-      <div class="cta cta-end" data-reveal>
-        <a class="btn primary" href="app/#inscription">Créer mon compte</a>
-        <a class="btn" href="app/?demo=1">Essayer la démo</a>
-      </div>
-    </section>
+    <section id="v-onboarding" class="view" hidden aria-labelledby="h-ob"></section>
+    <section id="v-aujourdhui" class="view" hidden aria-labelledby="h-auj"></section>
+    <section id="v-portefeuille" class="view" hidden aria-labelledby="h-pf"></section>
+    <section id="v-performance" class="view" hidden aria-labelledby="h-perf"></section>
+    <section id="v-marche" class="view" hidden aria-labelledby="h-mk"></section>
+    <section id="v-profil" class="view" hidden aria-labelledby="h-pr"></section>
+
+    <div id="loading" class="skel" role="status" aria-live="polite"><span class="sr-only">Chargement…</span>
+      <div class="skel-card" aria-hidden="true"><i class="w40"></i><i class="w70 tall"></i><i class="w55"></i></div>
+      <div class="skel-card" aria-hidden="true"><i class="w30"></i><i></i><i></i><i class="w80"></i></div>
+      <div class="skel-card" aria-hidden="true"><i class="w30"></i><i></i><i class="w60"></i></div>
+    </div>
   </main>
 
-  <footer class="v-foot">
-    <p class="small"><strong>Avertissement.</strong> BafiBourse est un outil d'aide à la décision : il ne constitue pas un conseil en
-      investissement personnalisé. Investir en bourse comporte un risque de perte en capital ; les performances passées ne préjugent pas des
-      performances futures.</p>
-    <p class="small"><button type="button" class="btn link" id="voir-cgu" hidden></button> <a href="app/#connexion">Se connecter</a> · <a href="app/?demo=1">Démo</a></p>
-  </footer>
+  <nav class="tabs-bottom" aria-label="Navigation principale" hidden>
+    <a href="#aujourdhui" data-tab="aujourdhui"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Aujourd'hui</a>
+    <a href="#portefeuille" data-tab="portefeuille"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM8 7V5h8v2M4 12h16"/></svg>Portefeuille</a>
+    <a href="#performance" data-tab="performance"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>Performance</a>
+    <a href="#marche" data-tab="marche"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>Marché</a>
+    <a href="#profil" data-tab="profil"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Profil</a>
+  </nav>
+
+  <dialog id="dlg-op" aria-labelledby="dlg-op-title">
+    <form id="f-op" method="dialog" novalidate>
+      <h2 id="dlg-op-title">Opération chez ma SGI</h2>
+      <fieldset class="fs"><legend>Que s'est-il passé ?</legend>
+        <p class="choix-t">Mes titres</p>
+        <div class="choix">
+          <label><input type="radio" name="type" value="ACHAT" checked><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>J'ai acheté</span></label>
+          <label><input type="radio" name="type" value="VENTE"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>J'ai vendu</span></label>
+          <label><input type="radio" name="type" value="DIVIDENDE"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h3.8a1.7 1.7 0 0 1 0 3.4H10"/></svg>Dividende ou coupon reçu</span></label>
+        </div>
+        <p class="choix-t">Mon argent</p>
+        <div class="choix">
+          <label><input type="radio" name="type" value="DEPOT"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 5v14"/></svg>Argent versé à ma SGI</span></label>
+          <label><input type="radio" name="type" value="RETRAIT"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H8M12 6l-6 6 6 6"/><path d="M4 5v14"/></svg>Argent retiré de ma SGI</span></label>
+          <label><input type="radio" name="type" value="FRAIS"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7"/><circle cx="7.5" cy="7.5" r="2"/><circle cx="16.5" cy="16.5" r="2"/></svg>Frais prélevés</span></label>
+          <label><input type="radio" name="type" value="SOLDE"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>Solde relevé chez ma SGI</span></label>
+        </div>
+      </fieldset>
+      <div data-for="titre">
+        <fieldset class="fs" data-for="cat"><legend>Catégorie</legend>
+          <div class="seg src">
+            <label><input type="radio" name="cat" value="actions" checked><span>Actions</span></label>
+            <label><input type="radio" name="cat" value="obligations"><span>Obligations</span></label>
+            <label><input type="radio" name="cat" value="opcvm"><span>OPCVM</span></label>
+          </div>
+        </fieldset>
+        <label data-for="recherche">Rechercher<input id="op-q" type="search" autocomplete="off" placeholder="ex. Niger, Gamma…"></label>
+        <label>Titre<select name="ticker" id="op-titre"></select></label>
+        <label data-for="autre" hidden>Code du titre<input name="autre" autocapitalize="characters" autocomplete="off" placeholder="ex. SNTS"></label>
+        <p class="small muted" id="op-info"></p>
+      </div>
+      <div class="grid2" data-for="qp">
+        <label>Quantité <input name="quantite" type="number" min="0" step="any" inputmode="decimal"></label>
+        <label>Prix unitaire (F) <input name="prix" type="number" min="0" step="any" inputmode="decimal"></label>
+      </div>
+      <label data-for="qp">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
+        <input name="frais" type="number" min="0" step="any" inputmode="decimal">
+      </label>
+      <label data-for="montant">Montant (F) <input name="montant" type="number" min="0" step="any" inputmode="decimal"></label>
+      <label class="switch" data-for="vers-epargne" hidden><input type="checkbox" name="vers_epargne"> Je le remets dans mon épargne mise de côté</label>
+      <label>Date <input name="date" type="date" required></label>
+      <label>Note <input name="note" maxlength="200"></label>
+      <p class="op-total" id="op-total" aria-live="polite"></p>
+      <p class="msg err" role="alert"></p>
+      <div class="actions">
+        <button class="btn" value="annuler" formnovalidate>Annuler</button>
+        <button class="btn primary" value="ok" id="op-ok">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Épargne : saisie rapide -->
+  <dialog id="dlg-coffre" aria-labelledby="dlg-coffre-title">
+    <form id="f-coffre" method="dialog" novalidate>
+      <h2 id="dlg-coffre-title">J'ai épargné</h2>
+      <p class="small muted" id="dlg-coffre-sub"></p>
+      <div class="presets" id="cf-presets" role="group" aria-label="Montants proposés"></div>
+      <label>Montant (F)<input name="montant" type="number" min="1" step="any" inputmode="numeric" required></label>
+      <fieldset class="fs" id="cf-src"><legend>Où est cet argent ?</legend>
+        <div class="seg src">
+          <label><input type="radio" name="source" value="especes" checked><span>Espèces</span></label>
+          <label><input type="radio" name="source" value="banque"><span>Banque</span></label>
+          <label><input type="radio" name="source" value="mobile"><span>Mobile money</span></label>
+        </div>
+      </fieldset>
+      <label>Date<input name="date" type="date" required></label>
+      <p class="msg err" role="alert"></p>
+      <div class="actions">
+        <button class="btn" value="annuler" formnovalidate>Annuler</button>
+        <button class="btn primary" value="ok" id="cf-ok">Mettre de côté</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dégradés des médailles (bronze, argent, or, platine, diamant…) -->
+  <svg class="defs-medailles" width="0" height="0" aria-hidden="true" focusable="false"><defs><linearGradient id="m-bronze-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0B07A"/><stop offset=".55" stop-color="#E9A06A"/><stop offset="1" stop-color="#7A3F18"/></linearGradient><radialGradient id="m-bronze-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#F0B07A"/><stop offset=".45" stop-color="#E9A06A"/><stop offset="1" stop-color="#A85A2A"/></radialGradient><linearGradient id="m-argent-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#F4F6F8"/><stop offset="1" stop-color="#7D8794"/></linearGradient><radialGradient id="m-argent-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#F4F6F8"/><stop offset="1" stop-color="#A9B2BD"/></radialGradient><linearGradient id="m-or-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF1A8"/><stop offset=".55" stop-color="#FFE37A"/><stop offset="1" stop-color="#A8740D"/></linearGradient><radialGradient id="m-or-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFF1A8"/><stop offset=".45" stop-color="#FFE37A"/><stop offset="1" stop-color="#D9A21E"/></radialGradient><linearGradient id="m-platine-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F5FAFC"/><stop offset=".55" stop-color="#E3EEF3"/><stop offset="1" stop-color="#5E7C8E"/></linearGradient><radialGradient id="m-platine-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#F5FAFC"/><stop offset=".45" stop-color="#E3EEF3"/><stop offset="1" stop-color="#9DB6C4"/></radialGradient><linearGradient id="m-diamant-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E9FBFF"/><stop offset=".55" stop-color="#BFEFFF"/><stop offset="1" stop-color="#2A6E9E"/></linearGradient><radialGradient id="m-diamant-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#E9FBFF"/><stop offset=".45" stop-color="#BFEFFF"/><stop offset="1" stop-color="#4FA7D8"/></radialGradient><linearGradient id="m-legende-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD6F0"/><stop offset=".55" stop-color="#E7A6F5"/><stop offset="1" stop-color="#5B1F7A"/></linearGradient><radialGradient id="m-legende-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFD6F0"/><stop offset=".45" stop-color="#E7A6F5"/><stop offset="1" stop-color="#8E43B8"/></radialGradient><linearGradient id="m-emeraude-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C7F5DF"/><stop offset=".55" stop-color="#8FE0BA"/><stop offset="1" stop-color="#0B5E43"/></linearGradient><radialGradient id="m-emeraude-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#C7F5DF"/><stop offset=".45" stop-color="#8FE0BA"/><stop offset="1" stop-color="#1E8C63"/></radialGradient><linearGradient id="m-saphir-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#CFE0FF"/><stop offset=".55" stop-color="#9DBDF7"/><stop offset="1" stop-color="#1C3E86"/></linearGradient><radialGradient id="m-saphir-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#CFE0FF"/><stop offset=".45" stop-color="#9DBDF7"/><stop offset="1" stop-color="#3563C4"/></radialGradient><linearGradient id="m-rubis-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC9CC"/><stop offset=".55" stop-color="#F68E97"/><stop offset="1" stop-color="#7E1622"/></linearGradient><radialGradient id="m-rubis-face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#FFC9CC"/><stop offset=".45" stop-color="#F68E97"/><stop offset="1" stop-color="#C2303F"/></radialGradient></defs></svg>
+
+  <dialog id="dlg-bravo" class="bravo" aria-labelledby="bravo-titre">
+    <form method="dialog">
+      <div id="bravo-medaille"></div>
+      <p class="bravo-rang" id="bravo-rang"></p>
+      <h2 id="bravo-titre"></h2>
+      <p id="bravo-msg"></p>
+      <p class="small muted" id="bravo-aussi"></p>
+      <div class="actions">
+        <button class="btn primary" value="ok">Continuer</button>
+        <button class="btn" type="button" id="bravo-action" data-coffre="transfert" hidden>J'ai envoyé à ma SGI</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-info" aria-labelledby="dlg-info-title">
+    <form method="dialog">
+      <h2 id="dlg-info-title"></h2>
+      <div id="dlg-info-body"></div>
+      <div class="actions"><button class="btn primary" value="ok">Fermer</button></div>
+    </form>
+  </dialog>
+
+  <button id="fab-coffre" class="fab" type="button" data-coffre="verser" hidden aria-label="Noter mon épargne">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/>
+      <path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/></svg>
+    <span class="fab-dot" hidden></span>
+  </button>
 
   <dialog id="dlg-cgu" aria-labelledby="dlg-cgu-title">
     <form method="dialog">
       <h2 id="dlg-cgu-title"></h2>
       <p class="small muted" id="dlg-cgu-sub"></p>
       <div id="dlg-cgu-texte" class="doc-texte small" tabindex="0"></div>
-      <div class="actions"><button class="btn primary" value="ok">Fermer</button></div>
+      <p class="msg err" role="alert"></p>
+      <div class="actions"></div>
     </form>
   </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="../config.js"></script>
+  <script src="../supabase.min.js"></script>
+  <script src="../pays.js"></script>
+  <script src="app.js"></script>
+  <script src="assistant.js"></script>
+  <script src="tutoriel.js"></script>
 </body>
 </html>
