@@ -37,6 +37,7 @@
   const nf1 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const ok = (v) => v !== null && v !== undefined && Number.isFinite(+v);
   const F = (v) => (ok(v) ? nf0.format(Math.round(+v)) + " F" : "–");
+  const montantHtml = (v) => (ok(v) ? `${nf0.format(Math.round(+v))}<span class="unite">&nbsp;F</span>` : "–");
   const N = (v) => (ok(v) ? nf0.format(+v) : "–");
   const P = (v, sign = true) => (ok(v) ? (sign && +v > 0 ? "+" : "") + nf1.format(+v * 100) + " %" : "–");
   const nf2 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -624,27 +625,43 @@
     if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
       h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
         <button class="btn small" type="button" data-completer>Compléter mon profil</button></div>`;
+    // Bloc « À faire » : problèmes du journal, alertes importantes des titres, épargne à verser ou à envoyer
+    const faire = [];
     const alertes = [...L.errors, ...(fresh && c?.alertes ? c.alertes : [])];
     if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
-    for (const a of alertes) h += `<div class="notice">${esc(a)}</div>`;
-    h += blocAlertes();
+    for (const a of alertes) faire.push(`<li class="af af-journal"><span class="af-ic" aria-hidden="true">!</span><div class="main"><div class="sub">${esc(a)}</div></div></li>`);
+    const { urg, aut } = lignesAlertes();
+    faire.push(...urg);
     const ep = epargne();
     if (ep?.aFaire && ep.plan?.montant)
-      h += `<div class="notice rappel"><span><b>Vos ${F(ep.plan.montant)} ${RYTHMES[ep.plan.rythme][1] === "aujourd'hui" ? "d'aujourd'hui" : RYTHMES[ep.plan.rythme][1]} ?</b>
-        ${ep.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} vous attend.` : "C'est le moment de commencer une nouvelle série."}</span>
-        <button class="btn small primary" data-coffre="verser">J'ai épargné</button></div>`;
+      faire.push(`<li class="af af-epargne"><span class="af-ic" aria-hidden="true">+</span><div class="main"><div class="name">Vos ${F(ep.plan.montant)} ${RYTHMES[ep.plan.rythme][1] === "aujourd'hui" ? "d'aujourd'hui" : RYTHMES[ep.plan.rythme][1]} ?</div>
+        <div class="sub">${ep.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} vous attend.` : "C'est le moment de commencer une nouvelle série."}</div></div>
+        <button class="btn small primary" data-coffre="verser">J'ai épargné</button></li>`);
     if (ep && ep.solde >= seuil())
-      h += `<div class="notice info"><b>Votre épargne mise de côté atteint ${F(ep.solde)}.</b> C'est assez pour investir :
-        envoyez-la à votre SGI, ${SIM() ? "la simulation sera recalculée" : "les ordres seront recalculés"}. <button class="btn link" data-coffre="transfert">J'ai envoyé à ma SGI</button></div>`;
+      faire.push(`<li class="af af-epargne"><span class="af-ic" aria-hidden="true">→</span><div class="main"><div class="name">Épargne prête à investir : ${F(ep.solde)}</div>
+        <div class="sub">Envoyez-la à votre SGI : ${SIM() ? "la simulation sera recalculée" : "les ordres seront recalculés"}.</div></div>
+        <button class="btn small" data-coffre="transfert">J'ai envoyé à ma SGI</button></li>`);
+    const blocFaire = faire.length || aut.length ? `<div class="card a-faire"><h2>À faire</h2>
+      ${faire.length ? `<ul class="list">${faire.join("")}</ul>` : `<p class="small muted">Rien d'urgent ce soir.</p>`}
+      ${aut.length ? `<details class="aide"><summary>${aut.length} point${aut.length > 1 ? "s" : ""} de vigilance sur vos titres</summary><ul class="list">${aut.join("")}</ul></details>` : ""}
+      ${(S.alertes || []).length ? `<p class="small muted">Alertes calculées après chaque séance : un signal à examiner, jamais une vente automatique (environ ${nf1.format(FEES * 100)} % de frais par vente).</p>` : ""}</div>` : "";
 
+    if (!hasPf) h += blocFaire;
     if (hasPf) {
       const changed = !fresh || journalChanged(L, c);
       const perf = changed ? {} : c?.performance || {};       // performance du soir : valable pour ce journal-là
-      h += `<div class="card kpis">
-        <div class="kpi"><div class="lbl">Total chez ma SGI</div><div class="val num" data-count="${L.valeur ?? ""}">${F(L.valeur)}</div></div>
-        <div class="kpi"><div class="lbl">Disponible chez ma SGI</div><div class="val num">${F(L.cash)}</div></div>
-        <div class="kpi"><div class="lbl">Performance</div><div class="val num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
-          <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div></div>`;
+      const hist = c?.historique || [], der = hist[hist.length - 1];
+      const jour = !changed && der && der.date === S.seance.date && ok(der.gain) ? der : null;
+      h += `<div class="card synthese">
+        <div class="syn-lbl">Total chez ma SGI</div>
+        <div class="syn-val num" data-count="${L.valeur ?? ""}" data-unite="1">${montantHtml(L.valeur)}</div>
+        ${jour ? `<div class="syn-jour ${cls(jour.gain)}"><b class="num">${jour.gain > 0 ? "+" : ""}${F(jour.gain)}${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</b> sur la séance du ${D(jour.date).slice(0, 5)}</div>` : ""}
+        <div class="syn-grid">
+          <div><div class="syn-lbl">Disponible chez ma SGI</div><div class="syn-sec num">${montantHtml(L.cash)}</div></div>
+          <div><div class="syn-lbl">Performance</div><div class="syn-sec num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
+            <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div>
+        </div></div>`;
+      h += blocFaire;
       const inst = changed ? instantOrders(L) : null;
       const ordres = changed ? inst.ordres : c?.ordres || [];
       S.ordres = ordres;
@@ -655,14 +672,22 @@
           ? `<p>Aucun ordre calculable pour l'instant avec votre disponible de ${F(L.cash)}. Vérifiez votre montant à investir et votre profil, ou revenez après le calcul du soir.</p>`
           : `<p>Rien à faire pour l'instant : votre portefeuille est proche de sa cible.</p>`;
       } else {
-        h += `<p class="small muted">${SIM() ? "Pour rejoindre la cible calculée selon vos réglages" : "Pour rejoindre votre portefeuille cible"} (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p><ul class="list">`;
-        ordres.forEach((o, i) => {
-          h += `<li><div class="main"><div class="name">${mq(o.code)}${esc(o.libelle || o.code)}</div>
-            <div class="sub">${chip(o.sens)} ${esc(o.code)} · ${esc(o.motif || "")}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
-            <div class="right num"><b>${N(o.quantite)}</b><div class="sub">limite ${F(o.prix_limite)}</div>
+        h += `<p class="small muted">${SIM() ? "Pour rejoindre la cible calculée selon vos réglages" : "Pour rejoindre votre portefeuille cible"} (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p>`;
+        // Regroupés par sens ; les 5 premiers visibles, le reste dans une liste repliable
+        const ligne = ({ o, i }) => `<li><div class="main"><div class="name">${mq(o.code)}${esc(nomLisible(o.libelle || o.code))}</div>
+            <div class="sub">${esc(o.code)}${o.motif ? " · " + esc(o.motif) : ""}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
+            <div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">limite ${F(o.prix_limite)}</div>
             <button class="btn small" data-ordre="${i}">J'ai passé l'ordre</button></div></li>`;
-        });
-        h += `</ul>`;
+        const groupe = (titre, liste) => {
+          if (!liste.length) return "";
+          const total = liste.reduce((a, { o }) => a + (+o.quantite || 0) * (+o.prix_limite || 0), 0);
+          return `<div class="og"><h3 class="og-t">${titre}<span class="og-n">${liste.length} ordre${liste.length > 1 ? "s" : ""} · environ ${F(total)}</span></h3>
+            <ul class="list">${liste.slice(0, 5).map(ligne).join("")}</ul>
+            ${liste.length > 5 ? `<details class="og-plus"><summary>Voir les ${liste.length - 5} autres</summary><ul class="list">${liste.slice(5).map(ligne).join("")}</ul></details>` : ""}</div>`;
+        };
+        const tous = ordres.map((o, i) => ({ o, i }));
+        h += groupe(SIM() ? "Ventes simulées" : "À vendre", tous.filter((x) => x.o.sens === "VENTE"))
+           + groupe(SIM() ? "Achats simulés" : "À acheter", tous.filter((x) => x.o.sens !== "VENTE"));
       }
       h += changed
         ? `<p class="small muted">Recalculés à l'instant avec votre journal à jour (estimation). Le calcul détaillé, qui tient compte de la liquidité de chaque titre, est refait ce soir après la séance.</p>`
@@ -714,7 +739,7 @@
         try {
           await api.saveProfil(S.user.id, upd);
           Object.assign(S.profil, upd);
-          S.cibles = await api.cibles(S.seance.date, profil);
+          S.cibles = await ciblesLisibles(S.seance.date, profil);
           vAujourdhui();
         } catch (err) { toast("Enregistrement impossible : " + err.message); }
       };
@@ -725,6 +750,30 @@
   }
 
   const pluriel = (n, u) => `${n} ${u === "mois" ? "mois" : u + (n > 1 ? "s" : "")}`;
+  // « SOCIETE GENERALE CI » → « Société Générale CI » ; un nom déjà en casse mixte n'est pas touché
+  const SIGLES = new Set(["CI", "BF", "SN", "ML", "NE", "TG", "BJ", "GW", "SA", "SGI", "FCP", "FCPE", "SICAV", "OPCVM", "UEMOA", "UMOA", "BOA",
+    "BOAD", "BIDC", "CRRH", "CIE", "SIB", "SGB", "SGBC", "NSIA", "BICI", "BIIC", "PAD", "TPCI", "SODE", "SDSC", "SMB", "SAPH", "SOGB", "AM", "ETI", "BNI", "BHCI"]);
+  const MOTS_ACCENTS = { ETAT: "État", SOCIETE: "Société", GENERALE: "Générale", SENEGAL: "Sénégal", COTE: "Côte", BENIN: "Bénin",
+    ELECTRICITE: "Électricité", MONETAIRE: "Monétaire", DIVERSIFIE: "Diversifié", TOTALENERGIES: "TotalEnergies", REPUBLIQUE: "République",
+    ENERGIE: "Énergie", SECURITE: "Sécurité", EQUILIBRE: "Équilibré", DYNAMIQUE: "Dynamique" };
+  const PETITS_MOTS = new Set(["de", "du", "des", "la", "le", "les", "et", "en", "of", "the", "and", "d", "l"]);
+  function nomLisible(t) {
+    t = String(t ?? "");
+    const lettres = t.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, "");
+    if (lettres.length < 4 || lettres !== lettres.toUpperCase()) return t;
+    return t.split(/(\s+)/).map((m, i) => {
+      if (/^\s+$/.test(m) || /\d/.test(m)) return m;
+      const nu = m.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z'’-]/gi, "");
+      if (SIGLES.has(nu)) return m;
+      if (MOTS_ACCENTS[nu]) return MOTS_ACCENTS[nu];
+      const bas = m.toLowerCase();
+      if (i > 0 && PETITS_MOTS.has(bas)) return bas;
+      return bas.replace(/(^|[-'’])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase());
+    }).join("");
+  }
+  async function ciblesLisibles(date, profil) {
+    return ((await api.cibles(date, profil)) || []).map((c) => ({ ...c, libelle: nomLisible(c.libelle) }));
+  }
   function carteEpargne(ep) {
     const pl = ep.plan, r = pl?.rythme;
     let h = `<div class="card epargne" id="mon-epargne"><div class="ep-head"><h2>Mon épargne</h2>
@@ -816,6 +865,10 @@
     return `<li class="al al-${n.c}"><span class="al-pt" aria-hidden="true"></span><div class="main">
       <div class="name">${mq(a.ticker)}${esc(S.names.get(a.ticker) || a.ticker)} <span class="al-niv">${esc(n.t)}</span></div>
       <div class="sub">${esc(motifAlerte(a.motif))}</div></div></li>`;
+  }
+  function lignesAlertes() {
+    const A = S.alertes || [];
+    return { urg: A.filter((a) => NIVEAUX[a.alerte]?.urgent).map(ligneAlerte), aut: A.filter((a) => !NIVEAUX[a.alerte]?.urgent).map(ligneAlerte) };
   }
   function blocAlertes() {
     const A = S.alertes;
@@ -982,7 +1035,7 @@
       h += `<ul class="list">`;
       for (const o of [...S.ops].reverse()) {
         const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
-        h += `<li data-op-row="${esc(o.id)}"><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker || "")}</div>
+        h += `<li data-op-row="${esc(o.id)}"><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker ? (S.names.get(o.ticker) || o.ticker) : "")}</div>
           <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
           <div class="right num">${what}<div><button class="btn link small" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
       }
@@ -1292,7 +1345,7 @@
             await api.saveProfil(S.user.id, upd);
             const avant = p.profil;
             Object.assign(p, upd);
-            if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await api.cibles(S.seance.date, upd.profil);
+            if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
             if (dernier) return finir(completer ? "Profil complété." : `Bienvenue${p.prenom ? ", " + p.prenom : ""} ! Votre espace est prêt.`);
             i++; afficher();
             window.scrollTo(0, 0);
@@ -1364,7 +1417,7 @@
         await api.saveProfil(S.user.id, upd);
         const changed = upd.profil !== S.profil.profil;
         Object.assign(S.profil, upd);
-        if (changed && S.seance) S.cibles = await api.cibles(S.seance.date, upd.profil);
+        if (changed && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
         fin("✓ Enregistré");
         confirmeForm(f, `la ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir`);
       } catch (err) { fin(); toast("Enregistrement impossible : " + err.message); }
@@ -1829,7 +1882,7 @@
     const t0 = performance.now(), d = 600;
     const step = (t) => {
       const k = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - k, 3);
-      el.textContent = F(to * e);
+      if (el.dataset.unite) el.innerHTML = montantHtml(to * e); else el.textContent = F(to * e);
       if (k < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -1884,7 +1937,9 @@
     Object.assign(S, { seance, prop, ops: ops || [] });
     if (seance) {
       const [a, o, f, c] = await Promise.all([api.table("actions_analyse", seance.date), api.table("obligations_analyse", seance.date),
-        api.table("opcvm_analyse", seance.date), api.cibles(seance.date, S.profil.profil)]);
+        api.table("opcvm_analyse", seance.date), ciblesLisibles(seance.date, S.profil.profil)]);
+      for (const r of [...(a || []), ...(o || []), ...(f || [])]) r.nom = nomLisible(r.nom);
+      for (const x of [...(S.prop?.contenu?.ordres || []), ...(S.prop?.contenu?.proposition?.lignes || [])]) if (x.libelle) x.libelle = nomLisible(x.libelle);
       S.mk = { actions: a || [], obligations: o || [], opcvm: f || [] };
       S.cibles = c || [];
       try { S.indices = await api.indices(); } catch (e) { S.indices = []; }   // table pas encore créée

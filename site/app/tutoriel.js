@@ -201,10 +201,10 @@
                   texte: "Quand votre SGI confirme un achat (avis d'opéré), notez-le ici avec la quantité, le prix et les frais.",
                   action: { label: "Noter un achat", fn: () => app.ouvrirOperation("ACHAT") } }] },
       { id: "alertes", t: "Découvrir mes alertes", fait: !!e.pas.alertes,
-        guide: [{ tab: "aujourdhui", cible: ["#v-aujourdhui .card.alertes", "#v-aujourdhui h1"], titre: "Vos alertes",
-                  texte: (c) => c?.matches(".alertes")
-                    ? "Après chaque séance, les titres qui demandent votre attention apparaissent ici, avec l'explication. Une alerte est un signal à examiner, jamais une vente automatique."
-                    : "Dès que vous détiendrez des titres, leurs alertes apparaîtront ici après chaque séance. Une alerte est un signal à examiner, jamais une vente automatique." }] },
+        guide: [{ tab: "aujourdhui", cible: ["#v-aujourdhui .card.a-faire", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "Vos alertes",
+                  texte: (c) => c?.matches(".a-faire")
+                    ? "Ce bloc « À faire » réunit après chaque séance les titres qui demandent votre attention, avec l'explication. Une alerte est un signal à examiner, jamais une vente automatique."
+                    : "Dès que vous détiendrez des titres, leurs alertes apparaîtront dans un bloc « À faire » sur cet écran. Une alerte est un signal à examiner, jamais une vente automatique." }] },
       ...(robot ? [{ id: "robot", t: "Poser une question au robot", fait: !!e.pas.robot,
         guide: [{ cible: "#fab-ia", titre: "Votre assistant", texte: "Posez-lui une question sur votre portefeuille ou le marché : il répond avec vos chiffres.",
                   action: { label: "Poser une question", fn: ouvrirAssistant } }] }] : []),
@@ -248,8 +248,9 @@
         : `<li><button type="button" class="tuto-go" data-pas="${p.id}"><span class="tuto-coche" aria-hidden="true"></span><span>${esc(p.t)}</span><span class="tuto-fleche" aria-hidden="true">›</span></button></li>`).join("")}</ul>
       <p class="small tuto-liens">${e.visite !== "terminee" ? `<button type="button" class="btn link" data-tuto="visite">Faire la visite guidée (1 min)</button> · ` : ""}
         <button type="button" class="btn link" data-tuto="masquer">Masquer</button></p></div>`;
-    const avant = $(".card", v);
-    if (avant) avant.insertAdjacentHTML("beforebegin", html); else v.insertAdjacentHTML("beforeend", html);
+    const synthese = $(".synthese", v), avant = $(".card", v);          // juste après la synthèse du jour
+    if (synthese) synthese.insertAdjacentHTML("afterend", html);
+    else if (avant) avant.insertAdjacentHTML("beforebegin", html); else v.insertAdjacentHTML("beforeend", html);
   }
 
   // ---------------------------------------------------------------- 3. astuce à la première visite d'un onglet

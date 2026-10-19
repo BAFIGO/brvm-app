@@ -204,6 +204,18 @@
   }
 
   window.addEventListener("brvm:pret", () => { majBouton(); setTimeout(cligner, 900); planifierAmbiance(); });
+
+  // ---------------------------------------------------------------- boutons flottants : ils s'effacent quand on descend
+  // pour ne pas cacher les chiffres, et reviennent dès qu'on remonte ou qu'on arrive en bas de la page.
+  let dernierY = scrollY;
+  addEventListener("scroll", () => {
+    const y = scrollY, dy = y - dernierY;
+    if (Math.abs(dy) < 8) return;
+    const enBas = innerHeight + y >= document.documentElement.scrollHeight - 40;
+    const focus = document.activeElement?.closest?.(".fab, .fab-ia");
+    document.body.classList.toggle("fabs-caches", dy > 0 && y > 160 && !enBas && !focus);
+    dernierY = y;
+  }, { passive: true });
   window.addEventListener("brvm:maj", majBouton);
   if (window.BRVM_APP) majBouton();
 })();

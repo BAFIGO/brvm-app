@@ -1,0 +1,48 @@
+/* BRVM Portefeuille – finitions visuelles (livraison 1 : écran Aujourd'hui, montants, boutons flottants).
+ * Chargée après styles.css ; mêmes couleurs, clair et sombre. */
+
+/* ---------------------------------------------------------------- montants : l'unité plus discrète que le nombre */
+.unite { font-size: .62em; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+
+/* ---------------------------------------------------------------- synthèse du jour : la seule carte mise en avant */
+.card.synthese { background: var(--accent-soft); border-color: transparent; box-shadow: none; padding: 20px 20px 18px; }
+.syn-lbl { font-size: .82rem; color: var(--muted); font-weight: 600; }
+.syn-val { font-size: clamp(2rem, 8.5vw, 2.6rem); font-weight: 800; line-height: 1.1; letter-spacing: -.02em; margin-top: 2px;
+  font-variant-numeric: tabular-nums; }
+.syn-jour { margin-top: 6px; font-size: .92rem; font-weight: 600; }
+.syn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+.syn-sec { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- bloc « À faire » */
+.card.a-faire h2 { margin-bottom: 4px; }
+.a-faire .list > li { align-items: center; gap: 12px; }
+.a-faire .list > li > .btn { flex: none; }
+.a-faire .list > li.af-epargne { flex-wrap: wrap; }                 /* le bouton passe sous le texte : lecture confortable */
+.a-faire .list > li.af-epargne > .main { flex: 1 1 calc(100% - 44px); }
+.a-faire .list > li.af-epargne > .btn { margin-left: 40px; }
+.af-ic { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  font-weight: 800; font-size: .9rem; }
+.af-journal .af-ic { background: var(--warn-bg); color: var(--warn); }
+.af-epargne .af-ic { background: var(--accent-soft); color: var(--accent); }
+.a-faire .list > li.al { align-items: flex-start; }
+.a-faire .list > li.al .al-pt { width: 12px; height: 12px; margin: 6px 8px 0; }
+.a-faire details { margin-top: 4px; }
+.a-faire > p.small { margin-top: 10px; }
+
+/* ---------------------------------------------------------------- ordres regroupés par sens */
+.og + .og { margin-top: 14px; }
+.og-t { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  margin: 12px 0 2px; font-size: 1rem; }
+.og-n { font-size: .82rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.og-plus > summary { cursor: pointer; padding: 10px 0; font-weight: 600; color: var(--accent); min-height: 44px; display: flex; align-items: center; }
+.og-plus > summary::marker { color: var(--accent); }
+.og .list .right b { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- boutons flottants : effacés pendant la descente */
+.fab-ia { width: 52px; height: 52px; }
+.fab-ia .ia-visage { width: 28px; height: 28px; }
+body.fabs-caches .fab-ia, body.fabs-caches #fab-coffre { transform: translateY(calc(100% + 96px)); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .fab-ia, #fab-coffre { transition: transform .22s ease, opacity .22s ease; }
+}
