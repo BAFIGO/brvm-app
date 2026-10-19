@@ -1,4 +1,4 @@
-/* BRVM Portefeuille – assistant (robot de discussion).
+/* BafiBourse – assistant (robot de discussion).
  * Bouton fixe en bas à droite → fenêtre de discussion avec questions proposées, saisie et dictée facultative.
  * Les réponses viennent de la fonction Supabase « assistant » (clé de l'API Claude gardée sur le serveur).
  * app.js fournit window.BRVM_APP (données de l'écran) puis émet « brvm:pret » ; « brvm:maj » à chaque affichage. */

@@ -1,4 +1,4 @@
-/* BRVM Portefeuille – alertes des titres et assistant. Utilise les couleurs de styles.css (clair et sombre). */
+/* BafiBourse – alertes des titres et assistant. Utilise les couleurs de styles.css (clair et sombre). */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ---------------------------------------------------------------- alertes des titres */

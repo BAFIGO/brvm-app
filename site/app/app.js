@@ -1,4 +1,4 @@
-/* BRVM Portefeuille – application web (sans framework, sans étape de compilation).
+/* BafiBourse – application web (sans framework, sans étape de compilation).
  * Données : Supabase (règles RLS : chacun ne voit que ses propres profil, journal et propositions).
  * Mode démo : ?demo=1 charge demo.json (données fictives), rien n'est enregistré. */
 (() => {
@@ -667,7 +667,7 @@
       const ordres = changed ? inst.ordres : c?.ordres || [];
       S.ordres = ordres;
       const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
-      h += `<div class="card"><h2>${SIM() ? "Ajustements simulés" : "Ordres proposés"}</h2>`;
+      h += `<div class="card ordres"><h2>${SIM() ? "Ajustements simulés" : "Ordres proposés"}</h2>`;
       if (!ordres.length) {
         h += investi < 0.5 && L.cash > MIN_LINE
           ? `<p>Aucun ordre calculable pour l'instant avec votre disponible de ${F(L.cash)}. Vérifiez votre montant à investir et votre profil, ou revenez après le calcul du soir.</p>`
@@ -696,7 +696,7 @@
       h += `</div>`;
       const lignes = changed ? inst.cible : c?.proposition?.lignes || [];
       if (lignes.length)
-        h += `<div class="card"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
+        h += `<div class="card cible"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
           <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}</p></div>`;
     } else {
       const auto = S.coffre && S.profil?.budget_mode === "auto";
@@ -704,7 +704,7 @@
       const nightly = fresh && c?.proposition && !c.positions?.length && Math.round(c.proposition.base) === Math.round(budget)
         && c.profil === S.profil?.profil ? c.proposition : null;
       const e = nightly ? { lines: nightly.lignes, reliquat: nightly.reliquat, rdt: nightly.rendement_attendu } : estimate(budget);
-      h += `<div class="card"><h2>${SIM() ? "Simulation de portefeuille" : "Votre portefeuille proposé"}</h2>
+      h += `<div class="card ordres"><h2>${SIM() ? "Simulation de portefeuille" : "Votre portefeuille proposé"}</h2>
         <form id="f-budget" class="grid2" novalidate>
           ${auto ? `<div><div class="lbl small muted" style="font-weight:600">Montant à investir (automatique)</div><div class="val num" style="font-size:1.2rem;font-weight:700;margin-top:10px">${F(budget)}</div>
             <a class="small" href="#profil">Changer de mode</a></div>`
@@ -1016,7 +1016,7 @@
     h += `
       <div class="actions"><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
-    h += `<div class="card"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
+    h += `<div class="card positions"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
     if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
     else {
       h += `<ul class="list">`;
@@ -1031,7 +1031,7 @@
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
     }
-    h += `</div><div class="card"><h2>Journal des opérations</h2>`;
+    h += `</div><div class="card journal"><h2>Journal des opérations</h2>`;
     if (!S.ops.length) h += `<p class="muted">Aucune opération enregistrée.</p>`;
     else {
       h += `<ul class="list">`;
@@ -2127,7 +2127,7 @@
 
   async function init() {
     $("#badge-demo").hidden = !DEMO;
-    if (DEMO) document.title = "Démo – BRVM Portefeuille";
+    if (DEMO) document.title = "Démo – BafiBourse";
     showAnnonce();
     chargerMode();
     try {

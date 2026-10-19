@@ -1,4 +1,4 @@
-/* BRVM Portefeuille – prise en main guidée.
+/* BafiBourse – prise en main guidée.
  * 1. Visite de bienvenue : 5 bulles au plus, proposée une seule fois après l'inscription.
  * 2. « Mes premiers pas » : liste sur l'écran Aujourd'hui ; chaque ligne lance un mini-guide et se coche
  *    toute seule quand l'action est réellement faite (dépôt, achat, alertes, robot, plan d'épargne).
