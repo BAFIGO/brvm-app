@@ -150,10 +150,10 @@
       texte: `Chaque soir après la séance : le point sur votre argent, vos alertes et ${app.sim() ? "la simulation" : "la proposition"} du jour.` },
     { tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Noter vos opérations",
       texte: "Après chaque achat, vente ou versement chez votre SGI, notez-le ici : tous les calculs partent de ce journal." },
-    { cible: ['.tabs-bottom [data-tab="marche"]'], titre: "Le marché",
-      texte: "Les analyses du soir pour les actions, obligations et OPCVM de la BRVM. Touchez un titre pour le détail." },
     { cible: "#fab-coffre", optionnel: true, titre: "Votre coffre",
       texte: "Mettez de l'argent de côté avant de l'envoyer à votre SGI, et suivez votre régularité." },
+    { tab: "marche", cible: ["#v-marche .list > li:first-child", "#v-marche h1"], titre: "Le marché",
+      texte: "Chaque soir, l'analyse de chaque action, obligation et OPCVM de la BRVM. Touchez un titre, comme celui-ci, pour voir le détail et les raisons." },
     { cible: "#fab-ia", optionnel: true, titre: "Votre assistant",
       texte: "Une question ? Demandez-lui : il répond avec vos chiffres et l'actualité publiée." },
   ];
@@ -171,7 +171,7 @@
       surPasse: (i) => noter("visite_passee", i + 1),
     });
     const e2 = etat();
-    e2.astuces.portefeuille = 1;                               // déjà vu pendant la visite
+    e2.astuces.portefeuille = 1; e2.astuces.marche = 1;        // déjà vus pendant la visite
     if (fin === "fin") { e2.visite = "terminee"; noter("visite_terminee"); }
     else if (!e2.visite) e2.visite = "passee";
     sauver(e2);
@@ -223,14 +223,42 @@
     }
     if (change) sauver(e);
   }
+  // Parcours enchaîné : après chaque premier pas, l'étape suivante est proposée directement,
+  // sans revenir à la liste. « Plus tard » arrête le parcours ; la liste reste sur l'écran Aujourd'hui.
+  let enAttente = null;                                     // premier pas en cours dans une fenêtre (opération, robot)
   async function lancerPas(id) {
-    const p = premiersPas().find((x) => x.id === id);
+    const liste = premiersPas(), i = liste.findIndex((x) => x.id === id), p = liste[i];
     if (!p || enCours) return;
     noter("pas_guide", id);
-    const r = await derouler(p.guide, { surtitre: "Premiers pas", terminer: "Compris" });
+    const r = await derouler(p.guide, { surtitre: `Premier pas ${i + 1} sur ${liste.length}`, terminer: "Compris", passer: "Plus tard" });
     if (id === "alertes" && r === "fin") { const e = etat(); e.pas.alertes = 1; sauver(e); noter("pas_termine", "alertes"); }
     app.render();
+    if (r === "fin") { await attendre(350); proposerSuite(id); }
+    else if (r === "action") enAttente = id;               // la suite sera proposée à la fermeture de la fenêtre
   }
+  async function proposerSuite(apres) {
+    if (enCours) return;
+    const liste = premiersPas(), faits = liste.filter((x) => x.fait).length;
+    const suivant = liste.find((x) => !x.fait && x.id !== apres);
+    if (!suivant) return;                                   // tout est fait : la liste affiche « Bravo »
+    const r = await derouler([{ titre: "Étape suivante", texte: `${suivant.t}. On continue ?` }],
+      { surtitre: `Premiers pas : ${faits} sur ${liste.length} faits`, passer: "Plus tard", terminer: "Continuer" });
+    if (r === "fin") lancerPas(suivant.id);
+  }
+  // Fin d'un premier pas fait dans une fenêtre : fenêtre d'opération fermée, ou robot refermé après une question
+  document.addEventListener("close", (ev) => {
+    if (!enAttente || !["dlg-op", "dlg-ia"].includes(ev.target?.id)) return;
+    const id = enAttente; enAttente = null;
+    setTimeout(async () => {
+      app.render();
+      await attendre(200);
+      const fait = premiersPas().find((x) => x.id === id)?.fait;
+      if (!fait) return;                                    // fenêtre fermée sans faire l'action : on n'insiste pas
+      // laisse le temps de lire la confirmation de l'enregistrement
+      for (let k = 0; k < 35 && !$("#toast")?.hidden; k++) await attendre(100);
+      proposerSuite(id);
+    }, 300);
+  }, true);
   function carteListe() {
     const v = $("#v-aujourdhui");
     if (!v || v.hidden || $(".tuto-liste", v)) return;
