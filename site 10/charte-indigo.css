@@ -1,0 +1,67 @@
+/* Charte « indigo » (à l'essai) : indigo profond pour la confiance, ambre pour la mise en avant.
+ * Ne s'applique que si charte.js a posé data-charte="indigo" ; sinon la charte verte d'origine reste en place.
+ * Contrastes vérifiés (normes WCAG) : texte ≥ 4,5:1, icônes et bordures de champ ≥ 3:1, en clair comme en sombre. */
+
+:root[data-charte="indigo"] {
+  --bg: hsl(240 20% 98%); --surface: #ffffff; --surface-2: hsl(230 25% 95%);
+  --text: hsl(232 34% 12%); --muted: hsl(230 14% 40%); --border: hsl(230 20% 88%);
+  --accent: hsl(230 55% 32%); --accent-text: #ffffff; --accent-soft: hsl(230 60% 95%);
+  --brand: hsl(230 60% 26%);
+  --ambre: hsl(35 92% 55%); --ambre-texte: hsl(32 90% 32%); --sur-ambre: hsl(232 34% 12%);
+  --good: hsl(163 60% 30%); --bad: hsl(355 70% 44%); --warn: hsl(32 90% 32%);
+  --warn-bg: hsl(38 95% 93%); --bad-bg: hsl(355 80% 96%); --info: hsl(205 80% 36%);
+  --s1: hsl(230 60% 48%); --s2: hsl(32 90% 45%); --s3: hsl(185 60% 36%);
+  --radius: 14px; --radius-ctrl: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-charte="indigo"]:not([data-theme="light"]) {
+    --bg: hsl(232 30% 9%); --surface: hsl(232 26% 13%); --surface-2: hsl(232 22% 17%);
+    --text: hsl(230 30% 93%); --muted: hsl(230 15% 68%); --border: hsl(232 18% 24%);
+    --accent: hsl(230 80% 74%); --accent-text: hsl(232 34% 12%); --accent-soft: hsl(230 35% 22%);
+    --brand: hsl(230 80% 80%); --ambre-texte: hsl(35 92% 60%);
+    --good: hsl(163 50% 55%); --bad: hsl(355 85% 68%); --warn: hsl(35 92% 60%);
+    --warn-bg: hsl(35 50% 16%); --bad-bg: hsl(355 40% 18%); --info: hsl(200 80% 65%);
+    --s1: hsl(230 80% 72%); --s2: hsl(35 92% 58%); --s3: hsl(185 55% 55%);
+  }
+}
+:root[data-charte="indigo"][data-theme="dark"] {
+  --bg: hsl(232 30% 9%); --surface: hsl(232 26% 13%); --surface-2: hsl(232 22% 17%);
+  --text: hsl(230 30% 93%); --muted: hsl(230 15% 68%); --border: hsl(232 18% 24%);
+  --accent: hsl(230 80% 74%); --accent-text: hsl(232 34% 12%); --accent-soft: hsl(230 35% 22%);
+  --brand: hsl(230 80% 80%); --ambre-texte: hsl(35 92% 60%);
+  --good: hsl(163 50% 55%); --bad: hsl(355 85% 68%); --warn: hsl(35 92% 60%);
+  --warn-bg: hsl(35 50% 16%); --bad-bg: hsl(355 40% 18%); --info: hsl(200 80% 65%);
+  --s1: hsl(230 80% 72%); --s2: hsl(35 92% 58%); --s3: hsl(185 55% 55%);
+}
+
+/* ---------------------------------------------------------------- formes : rayons hiérarchisés, focus visible */
+[data-charte="indigo"] .btn, [data-charte="indigo"] input, [data-charte="indigo"] select, [data-charte="indigo"] textarea { border-radius: var(--radius-ctrl); }
+[data-charte="indigo"] .card, [data-charte="indigo"] dialog { border-radius: var(--radius); }
+[data-charte="indigo"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-charte="indigo"] .card { box-shadow: 0 1px 2px hsl(232 40% 20% / .05); }
+
+/* ---------------------------------------------------------------- marque : grands titres en indigo profond */
+[data-charte="indigo"] h1, [data-charte="indigo"] .hero-title, [data-charte="indigo"] .display { color: var(--brand); }
+[data-charte="indigo"] .brand span { color: var(--brand); }
+
+/* ---------------------------------------------------------------- ambre : la mise en avant, toujours avec un texte sombre */
+/* Le coffre (action d'épargne) devient l'élément ambre de l'écran ; le bouton principal reste indigo */
+[data-charte="indigo"] .fab { background: var(--ambre); color: var(--sur-ambre); border-color: var(--ambre); }
+[data-charte="indigo"] .fab-dot { border-color: var(--ambre); background: var(--accent); }
+[data-charte="indigo"] .fab.allume svg { animation-name: coffre-halo-indigo; }
+@keyframes coffre-halo-indigo { 45% { filter: drop-shadow(0 0 5px hsl(232 34% 12% / .55)); } }
+[data-charte="indigo"] #badge-demo { background: var(--accent-soft); color: var(--accent); }   /* l'ambre reste réservé à « Bafi » et au coffre */
+[data-charte="indigo"] .ia-badge { background: var(--ambre); color: var(--sur-ambre); }
+/* bouton principal du premier écran de la vitrine : seule ombre colorée, au survol */
+@media (hover: hover) {
+  [data-charte="indigo"] .hero .btn.primary:hover { box-shadow: 0 8px 22px -8px hsl(230 55% 32% / .55); }
+}
+
+/* ---------------------------------------------------------------- éléments codés en dur dans l'ancienne charte */
+[data-charte="indigo"] .tel { background: hsl(232 34% 12%); }
+[data-charte="indigo"] .syn-grid { border-top-color: hsl(230 55% 32% / .18); }
+
+/* ---------------------------------------------------------------- nom de marque : « Bafi » en ambre doré, « Bourse » en indigo
+ * (le texte d'un logo ou d'un nom de marque n'est pas soumis aux exigences de contraste WCAG) */
+[data-charte="indigo"] .brand .marque { color: var(--brand); font-weight: 800; letter-spacing: -.01em; }
+[data-charte="indigo"] .brand .m-bafi { color: hsl(35 92% 55%); font-weight: inherit; }

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Administration – BafiBourse</title>
+  <meta name="theme-color" content="#0f5c4d">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <script src="../charte.js"></script>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="../charte-indigo.css">
+</head>
+<body class="admin">
+  <a class="skip" href="#main">Aller au contenu</a>
+  <header class="topbar">
+    <div class="brand"><img src="../icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></div>
+    <span class="chip warn">Administration</span>
+    <div class="who" id="who" hidden>
+      <span id="who-email" class="small muted"></span>
+      <a class="btn small" href="../app/">Application</a>
+      <button class="btn small" id="logout" type="button">Déconnexion</button>
+    </div>
+  </header>
+
+  <div class="admin-shell">
+    <nav class="admin-nav" id="nav" aria-label="Administration" hidden>
+      <a href="#tableau" data-tab="tableau" data-perm="dashboard.read">Tableau de bord</a>
+      <a href="#utilisateurs" data-tab="utilisateurs" data-perm="users.read">Utilisateurs</a>
+      <a href="#donnees" data-tab="donnees" data-perm="market.read">Données de marché</a>
+      <a href="#traitements" data-tab="traitements" data-perm="batch.read">Traitements</a>
+      <a href="#moteur" data-tab="moteur" data-perm="engine.params">Moteur</a>
+      <a href="#univers" data-tab="univers" data-perm="engine.params">Univers</a>
+      <a href="#communication" data-tab="communication" data-perm="comms.manage">Communication</a>
+      <a href="#conformite" data-tab="conformite" data-perm="compliance.manage">Conformité</a>
+      <a href="#habilitations" data-tab="habilitations" data-perm="roles.read">Habilitations</a>
+      <a href="#audit" data-tab="audit" data-perm="audit.read">Journal d'audit</a>
+    </nav>
+    <main id="main" tabindex="-1">
+      <section id="gate" class="view" aria-live="polite"><p class="center muted">Chargement…</p></section>
+      <section id="v-tableau" class="view" hidden aria-labelledby="h-tableau"></section>
+      <section id="v-utilisateurs" class="view" hidden aria-labelledby="h-utilisateurs"></section>
+      <section id="v-donnees" class="view" hidden aria-labelledby="h-donnees"></section>
+      <section id="v-traitements" class="view" hidden aria-labelledby="h-traitements"></section>
+      <section id="v-moteur" class="view" hidden aria-labelledby="h-moteur"></section>
+      <section id="v-univers" class="view" hidden aria-labelledby="h-univers"></section>
+      <section id="v-communication" class="view" hidden aria-labelledby="h-communication"></section>
+      <section id="v-conformite" class="view" hidden aria-labelledby="h-conformite"></section>
+      <section id="v-habilitations" class="view" hidden aria-labelledby="h-habilitations"></section>
+      <section id="v-audit" class="view" hidden aria-labelledby="h-audit"></section>
+    </main>
+  </div>
+
+  <dialog id="dlg" aria-labelledby="dlg-title">
+    <form id="dlg-form" method="dialog" novalidate>
+      <h2 id="dlg-title"></h2>
+      <div id="dlg-body"></div>
+      <label id="dlg-motif-l">Motif <span class="muted small">(consigné dans le journal d'audit)</span>
+        <input name="motif" maxlength="300" autocomplete="off">
+      </label>
+      <p class="msg err" role="alert"></p>
+      <div class="actions">
+        <button class="btn" value="annuler" formnovalidate>Annuler</button>
+        <button class="btn primary" value="ok" id="dlg-ok">Confirmer</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="../config.js"></script>
+  <script src="../supabase.min.js"></script>
+  <script src="../pays.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

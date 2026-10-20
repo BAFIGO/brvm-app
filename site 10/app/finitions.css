@@ -1,0 +1,158 @@
+/* BafiBourse – finitions visuelles (livraison 1 : écran Aujourd'hui, montants, boutons flottants).
+ * Chargée après styles.css ; mêmes couleurs, clair et sombre. */
+
+/* ---------------------------------------------------------------- montants : l'unité plus discrète que le nombre */
+.unite { font-size: .62em; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+
+/* ---------------------------------------------------------------- synthèse du jour : la seule carte mise en avant */
+.card.synthese { background: var(--accent-soft); border-color: transparent; box-shadow: none; padding: 20px 20px 18px; }
+.syn-lbl { font-size: .82rem; color: var(--muted); font-weight: 600; }
+.syn-val { font-size: clamp(2rem, 8.5vw, 2.6rem); font-weight: 800; line-height: 1.1; letter-spacing: -.02em; margin-top: 2px;
+  font-variant-numeric: tabular-nums; }
+.syn-jour { margin-top: 6px; font-size: .92rem; font-weight: 600; }
+.syn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+.syn-sec { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- bloc « À faire » */
+.card.a-faire h2 { margin-bottom: 4px; }
+.a-faire .list > li { align-items: center; gap: 12px; }
+.a-faire .list > li > .btn { flex: none; }
+.a-faire .list > li.af-epargne { flex-wrap: wrap; }                 /* le bouton passe sous le texte : lecture confortable */
+.a-faire .list > li.af-epargne > .main { flex: 1 1 calc(100% - 44px); }
+.a-faire .list > li.af-epargne > .btn { margin-left: 40px; }
+.af-ic { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  font-weight: 800; font-size: .9rem; }
+.af-journal .af-ic { background: var(--warn-bg); color: var(--warn); }
+.af-epargne .af-ic { background: var(--accent-soft); color: var(--accent); }
+.a-faire .list > li.al { align-items: flex-start; }
+.a-faire .list > li.al .al-pt { width: 12px; height: 12px; margin: 6px 8px 0; }
+.a-faire details { margin-top: 4px; }
+.a-faire > p.small { margin-top: 10px; }
+
+/* ---------------------------------------------------------------- ordres regroupés par sens */
+.og + .og { margin-top: 14px; }
+.og-t { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  margin: 12px 0 2px; font-size: 1rem; }
+.og-n { font-size: .82rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.og-plus > summary { cursor: pointer; padding: 10px 0; font-weight: 600; color: var(--accent); min-height: 44px; display: flex; align-items: center; }
+.og-plus > summary::marker { color: var(--accent); }
+.og .list .right b { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- boutons flottants : effacés pendant la descente */
+.fab-ia { width: 52px; height: 52px; }
+.fab-ia .ia-visage { width: 28px; height: 28px; }
+body.fabs-caches .fab-ia, body.fabs-caches #fab-coffre { transform: translateY(calc(100% + 96px)); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .fab-ia, #fab-coffre { transition: transform .22s ease, opacity .22s ease; }
+}
+
+/* =====================================================================================
+ * Livraison 2 : typographie, cartes, encadrés et lignes de liste
+ * ===================================================================================== */
+
+/* ---------------------------------------------------------------- typographie : une échelle, trois graisses */
+body { font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+h1 { font-size: 1.65rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; margin-bottom: .3rem; }
+h2 { font-size: 1.12rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.3; margin-bottom: .6rem; }
+h3 { font-size: 1rem; font-weight: 700; }
+.h-n { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; margin-left: 6px; border-radius: 11px;
+  background: var(--surface-2); color: var(--muted); font-size: .78rem; font-weight: 700; vertical-align: 2px; font-variant-numeric: tabular-nums; }
+.right, .kpi .val, .val { font-variant-numeric: tabular-nums; }
+.kpi .lbl, .lbl { font-weight: 600; }
+.small { line-height: 1.45; }
+
+/* ---------------------------------------------------------------- cartes : une bordure, pas d'ombre, plus d'air */
+.card { box-shadow: none; padding: 18px; border-radius: 14px; }
+.view > * + * { margin-top: 14px; }
+.card > h2:first-child { margin-top: 0; }
+
+/* ---------------------------------------------------------------- encadrés : un liseré de couleur plutôt qu'un fond plein */
+.notice { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 12px; padding: 12px 14px; }
+.notice.info, .notice.rappel { border-left-color: var(--accent); background: var(--surface); }
+.notice.bad { border-left-color: var(--bad); background: var(--surface); }
+
+/* ---------------------------------------------------------------- lignes de liste : deux niveaux nets, chiffres alignés */
+.list > li { padding: 14px 0; }
+.list .name { font-size: 1rem; line-height: 1.3; }
+.list .sub { font-size: .84rem; margin-top: 2px; line-height: 1.4; }
+.list .right b { font-size: 1rem; font-weight: 700; }
+.list .sub.etats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
+.list .sub.etats:empty { display: none; }
+.list .sub.etats .al-btn { margin-left: 0; }
+
+/* décisions : texte coloré précédé d'un point, en minuscules */
+.chip { background: none; padding: 0; border-radius: 0; font-size: .8rem; font-weight: 700; color: var(--muted); }
+.chip::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+.chip.buy { background: none; color: var(--good); }
+.chip.sell { background: none; color: var(--bad); }
+.chip.warn { background: none; color: var(--warn); }
+
+/* note financière : un petit carré discret */
+.grade.sm { width: 20px; height: 20px; font-size: .7rem; border-radius: 5px; margin-left: 6px; vertical-align: 2px; }
+
+/* titre en alerte : liseré de la couleur de l'alerte sur le bord gauche */
+.list > li.a-al { box-shadow: inset 3px 0 0 var(--al); padding-left: 12px; }
+
+/* journal : « Supprimer » discret, rouge seulement au survol ou au focus */
+.btn.link.del { color: var(--muted); font-weight: 500; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.btn.link.del:hover, .btn.link.del:focus-visible { color: var(--bad); text-decoration-color: currentColor; }
+
+/* moins de capitales décoratives */
+.trophees .rang, .bravo-rang { text-transform: none; letter-spacing: 0; }
+/* étiquettes qui restent des pastilles : mode démo, rythme d'épargne */
+#badge-demo, .ep-head .chip { padding: 2px 9px; border-radius: 999px; font-size: .75rem; }
+#badge-demo::before, .ep-head .chip::before { display: none; }
+#badge-demo { background: var(--warn-bg); color: var(--warn); }
+.ep-head .chip { background: var(--surface-2); color: var(--text); }
+
+/* =====================================================================================
+ * Livraison 3 : fenêtres, formulaires et mise en page sur ordinateur
+ * ===================================================================================== */
+
+/* ---------------------------------------------------------------- champs plus confortables */
+input, select, textarea { min-height: 48px; border-radius: 12px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+form label { margin-top: 14px; }
+.msg.err:not(:empty) { padding: 10px 12px; border-radius: 10px; background: var(--bad-bg); }
+
+/* ---------------------------------------------------------------- choix d'opération : deux familles, avec icônes */
+.choix-t { margin: 12px 0 0; font-size: .8rem; font-weight: 700; color: var(--muted); }
+.choix span { gap: 8px; min-height: 48px; }
+.choix .ic { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------------------------------------------------------------- téléphone : fenêtres en panneau depuis le bas */
+@media (max-width: 759px) {
+  dialog:not(.ia):not(.bravo) { width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 92vh; padding: 0 18px;
+    border-radius: 20px 20px 0 0; border-bottom: 0; }
+  dialog:not(.ia):not(.bravo) > form::before, dialog:not(.ia):not(.bravo) > div:first-child::before {
+    content: ""; display: block; width: 40px; height: 4px; margin: 10px auto 4px; border-radius: 2px; background: var(--border); }
+  /* barre de boutons toujours visible en bas du panneau */
+  dialog:not(.ia):not(.bravo) .actions:last-child, dialog:not(.ia):not(.bravo) form > .actions {
+    position: sticky; bottom: 0; z-index: 1; margin: 16px -18px 0; padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--border); }
+  dialog:not(.ia):not(.bravo) .actions .btn { flex: 1 1 0; }
+}
+@media (max-width: 759px) and (prefers-reduced-motion: no-preference) {
+  dialog:not(.ia):not(.bravo)[open] { animation: panneau .22s ease-out; }
+  @keyframes panneau { from { transform: translateY(24px); opacity: .6; } }
+}
+
+/* ---------------------------------------------------------------- ordinateur : deux colonnes au lieu d'une colonne étroite */
+@media (min-width: 1100px) {
+  main { max-width: 1180px; }
+  #v-aujourdhui:not([hidden]), #v-portefeuille:not([hidden]) {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); column-gap: 22px; row-gap: 0;
+    grid-auto-flow: row dense; align-items: start; }
+  #v-aujourdhui > *, #v-portefeuille > * { grid-column: 1; margin: 0 0 16px !important; }
+  #v-aujourdhui > h1, #v-aujourdhui > p, #v-aujourdhui > .notice,
+  #v-portefeuille > h1, #v-portefeuille > .notice { grid-column: 1 / -1; }
+  #v-aujourdhui > h1, #v-portefeuille > h1 { margin-bottom: 4px !important; }
+  /* colonne de droite : le contenu long (ordres, positions) */
+  #v-aujourdhui > .ordres, #v-aujourdhui > .cible { grid-column: 2; }
+  #v-aujourdhui > .ordres { grid-row: span 40; }
+  #v-portefeuille > .actions, #v-portefeuille > .positions { grid-column: 2; }
+  #v-portefeuille > .positions { grid-row: span 40; }
+  #v-portefeuille > .actions { margin-bottom: 12px !important; justify-content: flex-end; }
+}

@@ -1,0 +1,2142 @@
+/* BafiBourse – application web (sans framework, sans étape de compilation).
+ * Données : Supabase (règles RLS : chacun ne voit que ses propres profil, journal et propositions).
+ * Mode démo : ?demo=1 charge demo.json (données fictives), rien n'est enregistré. */
+(() => {
+  "use strict";
+
+  const CFG = window.BRVM_CONFIG;
+  const DEMO = new URLSearchParams(location.search).has("demo");
+  // Mode des portefeuilles réglé dans la console (Moteur) : « simulation » = calcul selon les réglages de l'utilisateur,
+  // jamais présenté comme une recommandation. Démo : ?demo=1&mode=simulation
+  let MODE = DEMO && new URLSearchParams(location.search).get("mode") === "simulation" ? "simulation" : "proposition";
+  const SIM = () => MODE === "simulation";
+  const AVERT = () => SIM()
+    ? "Simulation calculée à partir de vos réglages (budget et profil de risque) : ce n'est ni une recommandation ni un conseil en investissement. Vous restez seul décideur de vos ordres."
+    : "Outil d'aide à la décision, ce n'est pas un conseil en investissement.";
+  const FEES = CFG.fraisCourtage;
+  const MIN_LINE = 50000;                                  // même seuil que l'outil (MIN_LINE_FCFA)
+  const SEUIL_DEFAUT = 2 * MIN_LINE;                       // seuil d'investissement : 2 lignes minimum (réglable : console → Moteur)
+  const RYTHMES = { quotidien: ["par jour", "aujourd'hui"], hebdo: ["par semaine", "cette semaine"], mensuel: ["par mois", "ce mois-ci"] };
+  const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
+  const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
+                     FRAIS: "Frais", SOLDE: "Solde relevé" };
+  const TABS = ["aujourdhui", "portefeuille", "performance", "marche", "profil"];
+  const PROFILS = {
+    prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
+    equilibre: { t: "Équilibré", d: "Un tiers à la moitié en actions, le reste en obligations et fonds. Le choix par défaut." },
+    dynamique: { t: "Dynamique", d: "Jusqu'à 70 % en actions et fonds actions. Plus de rendement attendu, plus de variations." },
+  };
+  const CLASSES = { actions: "Actions", obligations: "Obligations", opcvm_actions: "OPCVM actions", opcvm_taux: "OPCVM taux" };
+  const COLORS = { actions: "#2f8a72", obligations: "#c48a1a", opcvm_actions: "#5b73c4", opcvm_taux: "#a86aa6" };
+  const BUY = ["ACHAT", "ACHAT FORT", "SOUSCRIRE"];
+
+  // ---------------------------------------------------------------- utilitaires
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const nf0 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
+  const nf1 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const ok = (v) => v !== null && v !== undefined && Number.isFinite(+v);
+  const F = (v) => (ok(v) ? nf0.format(Math.round(+v)) + " F" : "–");
+  const montantHtml = (v) => (ok(v) ? `${nf0.format(Math.round(+v))}<span class="unite">&nbsp;F</span>` : "–");
+  const N = (v) => (ok(v) ? nf0.format(+v) : "–");
+  const P = (v, sign = true) => (ok(v) ? (sign && +v > 0 ? "+" : "") + nf1.format(+v * 100) + " %" : "–");
+  const nf2 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const P2 = (v) => (ok(v) ? (+v > 0 ? "+" : "") + nf2.format(+v * 100) + " %" : "–");
+  const Dc = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "–");
+  const D = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR") : "–");
+  const today = () => new Date().toISOString().slice(0, 10);
+  const cls = (v) => (ok(v) ? (+v > 0 ? "good" : +v < 0 ? "bad" : "") : "");
+  const chip = (d) => {
+    if (!d) return "";
+    const k = BUY.includes(d) ? "buy" : /VENDRE|ÉVITER|RACHETER/.test(d) ? "sell" : /ALLÉGER|SURVEILLER/.test(d) ? "warn" : "";
+    const lib = String(d).charAt(0) + String(d).slice(1).toLowerCase();      // « ACHAT FORT » → « Achat fort »
+    return `<span class="chip ${k}">${esc(lib)}</span>`;
+  };
+  function spark(c, w = 96, h = 30) {
+    const pts = c?.points;
+    if (!pts || pts.length < 2) return "";
+    const lo = Math.min(...pts), hi = Math.max(...pts), span = hi - lo || 1;
+    const xy = pts.map((v, i) => `${((i / (pts.length - 1)) * (w - 2) + 1).toFixed(1)},${(h - 1 - ((v - lo) / span) * (h - 2)).toFixed(1)}`);
+    const chg = pts[pts.length - 1] / pts[0] - 1;
+    return `<svg class="spark ${chg >= 0 ? "good" : "bad"}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
+      aria-label="Cours sur un an (${D(c.debut)} – ${D(c.fin)}) : ${P(chg)}"><polyline points="${xy.join(" ")}"/></svg>`;
+  }
+  const APPR = { Bon: "buy", Moyen: "warn", Faible: "sell" };
+  const appr = (a) => (a ? `<span class="chip ${APPR[a] || ""}">${esc(a)}</span>` : "");
+  function analyse(a) {
+    if (!a) return `<p class="small muted">Analyse financière indisponible (états financiers non publiés ou illisibles).</p>`;
+    const m = (v) => (ok(v) ? nf0.format(Math.round(v)) : "–");
+    const pc = (v) => (ok(v) ? nf1.format(v * 100) + " %" : "–");
+    let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Note financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
+      <div><b>Analyse financière : ${esc(a.recommandation || "–")}</b><div class="sub">Note ${esc(a.note || "–")}${ok(a.score) ? ` (${N(a.score)}/100)` : ""} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
+    if (a.proposition) h += `<p>${esc(a.proposition)}</p>`;
+    if (a.verdict) h += `<p class="small">${esc(a.verdict)}</p>`;
+    for (const al of a.alertes || []) h += `<div class="notice small">⚠ ${esc(al)}</div>`;
+    if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
+      <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
+    const yrs = (a.annees || []).filter((y) => ok(y.rev) || ok(y.ni));
+    if (yrs.length) h += `<div class="tbl" role="region" aria-label="Chiffres clés" tabindex="0"><table><caption class="small muted">Chiffres clés (millions de F)</caption>
+      <thead><tr><th scope="col">Exercice</th><th scope="col">${a.banque ? "PNB" : "Chiffre d'affaires"}</th><th scope="col">Résultat net</th><th scope="col">Marge nette</th></tr></thead>
+      <tbody>${yrs.map((y) => `<tr><th scope="row">${esc(y.year)}</th><td>${m(y.rev)}</td><td class="${cls(y.ni)}">${m(y.ni)}</td><td>${pc(y.margin)}</td></tr>`).join("")}</tbody></table></div>`;
+    if (a.ratios?.length) h += `<details class="ratios"><summary>Voir les ${a.ratios.length} ratios détaillés</summary><ul class="list">
+      ${a.ratios.map((r) => `<li><div class="main"><div>${esc(r.libelle)}</div>${r.aide ? `<div class="sub">${esc(r.aide)}</div>` : ""}</div>
+        <div class="right num"><b>${esc(r.valeur ?? "–")}</b>${r.precedent ? `<div class="sub">avant ${esc(r.precedent)}</div>` : ""}${appr(r.appreciation)}</div></li>`).join("")}</ul></details>`;
+    return h + `</div>`;
+  }
+
+  // Message de confirmation : texte, détail facultatif et boutons d'action (« Annuler », « Voir »).
+  // Avec des boutons, il reste 8 s, et ne disparaît pas tant que le doigt ou le clavier est dessus.
+  function toast(msg, o = {}) {
+    const t = $("#toast"), actions = o.actions || [];
+    const cacher = () => { clearTimeout(toast.t); t.hidden = true; };
+    const lancer = () => { clearTimeout(toast.t); toast.t = setTimeout(cacher, o.duree || (actions.length ? 8000 : 4000)); };
+    t.innerHTML = `<div class="toast-txt"><b>${esc(msg)}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ""}</div>`
+      + (actions.length ? `<div class="toast-act">${actions.map((a, i) => `<button type="button" class="btn link" data-i="${i}">${esc(a.label)}</button>`).join("")}</div>` : "");
+    t.classList.toggle("riche", !!(o.detail || actions.length));
+    actions.forEach((a, i) => t.querySelector(`[data-i="${i}"]`).addEventListener("click", () => { cacher(); a.fn(); }));
+    t.onpointerenter = t.onfocusin = () => clearTimeout(toast.t);
+    t.onpointerleave = t.onfocusout = lancer;
+    t.hidden = false;
+    lancer();
+  }
+  // Bouton « occupé » pendant l'envoi : il ne réagit plus (pas de double enregistrement) et le dit.
+  // fin("✓ Enregistré") affiche brièvement le succès sur le bouton ; fin() le remet tel quel.
+  function occupe(b, texte = "Enregistrement…") {
+    if (!b) return () => {};
+    const avant = b.textContent;
+    b.disabled = true; b.setAttribute("aria-busy", "true"); b.textContent = texte;
+    return (succes) => {
+      b.removeAttribute("aria-busy");
+      if (!succes) { b.textContent = avant; b.disabled = false; return; }
+      b.textContent = succes;
+      setTimeout(() => { b.textContent = avant; b.disabled = false; }, 1500);
+    };
+  }
+  // Confirmation qui reste sous le bouton d'un formulaire du Profil, jusqu'à la prochaine modification
+  function confirmeForm(f, suite) {
+    if (!f || !$(".actions", f)) return;
+    let m = $(".ok-msg", f);
+    if (!m) { m = document.createElement("p"); m.className = "ok-msg"; m.setAttribute("role", "status"); $(".actions", f).before(m); }
+    const h = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
+    setTimeout(() => { m.textContent = `✓ Enregistré à ${h}${suite ? " : " + suite : ""}`; }, 60);
+    f.addEventListener("input", () => { m.textContent = ""; }, { once: true });
+  }
+
+  // ---------------------------------------------------------------- accès aux données
+  function supaApi() {
+    const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" },
+    });
+    const r = ({ data, error }) => { if (error) throw error; return data; };
+    return {
+      session: async () => (await sb.auth.getSession()).data.session,
+      onAuth: (cb) => sb.auth.onAuthStateChange((_e, s) => cb(s)),
+      // creer = false : reconnexion seulement (erreur si aucun compte avec cette adresse)
+      login: async (email, creer) => r(await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: !!creer, emailRedirectTo: location.origin + location.pathname } })),
+      verify: async (email, token) => r(await sb.auth.verifyOtp({ email, token, type: "email" })),
+      logout: async () => { await sb.auth.signOut(); location.href = "../?deconnecte=1"; },   // retour à la page d'accueil
+      profil: async (uid) => r(await sb.from("profils").select("*").eq("id", uid).maybeSingle()),
+      saveProfil: async (uid, p) => r(await sb.from("profils").update(p).eq("id", uid)),
+      seance: async () => r(await sb.from("seances").select("*").order("date", { ascending: false }).limit(1))[0] || null,
+      proposition: async (uid) => r(await sb.from("propositions").select("date,contenu").eq("user_id", uid)
+        .order("date", { ascending: false }).limit(1))[0] || null,
+      operations: async () => r(await sb.from("operations").select("id,date,type,ticker,quantite,prix,frais,montant,note")
+        .order("date").order("id")),
+      addOperation: async (op) => r(await sb.from("operations").insert(op)),
+      deleteOperation: async (id) => r(await sb.from("operations").delete().eq("id", id)),
+      table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
+      cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
+      indices: async () => r(await sb.from("indices").select("date,code,cloture,variation").order("date").limit(3000)),
+      annonce: async () => r(await sb.from("annonces").select("message,niveau").order("cree_le", { ascending: false }).limit(1))[0] || null,
+      // Épargne mise de côté (supabase/epargne.sql) : erreur si le fichier n'est pas installé → fonctions masquées
+      coffre: async () => r(await sb.rpc("mon_epargne")),
+      addMouvement: async (m) => r(await sb.rpc("epargne_mouvement", { p_date: m.date, p_type: m.type, p_montant: m.montant,
+                                                                     p_source: m.source || "", p_note: m.note || null })),
+      envoyerSgi: async (date, montant) => r(await sb.rpc("epargne_envoyer_sgi", { p_date: date, p_montant: montant })),
+      savePlan: async (pl) => r(await sb.from("coffre_plans").upsert({ user_id: S.user.id, montant: pl.montant, rythme: pl.rythme,
+                                  jours_ouvres: pl.jours_ouvres, objectif: pl.objectif, debut: pl.debut }, { onConflict: "user_id" })),
+      mode: async () => r(await sb.rpc("mode_recommandation")),
+      // Univers accessible (supabase/univers.sql) : erreur si le fichier n'est pas installé → rubrique masquée
+      // pays des SGI (drapeaux) : colonne ajoutée par une version plus récente de univers.sql → repli sans elle
+      sgi: async () => { const q = await sb.from("sgi").select("nom,pays").eq("actif", true).order("nom");
+        return q.error ? r(await sb.from("sgi").select("nom").eq("actif", true).order("nom")) : q.data; },
+      gestionnaires: async () => { const q = await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme,pays");
+        return q.error ? r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")) : q.data; },
+      titresPays: async () => r(await sb.from("titres_pays").select("code,pays")),
+      documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
+      // Prise en main : événements pour les indicateurs de la console (tutoriel.sql) ; sans effet si la table manque
+      evenementTutoriel: async (evenement, etape) => { await sb.from("tutoriel_evenements").insert({ evenement, etape }); },
+      // Alertes des positions (vue v_alertes_positions, fichier alertes.sql) : erreur si la vue n'est pas installée → rubrique masquée
+      alertes: async () => r(await sb.from("v_alertes_positions").select("classe_actif,ticker,alerte,motif,plancher,jours_echeance,perf_pct,dernier_cours")),
+      // Assistant : fonction Supabase « assistant » (la clé de l'API Claude reste sur le serveur)
+      assistant: async (body) => {
+        const { data, error } = await sb.functions.invoke("assistant", { body });
+        if (error) {
+          let msg = error.message || "erreur inconnue", code = error.context?.status;
+          try { const j = await error.context.json(); if (j?.erreur) msg = j.erreur; } catch (e) { /* réponse non JSON */ }
+          const err = new Error(msg); err.status = code; throw err;
+        }
+        return data;
+      },
+    };
+  }
+
+  function demoApi() {
+    let data = null, nextId = 10000;
+    const load = async () => (data ??= await (await fetch("demo.json")).json());
+    const names = { actions_analyse: "actions", obligations_analyse: "obligations", opcvm_analyse: "opcvm" };
+    return {
+      session: async () => { await load(); return { user: { id: "demo", email: data.profil.email } }; },
+      onAuth: () => {},
+      login: async () => {}, verify: async () => {},
+      logout: async () => { location.href = "../?deconnecte=1"; },
+      profil: async () => ({ ...(await load()).profil }),
+      saveProfil: async (_u, p) => { Object.assign((await load()).profil, p); },
+      seance: async () => (await load()).seance,
+      proposition: async () => (await load()).proposition,
+      sgi: async () => [["Alpha Bourse", "CI"], ["Beta Securities", "SN"], ["Gamma Finance", "CI"], ["Omega Capital", "BF"]].map(([nom, pays]) => ({ nom, pays })),
+      gestionnaires: async () => [["ALPHA AM", ["Alpha Bourse"]], ["BETA GESTION", ["Beta Securities"]], ["DELTA ASSET", []],
+        ["GAMMA CAPITAL", ["Gamma Finance"]], ["OMEGA FINANCE", ["Omega Capital"]], ["SIGMA AM", []]]
+        .map(([gestionnaire, distributeurs], i) => ({ gestionnaire, distributeurs, sgo_directe: true, confirme: false, pays: ["CI", "SN", "CI", "BF", "CI", "TG"][i] })),
+      titresPays: async () => [],
+      operations: async () => (await load()).operations.slice(),
+      addOperation: async (op) => {
+        const d = await load();
+        d.operations.push({ ...op, id: nextId++ });
+        d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      },
+      deleteOperation: async (id) => { const d = await load(); d.operations = d.operations.filter((o) => o.id !== id); },
+      table: async (name) => (await load())[names[name]],
+      cibles: async (_d, profil) => (await load()).cibles.filter((c) => c.profil === profil),
+      indices: async () => (await load()).indices || [],
+      // Épargne mise de côté : en démonstration, un plan quotidien et quelques semaines de versements fictifs
+      coffre: async () => {
+        const d = await load();
+        if (!d.coffre) {
+          const iso = (dt) => new Date(dt.getTime() - dt.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+          const mv = [], src = ["especes", "mobile", "especes", "banque"];
+          let id = 1;
+          const ouvres = [];                                                    // jours ouvrés, du plus récent au plus ancien
+          for (let j = 1; j <= 40; j++) { const dt = new Date(); dt.setDate(dt.getDate() - j); if (![0, 6].includes(dt.getDay())) ouvres.push(j); }
+          const manques = new Set([6, 7, 11, 16, 21].map((i) => ouvres[i]));   // série de 6 jours en cours ; avant, des séries plus courtes
+          for (let j = 34; j >= 1; j--) {
+            const dt = new Date(); dt.setDate(dt.getDate() - j);
+            if ([0, 6].includes(dt.getDay()) || manques.has(j)) continue;
+            mv.push({ id: id++, date: iso(dt), type: "VERSEMENT", montant: j % 6 === 0 ? 10000 : 5000, source: src[j % 4] });
+          }
+          const debut = new Date(); debut.setDate(debut.getDate() - 34);
+          d.coffre = { plan: { montant: 5000, rythme: "quotidien", jours_ouvres: true, objectif: 500000, debut: iso(debut) }, mouvements: mv, nextId: id };
+        }
+        return { plan: d.coffre.plan && { ...d.coffre.plan }, mouvements: d.coffre.mouvements.slice(), seuil: 100000 };
+      },
+      addMouvement: async (m) => { const d = await load(); d.coffre.mouvements.push({ ...m, id: d.coffre.nextId++ }); },
+      envoyerSgi: async (date, montant) => {
+        const d = await load();
+        d.coffre.mouvements.push({ id: d.coffre.nextId++, date, type: "TRANSFERT", montant });
+        d.operations.push({ id: nextId++, date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant, note: "Depuis mon épargne" });
+        d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      },
+      savePlan: async (pl) => { (await load()).coffre.plan = { ...pl }; },
+      annonce: async () => (await load()).annonce || null,
+      documents: async () => (await load()).documents || [],
+      alertes: async () => alertesDemo(),
+      evenementTutoriel: async () => {},
+      assistant: async (body) => {
+        await new Promise((ok) => setTimeout(ok, 700));
+        const c = body.contexte || {}, pf = c.portefeuille || {}, al = c.alertes_titres || [];
+        return { texte: `En démonstration, je réponds seulement avec les données fictives de l'écran.\n\n`
+          + `- Votre portefeuille de démonstration vaut **${F(pf.valeur_totale)}**, dont ${F(pf.disponible)} disponibles chez la SGI.\n`
+          + `- ${al.length ? `${al.length} alerte${al.length > 1 ? "s" : ""} à regarder, par exemple ${al[0].code} : ${al[0].motif}` : "Aucune alerte sur vos titres."}\n\n`
+          + `Avec un compte, je réponds à votre question réelle et je peux chercher l'actualité publiée des sociétés.`, sources: [] };
+      },
+    };
+  }
+
+  const api = DEMO ? demoApi() : supaApi();
+  const S = { vus: new Set(), user: null, profil: null, seance: null, prop: null, ops: [], mk: { actions: [], obligations: [], opcvm: [] },
+              cibles: [], prices: new Map(), names: new Map(), classes: new Map(),
+              ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30, perf: 1 } };
+
+  // ---------------------------------------------------------------- journal → positions (même méthode que l'outil)
+  function replay(ops) {
+    const pos = new Map();
+    let cash = 0, apports = 0, realise = 0, dividendes = 0, fraisOps = 0;
+    const errors = [];
+    for (const o of ops) {
+      const t = o.ticker || "", q = +o.quantite || 0, p = +o.prix || 0, m = +o.montant || 0;
+      const fee = ok(o.frais) ? +o.frais : (o.type === "ACHAT" || o.type === "VENTE" ? q * p * FEES : 0);
+      if (o.type === "DEPOT") { cash += m; apports += m; }
+      else if (o.type === "RETRAIT") { cash -= m; apports -= m; }
+      else if (o.type === "FRAIS") { cash -= m; fraisOps += m; }
+      else if (o.type === "ACHAT") {
+        cash -= q * p + fee;
+        const x = pos.get(t) || { q: 0, cost: 0 };
+        x.q += q; x.cost += q * p + fee; pos.set(t, x);
+      } else if (o.type === "VENTE") {
+        const x = pos.get(t);
+        if (!x || x.q < q - 1e-9) { errors.push(`Vente de ${N(q)} ${t} le ${D(o.date)} supérieure à la quantité détenue.`); continue; }
+        const avg = x.cost / x.q;
+        cash += q * p - fee; realise += q * p - fee - q * avg; x.q -= q; x.cost -= q * avg;
+        if (x.q < 1e-9) pos.delete(t);
+      } else if (o.type === "DIVIDENDE") { const d = ok(o.montant) ? m : q * p; cash += d; dividendes += d; }
+    }
+    const positions = [...pos.entries()].map(([code, x]) => {
+      const cours = S.prices.get(code);
+      const valeur = ok(cours) ? x.q * cours : null;
+      return { code, quantite: x.q, pru: x.cost / x.q, cout: x.cost, cours, valeur,
+               pv: ok(valeur) ? valeur * (1 - FEES) - x.cost : null, classe: S.classes.get(code) };
+    }).sort((a, b) => (b.valeur || 0) - (a.valeur || 0));
+    const investi = positions.reduce((s, p) => s + (p.valeur || 0), 0);
+    const latent = positions.reduce((s, p) => s + (p.pv || 0), 0);
+    return { positions, cash, apports, errors, valeur: cash + investi, investi, latent, realise, dividendes, fraisOps,
+             fraisVente: investi * FEES, gainTotal: cash + investi - apports };
+  }
+
+  // ---------------------------------------------------------------- proposition instantanée (budget × poids cibles)
+  // ---------------------------------------------------------------- univers accessible (Profil → Mes comptes et mes placements)
+  const CHOIX_FCP = { accessibles: ["Seulement ceux que je peux souscrire", "Selon mes SGI (et les sociétés de gestion si je le précise)."],
+    tous: ["Tous les FCP", "Sans tenir compte de mes SGI."], aucun: ["Aucun FCP", ""] };
+  const CHOIX_OBLIG = { toutes: ["Toutes les obligations cotées", ""], publiques: ["États et institutions régionales seulement", "Pas d'émetteurs privés."],
+    aucune: ["Aucune obligation", ""] };
+  // Gestionnaires dont l'utilisateur peut souscrire les FCP ; null = pas de filtre (aucune SGI déclarée, univers absent)
+  function accesFcp() {
+    const p = S.profil || {}, U = S.univ;
+    if (!U || (p.choix_fcp || "accessibles") !== "accessibles") return null;
+    const mes = new Set(p.mes_sgi || []), dir = !!p.souscription_sgo;
+    if (!mes.size && !dir) return null;
+    return new Set(U.gest.filter((g) => (dir && g.sgo_directe !== false) || (g.distributeurs || []).some((x) => mes.has(x))).map((g) => g.gestionnaire));
+  }
+  // L'estimation immédiate respecte les choix du profil, comme le calcul du soir ; FCP et obligations détenus restent dans l'univers
+  function permis(classe, code, detenus) {
+    const p = S.profil || {};
+    if (classe === "actions") return p.choix_actions !== false;
+    if (detenus?.has(code)) return true;
+    if (classe === "obligations") {
+      const o = p.choix_obligations || "toutes";
+      return o === "toutes" || (o === "publiques" && ["etat", "regional"].includes(S.mk.obligations.find((x) => x.code === code)?.categorie));
+    }
+    if (String(classe).startsWith("opcvm")) {
+      if (p.choix_fcp === "aucun") return false;
+      const a = accesFcp();
+      return !a || a.has(S.mk.opcvm.find((x) => x.code === code)?.gestionnaire);
+    }
+    return true;
+  }
+
+  function noticesUnivers(c) {
+    const p = S.profil || {};
+    if (!S.univ) return "";
+    if ((p.choix_fcp || "accessibles") === "accessibles" && !(p.mes_sgi || []).length && !p.souscription_sgo)
+      return `<div class="notice info small">Indiquez votre SGI dans <a href="#profil">Profil → Mes comptes et mes placements</a> :
+        seuls les FCP que vous pouvez souscrire vous seront alors ${SIM() ? "inclus dans la simulation" : "proposés"}.</div>`;
+    const hors = c?.univers?.fcp_inaccessibles || [];
+    if (!hors.length || !accesFcp()) return "";
+    return `<div class="card"><h2>FCP bien notés, non souscriptibles par vos SGI</h2><ul class="list">${hors.map((f) => `<li><div class="main">
+      <div class="name">${esc(f.nom)}</div><div class="sub">${esc(f.gestionnaire)} · se souscrit chez ${esc((f.ou || []).join(" ou ") || "–")}${f.confirme ? "" : " (à confirmer)"}</div></div></li>`).join("")}</ul>
+      <p class="small muted">Pour les inclure, ajoutez une SGI qui les distribue dans votre profil.</p></div>`;
+  }
+
+  // Drapeau du pays d'un titre (déduit par pays.js, corrections de la console d'abord)
+  function mq(code) {
+    const P = window.BRVM_PAYS, x = S.lignesMk?.get(code);
+    if (!P || !x) return "";
+    return P.marque(P.de(x[0], x[1], S.paysTitres, S.paysGest), nomPays);
+  }
+
+  function estimate(budget, detenus) {
+    // Même principe que le calcul du soir : chaque poche garde ses meilleures lignes de façon qu'aucune
+    // ne descende sous MIN_LINE, puis nombre entier de titres au prix limite (frais compris).
+    const byClass = {};
+    const cibles = S.cibles.filter((c) => ok(c.prix) && +c.prix > 0 && permis(c.classe, c.code, detenus));
+    const total = cibles.reduce((s, c) => s + +c.poids, 0) || 1;   // part retirée par les choix : répartie sur le reste
+    for (const c of cibles) (byClass[c.classe] ||= []).push(c);
+    const lines = [];
+    let invest = 0, rdt = 0;
+    for (const list of Object.values(byClass)) {
+      const pocket = list.reduce((s, c) => s + +c.poids, 0) / total * budget;
+      const n = Math.max(1, Math.min(list.length, Math.floor(pocket / MIN_LINE)));
+      const keep = [...list].sort((a, b) => b.poids - a.poids).slice(0, n);
+      const wsum = keep.reduce((s, c) => s + +c.poids, 0);
+      for (const c of keep) {
+        const prix = +c.prix, q = Math.floor((pocket * c.poids / wsum) / (prix * (1 + FEES)));
+        if (q <= 0) continue;
+        const montant = q * prix;
+        lines.push({ classe: c.classe, code: c.code, libelle: c.libelle, quantite: q, prix, montant, decision: c.decision });
+        invest += montant * (1 + FEES);
+        rdt += montant * (+c.rendement_attendu || 0);
+      }
+    }
+    const order = Object.keys(CLASSES);
+    lines.sort((a, b) => order.indexOf(a.classe) - order.indexOf(b.classe) || b.montant - a.montant);
+    return { lines, invest, reliquat: budget - invest, rdt: invest ? rdt / (invest / (1 + FEES)) : null };
+  }
+
+  // Le journal a-t-il changé depuis le calcul du soir ? (trésorerie ou positions différentes)
+  function journalChanged(L, c) {
+    if (!c) return true;
+    if (Math.abs((+c.tresorerie || 0) - L.cash) > 1) return true;
+    const key = (arr) => arr.map((p) => `${p.code}:${Math.round(+p.quantite * 1000)}`).sort().join("|");
+    return key(c.positions || []) !== key(L.positions);
+  }
+
+  // Ordres recalculés sur le téléphone (même logique que le calcul du soir, en plus simple) :
+  // cible du profil appliquée à la valeur actuelle, moins ce qui est déjà détenu ; ventes d'abord,
+  // achats limités à la trésorerie disponible ; écarts < 2 % de la valeur ignorés (frais).
+  const KEEP = ["CONSERVER", "ACHAT", "ACHAT FORT", "SOUSCRIRE"];
+  function instantOrders(L) {
+    const value = L.valeur;
+    if (!(value > 0)) return { ordres: [], cible: [] };
+    const cible = estimate(value, new Set(L.positions.map((p) => p.code))).lines;
+    const want = new Map(cible.map((l) => [l.code, l]));
+    const held = new Map(L.positions.map((p) => [p.code, p]));
+    const minTrade = 0.02 * value;
+    const sells = [], buys = [];
+    for (const p of L.positions) {
+      const w = want.get(p.code);
+      const px = ok(p.cours) ? p.cours : null;
+      if (!px) continue;
+      if (!w) {
+        if (KEEP.includes(S.decisions?.get(p.code))) continue;      // hors cible mais encore bien noté : on garde
+        sells.push({ sens: "VENTE", code: p.code, libelle: S.names.get(p.code), quantite: p.quantite, prix_limite: px, motif: "sortie de la cible" });
+      } else if (p.quantite - w.quantite > 0 && (p.quantite - w.quantite) * px >= minTrade) {
+        sells.push({ sens: "VENTE", code: p.code, libelle: w.libelle, quantite: p.quantite - w.quantite, prix_limite: px, motif: "alléger" });
+      }
+    }
+    let cash = L.cash + sells.reduce((s, o) => s + o.quantite * o.prix_limite * (1 - FEES), 0);
+    const gaps = cible.map((l) => ({ l, q: l.quantite - (held.get(l.code)?.quantite || 0) }))
+      .filter((g) => g.q > 0 && (g.q * g.l.prix >= minTrade || !held.has(g.l.code)))
+      .sort((a, b) => b.q * b.l.prix - a.q * a.l.prix);
+    for (const { l, q } of gaps) {
+      const n = Math.min(q, Math.floor(cash / (l.prix * (1 + FEES))));
+      if (n <= 0) continue;
+      cash -= n * l.prix * (1 + FEES);
+      buys.push({ sens: "ACHAT", code: l.code, libelle: l.libelle, quantite: n, prix_limite: l.prix,
+                  motif: held.has(l.code) ? "renforcer" : "nouvelle ligne" });
+    }
+    return { ordres: [...sells, ...buys], cible };
+  }
+
+  function classBar(lines) {
+    const tot = {};
+    let all = 0;
+    for (const l of lines) { tot[l.classe] = (tot[l.classe] || 0) + (+l.montant || 0); all += +l.montant || 0; }
+    if (!all) return "";
+    const keys = Object.keys(CLASSES).filter((k) => tot[k] > 0);
+    return `<div class="bar" role="img" aria-label="${esc(keys.map((k) => `${CLASSES[k]} ${Math.round((tot[k] / all) * 100)} %`).join(", "))}">
+      ${keys.map((k) => `<span style="width:${(tot[k] / all) * 100}%;background:${COLORS[k]}"></span>`).join("")}</div>
+      <div class="legend">${keys.map((k) => `<span><i style="background:${COLORS[k]}"></i>${CLASSES[k]} ${Math.round((tot[k] / all) * 100)} %</span>`).join("")}</div>`;
+  }
+
+
+  // ---------------------------------------------------------------- épargne mise de côté (coffre) : suivi déclaratif
+  const isoLocal = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
+  const weekday = (iso) => new Date(iso + "T12:00:00").getDay();             // 0 dimanche … 6 samedi
+  // Période d'épargne contenant une date (clé) selon le rythme du plan
+  function periode(iso, r) {
+    if (r === "mensuel") return iso.slice(0, 7);
+    if (r === "hebdo") { const w = weekday(iso); return addDays(iso, w === 0 ? -6 : 1 - w); }
+    return iso;
+  }
+  function prevPeriode(k, r, plan) {
+    if (r === "mensuel") { const [y, m] = k.split("-").map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; }
+    if (r === "hebdo") return addDays(k, -7);
+    let d = addDays(k, -1);
+    while (plan.jours_ouvres && [0, 6].includes(weekday(d))) d = addDays(d, -1);
+    return d;
+  }
+  const seuil = () => +S.coffre?.seuil || SEUIL_DEFAUT;
+  function epargne() {
+    const c = S.coffre;
+    if (!c) return null;
+    const mv = c.mouvements || [];
+    // totaux depuis le début (calculés par la base) ; à défaut, somme des mouvements chargés
+    const sum = (t) => mv.filter((m) => m.type === t).reduce((a, m) => a + (+m.montant || 0), 0);
+    const tt = c.totaux || {};
+    const verse = +(tt.verse ?? sum("VERSEMENT")), envoye = +(tt.envoye ?? sum("TRANSFERT")), retire = +(tt.retire ?? sum("RETRAIT"));
+    const e = { solde: verse - envoye - retire, verse, envoye, plan: c.plan, mv };
+    const plan = c.plan;
+    if (!plan?.montant) return e;
+    const r = plan.rythme || "mensuel", now = today();
+    const faits = new Set(mv.filter((m) => m.type === "VERSEMENT").map((m) => periode(m.date, r)));
+    const cur = periode(now, r);
+    const jourCompte = !(r === "quotidien" && plan.jours_ouvres && [0, 6].includes(weekday(now)));
+    e.aFaire = jourCompte && !faits.has(cur);
+    // régularité sur les dernières périodes écoulées (+ la période en cours si déjà tenue)
+    const n = r === "quotidien" ? 20 : r === "hebdo" ? 12 : 6;
+    const debut = plan.debut || (mv[0]?.date) || now;
+    // Série en cours : un oubli par période de 30 jours est couvert par le joker ; record : plus longue série
+    const debutK = periode(debut, r), dateDe = (key) => (key.length === 7 ? key + "-01" : key), limJoker = addDays(now, -30);
+    let k = jourCompte && faits.has(cur) ? cur : prevPeriode(cur, r, plan), tenus = 0, total = 0, serie = 0, enSerie = true;
+    let joker = null, run = 0, record = 0;
+    for (let i = 0; i < 400 && k >= debutK; i++, k = prevPeriode(k, r, plan)) {
+      const fait = faits.has(k);
+      if (i < n) { total++; if (fait) tenus++; }
+      if (enSerie) {
+        if (fait) serie++;
+        else if (!joker && serie > 0 && dateDe(k) >= limJoker) joker = k;
+        else enSerie = false;
+      }
+      if (fait) { run++; record = Math.max(record, run); } else run = 0;
+    }
+    record = Math.max(record, serie);
+    Object.assign(e, { tenus, total, serie, record, joker, unite: r === "quotidien" ? "jour" : r === "hebdo" ? "semaine" : "mois" });
+    // projections (sommes versées seulement, sans rendement supposé)
+    const parPeriode = +plan.montant;
+    const periodesVers = (montant) => Math.max(0, Math.ceil(montant / parPeriode));
+    const enJours = (p) => (r === "quotidien" ? Math.ceil(p * (plan.jours_ouvres ? 7 / 5 : 1)) : r === "hebdo" ? p * 7 : p * 30);
+    if (e.solde < seuil()) e.seuilDans = enJours(periodesVers(seuil() - e.solde));
+    if (plan.objectif) {
+      e.objectif = +plan.objectif;
+      e.reste = Math.max(0, e.objectif - verse);
+      e.objectifLe = e.reste ? addDays(now, enJours(periodesVers(e.reste))) : null;
+    }
+    return e;
+  }
+  // ---------------------------------------------------------------- encourager la régularité (trophées, félicitations)
+  // On félicite l'épargne (versement, régularité, objectif), jamais les achats ou ventes de titres.
+  const PALIERS = { quotidien: [3, 7, 14, 30, 60, 100], hebdo: [4, 8, 12, 26, 52], mensuel: [3, 6, 12, 24] };
+  // Rang de chaque médaille : plus l'effort est long, plus le métal est précieux
+  const RANGS = { bronze: "Bronze", argent: "Argent", or: "Or", platine: "Platine", diamant: "Diamant", legende: "Légende", emeraude: "Émeraude", saphir: "Saphir", rubis: "Rubis" };
+  const RANG_SERIE = ["bronze", "argent", "or", "platine", "diamant", "legende"];
+  const RANG_OBJECTIF = { 25: "bronze", 50: "argent", 75: "or", 100: "platine" };
+  function trophees(e) {
+    if (!e) return [];
+    const r = e.plan?.rythme, u = e.unite || "jour", t = [];
+    t.push({ id: "premier", titre: "Premier pas", marque: "1", metal: "emeraude", ok: e.verse > 0, rang: 1,
+      msg: "Votre coffre est ouvert. Chaque versement compte : revenez au prochain rendez-vous pour lancer votre série." });
+    if (r && e.plan?.montant) PALIERS[r].forEach((n, i) => t.push({ id: `serie-${r}-${n}`, titre: `${pluriel(n, u)} d'affilée`, marque: String(n), metal: RANG_SERIE[i],
+      ok: Math.max(e.serie || 0, e.record || 0) >= n, reste: n - (e.serie || 0), unite: u, rang: 10 + n,
+      msg: `Petit à petit, l'oiseau fait son nid : ${pluriel(n, u)} sans interruption. Continuez sur cette lancée !` }));
+    if (e.objectif) for (const pc of [25, 50, 75, 100]) t.push({ id: `objectif-${e.objectif}-${pc}`, titre: pc === 100 ? "Objectif atteint" : `${pc} % de l'objectif`,
+      marque: pc + "%", metal: RANG_OBJECTIF[pc], ok: e.verse >= (e.objectif * pc) / 100, rang: pc === 100 ? 500 : 200 + pc,
+      msg: pc === 100 ? `Vous avez mis de côté ${F(e.verse)} : objectif de ${F(e.objectif)} atteint. Bravo pour votre discipline !`
+        : `${F(e.verse)} épargnés sur ${F(e.objectif)}. ${pc === 50 ? "La moitié du chemin est faite !" : "Vous êtes sur la bonne voie."}` });
+    t.push({ id: "seuil", titre: "Prêt à investir", marque: "↑", metal: "saphir", ok: e.solde >= seuil() || e.envoye > 0, rang: 400, action: "transfert",
+      msg: `Votre épargne atteint ${F(e.solde)} : elle peut maintenant travailler en bourse. Envoyez-la à votre SGI.` });
+    t.push({ id: "sgi", titre: "Investisseur BRVM", marque: "★", metal: "rubis", ok: e.envoye > 0, rang: 450,
+      msg: "Premier envoi à votre SGI : vous êtes maintenant investisseur à la BRVM. Votre portefeuille va grandir avec votre épargne." });
+    return t;
+  }
+  const cleFetes = () => "brvm-fetes-" + (S.user?.id || "x");
+  // Étapes déjà fêtées : dans le profil Supabase (profils.fetes, partagé entre appareils) ; à défaut, sur ce téléphone
+  const fetesEnBase = () => !DEMO && S.profil && "fetes" in S.profil;
+  function chargerFetes() {
+    let v = fetesEnBase() && Array.isArray(S.profil.fetes) ? S.profil.fetes : null;
+    if (!v && !fetesEnBase()) try { v = JSON.parse(localStorage.getItem(cleFetes()) || "null"); } catch (e) { /* stockage indisponible */ }
+    S.fetes = new Set(Array.isArray(v) ? v : []);
+    if (!v) { trophees(epargne()).filter((t) => t.ok).forEach((t) => S.fetes.add(t.id)); garderFetes(); }   // l'historique ne se fête pas
+  }
+  function garderFetes() {
+    const liste = [...S.fetes];
+    if (fetesEnBase()) { S.profil.fetes = liste; api.saveProfil(S.user.id, { fetes: liste }).catch(() => { /* réessayé à la prochaine étape */ }); }
+    else try { localStorage.setItem(cleFetes(), JSON.stringify(liste)); } catch (e) { /* tant pis */ }
+  }
+  const MSG_JOUR = [
+    (m, s, u) => `Bravo ! ${F(m)} de plus. Série : ${pluriel(s, u)}.`,
+    (m, s, u) => `C'est noté : ${F(m)} mis de côté. ${pluriel(s, u)} d'affilée !`,
+    (m, s) => `Petit à petit, l'oiseau fait son nid : ${F(m)} de plus.${s > 1 ? ` Série : ${s}.` : ""}`,
+    (m, s, u) => `Belle régularité ! ${pluriel(s, u)} sans interruption.`,
+  ];
+  // Après une action d'épargne : grande félicitation si une étape est franchie, sinon petite victoire
+  function feter(montant) {
+    const e = epargne();
+    const nouveaux = trophees(e).filter((t) => t.ok && !S.fetes.has(t.id)).sort((a, b) => b.rang - a.rang);
+    if (nouveaux.length) { nouveaux.forEach((t) => S.fetes.add(t.id)); garderFetes(); bravo(nouveaux); return; }
+    if (montant) {
+      const s = Math.max(1, e?.serie || 1), u = e?.unite || "jour";
+      toast(MSG_JOUR[s % MSG_JOUR.length](montant, s, u));
+      const fab = $("#fab-coffre");
+      fab.classList.remove("fab-ok"); void fab.offsetWidth; fab.classList.add("fab-ok");
+      setTimeout(() => fab.classList.remove("fab-ok"), 1600);
+    }
+  }
+  // Médaille : ruban à deux pans, couronne métallique crantée, face bombée, gravure, reflet ; grisée si pas encore gagnée
+  const medaille = (t, gros) => {
+    const m = t.metal || "bronze", petit = t.marque.length > 2;
+    return `<svg class="medaille m-${m}${t.ok ? "" : " verrou"}${gros ? " gros" : ""}" viewBox="0 0 64 84" aria-hidden="true">
+      <path class="ruban-a" d="M17 0h13l7 25-11 7z"/><path class="ruban-b" d="M47 0H34l-7 25 11 7z"/>
+      <path class="ruban-l" d="M23.5 0h3l6.2 23.5-2.6 1.6zM40.5 0h-3l-6.2 23.5 2.6 1.6z"/>
+      <circle cx="32" cy="55" r="26" fill="url(#m-${m}-rim)"/>
+      <circle cx="32" cy="55" r="26" fill="none" class="cran" stroke-dasharray="2.4 2.1"/>
+      <circle cx="32" cy="55" r="20.5" fill="url(#m-${m}-face)"/>
+      <circle cx="32" cy="55" r="17.2" fill="none" class="grav"/>
+      <path d="M14 46a20 20 0 0 1 22-11" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="32.6" y="${petit ? 60.6 : 61.6}" text-anchor="middle" font-size="${petit ? 12.5 : 17}" class="ombre">${esc(t.marque)}</text>
+      <text x="32" y="${petit ? 60 : 61}" text-anchor="middle" font-size="${petit ? 12.5 : 17}">${esc(t.marque)}</text></svg>`;
+  };
+  function bravo(items) {
+    const t = items[0], d = $("#dlg-bravo");
+    $("#bravo-medaille").innerHTML = `<div class="halo h-${t.metal || "bronze"}" aria-hidden="true"></div>${medaille(t, true)}`;
+    $("#bravo-rang").textContent = "Médaille " + (RANGS[t.metal] || "");
+    $("#bravo-titre").textContent = t.titre;
+    $("#bravo-msg").textContent = t.msg;
+    $("#bravo-aussi").innerHTML = items.length > 1 ? "Et aussi : " + items.slice(1).map((x) => `<b>${esc(x.titre)}</b>`).join(", ") : "";
+    $("#bravo-action").hidden = t.action !== "transfert";
+    d.showModal();
+    confettis(d);
+  }
+  function confettis(hote) {
+    if (CALME || S.profil?.felicitations === false) return;
+    const c = document.createElement("canvas");
+    c.className = "confettis";
+    (hote?.open ? hote : document.body).append(c);
+    const dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+    c.width = W * dpr; c.height = H * dpr;
+    const g = c.getContext("2d"); g.scale(dpr, dpr);
+    const css = getComputedStyle(document.documentElement);
+    const cols = ["--s1", "--s2", "--s3", "--accent"].map((v) => css.getPropertyValue(v).trim() || "#17866F").concat(["#E4B43A", "#C8553D"]);
+    const P = Array.from({ length: W < 500 ? 90 : 150 }, () => ({ x: Math.random() * W, y: -20 - Math.random() * H * 0.6,
+      vx: (Math.random() - 0.5) * 2.4, vy: 2.2 + Math.random() * 3.2, r: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.3,
+      w: 6 + Math.random() * 6, h: 4 + Math.random() * 5, c: cols[(Math.random() * cols.length) | 0], o: Math.random() * 6.3 }));
+    const t0 = performance.now();
+    const f = (t) => {
+      const el = t - t0;
+      g.clearRect(0, 0, W, H);
+      g.globalAlpha = Math.max(0, 1 - Math.max(0, el - 2300) / 900);
+      for (const p of P) {
+        p.o += 0.06; p.x += p.vx + Math.sin(p.o) * 0.7; p.y += p.vy; p.r += p.vr;
+        g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c;
+        g.fillRect(-p.w / 2, -p.h / 2, p.w, Math.abs(Math.cos(p.o)) * p.h + 1); g.restore();
+      }
+      if (el < 3200) requestAnimationFrame(f); else c.remove();
+    };
+    requestAnimationFrame(f);
+  }
+
+  const delai = (j) => (j <= 1 ? "demain" : j < 14 ? `dans ${j} jours` : j < 60 ? `dans ${Math.round(j / 7)} semaines` : `dans ${Math.round(j / 30)} mois`);
+  // Montant à investir : saisi à la main, ou automatique (mis de côté + total chez ma SGI)
+  function budgetAuto() { const L = replay(S.ops); return Math.max(0, L.valeur) + (epargne()?.solde || 0); }
+  const budgetActuel = () => (S.coffre && S.profil?.budget_mode === "auto" ? budgetAuto() : +S.profil?.budget || 0);
+
+  // ---------------------------------------------------------------- vues
+  function vAujourdhui() {
+    const v = $("#v-aujourdhui");
+    v.onclick = (ev) => { if (ev.target.closest("[data-completer]")) onboarding(true); };
+    const L = replay(S.ops);
+    const c = S.prop?.contenu;
+    const fresh = S.prop && S.seance && S.prop.date === S.seance.date;
+    const hasPf = L.positions.length > 0 || L.cash > 0;
+    let h = `<h1 id="h-auj">Aujourd'hui</h1>`;
+    if (!S.seance) {
+      v.innerHTML = h + `<div class="notice info">Les analyses du marché n'ont pas encore été publiées. Revenez après la prochaine séance.</div>`;
+      return;
+    }
+    h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}</p>`;
+    if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
+      h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
+        <button class="btn small" type="button" data-completer>Compléter mon profil</button></div>`;
+    // Bloc « À faire » : problèmes du journal, alertes importantes des titres, épargne à verser ou à envoyer
+    const faire = [];
+    const alertes = [...L.errors, ...(fresh && c?.alertes ? c.alertes : [])];
+    if (L.cash < -1) alertes.unshift("Votre disponible chez la SGI est négatif : enregistrez vos dépôts pour des calculs justes.");
+    for (const a of alertes) faire.push(`<li class="af af-journal"><span class="af-ic" aria-hidden="true">!</span><div class="main"><div class="sub">${esc(a)}</div></div></li>`);
+    const { urg, aut } = lignesAlertes();
+    faire.push(...urg);
+    const ep = epargne();
+    if (ep?.aFaire && ep.plan?.montant)
+      faire.push(`<li class="af af-epargne"><span class="af-ic" aria-hidden="true">+</span><div class="main"><div class="name">Vos ${F(ep.plan.montant)} ${RYTHMES[ep.plan.rythme][1] === "aujourd'hui" ? "d'aujourd'hui" : RYTHMES[ep.plan.rythme][1]} ?</div>
+        <div class="sub">${ep.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} vous attend.` : "C'est le moment de commencer une nouvelle série."}</div></div>
+        <button class="btn small primary" data-coffre="verser">J'ai épargné</button></li>`);
+    if (ep && ep.solde >= seuil())
+      faire.push(`<li class="af af-epargne"><span class="af-ic" aria-hidden="true">→</span><div class="main"><div class="name">Épargne prête à investir : ${F(ep.solde)}</div>
+        <div class="sub">Envoyez-la à votre SGI : ${SIM() ? "la simulation sera recalculée" : "les ordres seront recalculés"}.</div></div>
+        <button class="btn small" data-coffre="transfert">J'ai envoyé à ma SGI</button></li>`);
+    const blocFaire = faire.length || aut.length ? `<div class="card a-faire"><h2>À faire</h2>
+      ${faire.length ? `<ul class="list">${faire.join("")}</ul>` : `<p class="small muted">Rien d'urgent ce soir.</p>`}
+      ${aut.length ? `<details class="aide"><summary>${aut.length} point${aut.length > 1 ? "s" : ""} de vigilance sur vos titres</summary><ul class="list">${aut.join("")}</ul></details>` : ""}
+      ${(S.alertes || []).length ? `<p class="small muted">Alertes calculées après chaque séance : un signal à examiner, jamais une vente automatique (environ ${nf1.format(FEES * 100)} % de frais par vente).</p>` : ""}</div>` : "";
+
+    if (!hasPf) h += blocFaire;
+    if (hasPf) {
+      const changed = !fresh || journalChanged(L, c);
+      const perf = changed ? {} : c?.performance || {};       // performance du soir : valable pour ce journal-là
+      const hist = c?.historique || [], der = hist[hist.length - 1];
+      const jour = !changed && der && der.date === S.seance.date && ok(der.gain) ? der : null;
+      h += `<div class="card synthese">
+        <div class="syn-lbl">Total chez ma SGI</div>
+        <div class="syn-val num" data-count="${L.valeur ?? ""}" data-unite="1">${montantHtml(L.valeur)}</div>
+        ${jour ? `<div class="syn-jour ${cls(jour.gain)}"><b class="num">${jour.gain > 0 ? "+" : ""}${F(jour.gain)}${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</b> sur la séance du ${D(jour.date).slice(0, 5)}</div>` : ""}
+        <div class="syn-grid">
+          <div><div class="syn-lbl">Disponible chez ma SGI</div><div class="syn-sec num">${montantHtml(L.cash)}</div></div>
+          <div><div class="syn-lbl">Performance</div><div class="syn-sec num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
+            <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div>
+        </div></div>`;
+      h += blocFaire;
+      const inst = changed ? instantOrders(L) : null;
+      const ordres = changed ? inst.ordres : c?.ordres || [];
+      S.ordres = ordres;
+      const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
+      h += `<div class="card ordres"><h2>${SIM() ? "Ajustements simulés" : "Ordres proposés"}</h2>`;
+      if (!ordres.length) {
+        h += investi < 0.5 && L.cash > MIN_LINE
+          ? `<p>Aucun ordre calculable pour l'instant avec votre disponible de ${F(L.cash)}. Vérifiez votre montant à investir et votre profil, ou revenez après le calcul du soir.</p>`
+          : `<p>Rien à faire pour l'instant : votre portefeuille est proche de sa cible.</p>`;
+      } else {
+        h += `<p class="small muted">${SIM() ? "Pour rejoindre la cible calculée selon vos réglages" : "Pour rejoindre votre portefeuille cible"} (${esc(PROFILS[S.profil?.profil]?.t || S.profil?.profil || "")}). Prix limites indicatifs.</p>`;
+        // Regroupés par sens ; les 5 premiers visibles, le reste dans une liste repliable
+        const ligne = ({ o, i }) => `<li><div class="main"><div class="name">${mq(o.code)}${esc(nomLisible(o.libelle || o.code))}</div>
+            <div class="sub">${esc(o.code)}${o.motif ? " · " + esc(o.motif) : ""}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
+            <div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">limite ${F(o.prix_limite)}</div>
+            <button class="btn small" data-ordre="${i}">J'ai passé l'ordre</button></div></li>`;
+        const groupe = (titre, liste) => {
+          if (!liste.length) return "";
+          const total = liste.reduce((a, { o }) => a + (+o.quantite || 0) * (+o.prix_limite || 0), 0);
+          return `<div class="og"><h3 class="og-t">${titre}<span class="og-n">${liste.length} ordre${liste.length > 1 ? "s" : ""} · environ ${F(total)}</span></h3>
+            <ul class="list">${liste.slice(0, 5).map(ligne).join("")}</ul>
+            ${liste.length > 5 ? `<details class="og-plus"><summary>Voir les ${liste.length - 5} autres</summary><ul class="list">${liste.slice(5).map(ligne).join("")}</ul></details>` : ""}</div>`;
+        };
+        const tous = ordres.map((o, i) => ({ o, i }));
+        h += groupe(SIM() ? "Ventes simulées" : "À vendre", tous.filter((x) => x.o.sens === "VENTE"))
+           + groupe(SIM() ? "Achats simulés" : "À acheter", tous.filter((x) => x.o.sens !== "VENTE"));
+      }
+      h += changed
+        ? `<p class="small muted">Recalculés à l'instant avec votre journal à jour (estimation). Le calcul détaillé, qui tient compte de la liquidité de chaque titre, est refait ce soir après la séance.</p>`
+        : `<p class="small muted">Calculés avec votre journal au soir du ${D(S.prop.date)}.</p>`;
+      h += `</div>`;
+      const lignes = changed ? inst.cible : c?.proposition?.lignes || [];
+      if (lignes.length)
+        h += `<div class="card cible"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
+          <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}</p></div>`;
+    } else {
+      const auto = S.coffre && S.profil?.budget_mode === "auto";
+      const budget = budgetActuel();
+      const nightly = fresh && c?.proposition && !c.positions?.length && Math.round(c.proposition.base) === Math.round(budget)
+        && c.profil === S.profil?.profil ? c.proposition : null;
+      const e = nightly ? { lines: nightly.lignes, reliquat: nightly.reliquat, rdt: nightly.rendement_attendu } : estimate(budget);
+      h += `<div class="card ordres"><h2>${SIM() ? "Simulation de portefeuille" : "Votre portefeuille proposé"}</h2>
+        <form id="f-budget" class="grid2" novalidate>
+          ${auto ? `<div><div class="lbl small muted" style="font-weight:600">Montant à investir (automatique)</div><div class="val num" style="font-size:1.2rem;font-weight:700;margin-top:10px">${F(budget)}</div>
+            <a class="small" href="#profil">Changer de mode</a></div>`
+          : `<label>Montant à investir (F)<input name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${budget || ""}"></label>`}
+          <label>Profil<select name="profil">${Object.entries(PROFILS).map(([k, p]) =>
+            `<option value="${k}"${S.profil?.profil === k ? " selected" : ""}>${p.t}</option>`).join("")}</select></label>
+        </form>`;
+      if (!budget) h += `<p class="muted">Indiquez le montant que vous souhaitez investir ${SIM() ? "pour lancer la simulation" : "pour recevoir une proposition"}.</p>`;
+      else if (!e.lines.length) h += `<p class="muted">Budget trop faible pour constituer un portefeuille diversifié.</p>`;
+      else {
+        h += classBar(e.lines) + `<p class="small muted">Rendement attendu ${P(e.rdt, false)} par an · non investi ${F(e.reliquat)}.
+          ${nightly ? (SIM() ? "Simulation calculée ce soir." : "Proposition calculée ce soir.")
+            : `Estimation immédiate ; la ${SIM() ? "simulation" : "proposition"} détaillée est recalculée chaque soir.`}</p><ul class="list">`;
+        e.lines.forEach((l, i) => {
+          h += `<li><div class="main"><div class="name">${mq(l.code)}${esc(l.libelle || l.code)}</div>
+            <div class="sub">${esc(CLASSES[l.classe] || l.classe)} · ${esc(l.code)} ${chip(l.decision)}</div></div>
+            <div class="right num"><b>× ${N(l.quantite)}</b><div class="sub">${F(l.montant)}</div>
+            <button class="btn small" data-ligne="${i}">J'ai acheté</button></div></li>`;
+        });
+        h += `</ul>`;
+        S.lines = e.lines;
+      }
+      h += `<div class="notice info small">Pour suivre votre portefeuille, enregistrez d'abord votre dépôt chez votre SGI,
+        puis vos achats. <button class="btn link" data-op="DEPOT">Enregistrer l'argent versé à ma SGI</button></div></div>`;
+    }
+    h += noticesUnivers(c);
+    h += `<p class="small muted">${AVERT()} Données de marché : BRVM.</p>`;
+    v.innerHTML = h;
+    const fb = $("#f-budget", v);
+    if (fb) {
+      const save = async () => {
+        const profil = fb.profil.value, upd = fb.budget ? { budget: Math.max(0, +fb.budget.value || 0), profil } : { profil };
+        try {
+          await api.saveProfil(S.user.id, upd);
+          Object.assign(S.profil, upd);
+          S.cibles = await ciblesLisibles(S.seance.date, profil);
+          vAujourdhui();
+        } catch (err) { toast("Enregistrement impossible : " + err.message); }
+      };
+      fb.budget?.addEventListener("change", save);
+      fb.profil.addEventListener("change", save);
+      fb.addEventListener("submit", (ev) => { ev.preventDefault(); save(); });
+    }
+  }
+
+  const pluriel = (n, u) => `${n} ${u === "mois" ? "mois" : u + (n > 1 ? "s" : "")}`;
+  // « SOCIETE GENERALE CI » → « Société Générale CI » ; un nom déjà en casse mixte n'est pas touché
+  const SIGLES = new Set(["CI", "BF", "SN", "ML", "NE", "TG", "BJ", "GW", "SA", "SGI", "FCP", "FCPE", "SICAV", "OPCVM", "UEMOA", "UMOA", "BOA",
+    "BOAD", "BIDC", "CRRH", "CIE", "SIB", "SGB", "SGBC", "NSIA", "BICI", "BIIC", "PAD", "TPCI", "SODE", "SDSC", "SMB", "SAPH", "SOGB", "AM", "ETI", "BNI", "BHCI"]);
+  const MOTS_ACCENTS = { ETAT: "État", SOCIETE: "Société", GENERALE: "Générale", SENEGAL: "Sénégal", COTE: "Côte", BENIN: "Bénin",
+    ELECTRICITE: "Électricité", MONETAIRE: "Monétaire", DIVERSIFIE: "Diversifié", TOTALENERGIES: "TotalEnergies", REPUBLIQUE: "République",
+    ENERGIE: "Énergie", SECURITE: "Sécurité", EQUILIBRE: "Équilibré", DYNAMIQUE: "Dynamique" };
+  const PETITS_MOTS = new Set(["de", "du", "des", "la", "le", "les", "et", "en", "of", "the", "and", "d", "l"]);
+  function nomLisible(t) {
+    t = String(t ?? "");
+    const lettres = t.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, "");
+    if (lettres.length < 4 || lettres !== lettres.toUpperCase()) return t;
+    return t.split(/(\s+)/).map((m, i) => {
+      if (/^\s+$/.test(m) || /\d/.test(m)) return m;
+      const nu = m.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z'’-]/gi, "");
+      if (SIGLES.has(nu)) return m;
+      if (MOTS_ACCENTS[nu]) return MOTS_ACCENTS[nu];
+      const bas = m.toLowerCase();
+      if (i > 0 && PETITS_MOTS.has(bas)) return bas;
+      return bas.replace(/(^|[-'’])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase());
+    }).join("");
+  }
+  async function ciblesLisibles(date, profil) {
+    return ((await api.cibles(date, profil)) || []).map((c) => ({ ...c, libelle: nomLisible(c.libelle) }));
+  }
+  function carteEpargne(ep) {
+    const pl = ep.plan, r = pl?.rythme;
+    let h = `<div class="card epargne" id="mon-epargne"><div class="ep-head"><h2>Mon épargne</h2>
+      ${pl?.montant ? `<span class="chip">${F(pl.montant)} ${RYTHMES[r][0]}</span>` : ""}</div>`;
+    if (!pl?.montant) {
+      return h + `<p>Fixez-vous un rythme (par jour, par semaine ou par mois) : l'application vous aide à le tenir et vous dit quand investir.</p>
+        <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="plan">Créer mon plan d'épargne</button>
+        <button class="btn" data-coffre="verser">J'ai épargné</button></div></div>`;
+    }
+    if (ep.objectif) {
+      const pc = Math.min(100, (100 * ep.verse) / ep.objectif);
+      h += `<div class="jauge" role="img" aria-label="${Math.round(pc)} % de l'objectif"><i style="width:${pc.toFixed(1)}%"></i></div>
+        <p class="small">${F(ep.verse)} épargnés sur un objectif de ${F(ep.objectif)}${ep.objectifLe ? ` · atteint vers le ${D(ep.objectifLe)} à ce rythme` : " · objectif atteint !"}</p>`;
+    }
+    h += `<div class="ep-stats">
+        <div><div class="lbl">Mis de côté</div><b class="num">${F(ep.solde)}</b></div>
+        <div><div class="lbl">Régularité</div><b class="num">${ep.tenus} / ${pluriel(ep.total, ep.unite)}</b></div>
+        <div><div class="lbl">Série en cours</div><b class="num">${pluriel(ep.serie, ep.unite)}</b></div>
+        <div><div class="lbl">Prochain versement</div><b>${ep.aFaire ? RYTHMES[r][1] : "à jour ✓"}</b></div>
+      </div>
+      ${(ep.serie === 0 && ep.record > 1) || S.demoPerdue
+        ? `<p class="encourage">Une série s'arrête, une nouvelle commence. Votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre !</p>` : ""}
+      ${ep.joker && ep.serie > 0 ? `<p class="small muted">Joker utilisé : l'oubli du ${D(ep.joker.length === 7 ? ep.joker + "-01" : ep.joker)} n'a pas cassé votre série (un joker par mois).</p>` : ""}
+      <p class="small ${ep.solde >= seuil() ? "good" : "muted"}">${ep.solde >= seuil() ? `Prêt à investir : envoyez votre épargne à votre SGI.`
+        : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(seuil())} mis de côté, pour limiter les frais).`}</p>
+      <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
+        <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
+        ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
+    const tr = trophees(ep), gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
+    h += `<div class="trophees-tete"><b>Mes trophées</b><span class="small muted">${gagnes.length} / ${tr.length}</span></div>
+      <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
+        <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}</li>`).join("")}</ul>`;
+    const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
+    if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
+        <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
+        <div class="sub">${D(m.date)}${m.source ? " · " + esc(SOURCES[m.source] || m.source) : ""}</div></div>
+        <div class="right num ${m.type === "VERSEMENT" ? "good" : ""}">${m.type === "VERSEMENT" ? "+" : "−"}${F(m.montant)}</div></li>`).join("")}</ul></details>`;
+    return h + `</div>`;
+  }
+  function aideGain() {
+    const L = replay(S.ops), ligne = (t, v, cl = "") => `<tr class="${cl}"><th scope="row">${t}</th><td class="num ${cls(v)}">${v > 0 ? "+" : ""}${F(v)}</td></tr>`;
+    showInfo("Comprendre mon gain", `<p>Deux chiffres répondent à deux questions différentes :</p>
+      <ul class="small"><li><b>Gain si je vendais aujourd'hui</b> : seulement les titres que vous avez encore, frais de vente déduits.</li>
+      <li><b>Gain total depuis le début</b> : tout ce que votre argent a rapporté, dividendes et titres déjà vendus compris.</li></ul>
+      <table class="decomp"><tbody>
+        ${ligne("Gain si je vendais aujourd'hui", L.latent)}
+        ${L.investi > 0 ? ligne(`+ frais de vente estimés (${nf1.format(FEES * 100)} %), pas encore payés`, L.fraisVente) : ""}
+        ${ligne("+ dividendes reçus", L.dividendes)}
+        ${ligne("+ résultat des titres déjà vendus", L.realise)}
+        ${L.fraisOps ? ligne("− autres frais", -L.fraisOps) : ""}
+        ${ligne("= Gain total depuis le début", L.gainTotal, "tot")}
+      </tbody></table>
+      <p class="small muted">Vérification : total chez ma SGI ${F(L.valeur)} − total envoyé à ma SGI ${F(L.apports)} = ${F(L.gainTotal)}.
+        Les frais d'achat sont déjà déduits dans les deux chiffres.</p>
+      <p class="small">La page <b>Performance</b> montre ce même gain total, mais sur la période choisie (une séance, un mois…).</p>`);
+  }
+  function showInfo(title, html) {
+    $("#dlg-info-title").textContent = title;
+    $("#dlg-info-body").innerHTML = html;
+    $("#dlg-info").showModal();
+  }
+
+  // ---------------------------------------------------------------- alertes des positions (vue v_alertes_positions)
+  // urgent : affiché en clair dans Aujourd'hui ; les autres sont regroupés dans une liste repliable
+  const NIVEAUX = {
+    ROUGE: { t: "Sortie à examiner", c: "rouge", urgent: true, o: 1 },
+    ORANGE: { t: "À surveiller de près", c: "orange", urgent: true, o: 2 },
+    BLEU: { t: "Échéance proche", c: "bleu", urgent: true, o: 3 },
+    VERT: { t: "Objectif atteint", c: "vert", urgent: true, o: 4 },
+    JAUNE: { t: "Vigilance", c: "jaune", o: 5 },
+    GRIS: { t: "Donnée ancienne", c: "gris", o: 6 },
+    INFO: { t: "Information", c: "info", o: 7 },
+    INCONNU: { t: "À vérifier", c: "gris", o: 8 },
+  };
+  const cleJournal = () => S.ops.length + ":" + (S.ops[S.ops.length - 1]?.id ?? "");
+  async function chargerAlertes() {
+    S.alertesCle = cleJournal();
+    try {
+      const rows = (await api.alertes()) || [];
+      S.alertes = rows.filter((a) => a.alerte && a.alerte !== "OK")
+        .sort((a, b) => (NIVEAUX[a.alerte]?.o || 9) - (NIVEAUX[b.alerte]?.o || 9) || String(a.ticker).localeCompare(b.ticker));
+    } catch (e) { S.alertes = null; }                                  // vue pas encore installée → rien n'est affiché
+    S.alertesMap = new Map((S.alertes || []).map((a) => [a.ticker, a]));
+  }
+  // En mode simulation, le moteur ne « recommande » rien
+  const motifAlerte = (m) => SIM() ? String(m || "").replace("Le moteur recommande désormais de vendre", "L'analyse du soir classe désormais ce titre en vente") : String(m || "");
+  function ligneAlerte(a) {
+    const n = NIVEAUX[a.alerte] || NIVEAUX.INFO;
+    return `<li class="al al-${n.c}"><span class="al-pt" aria-hidden="true"></span><div class="main">
+      <div class="name">${mq(a.ticker)}${esc(S.names.get(a.ticker) || a.ticker)} <span class="al-niv">${esc(n.t)}</span></div>
+      <div class="sub">${esc(motifAlerte(a.motif))}</div></div></li>`;
+  }
+  function lignesAlertes() {
+    const A = S.alertes || [];
+    return { urg: A.filter((a) => NIVEAUX[a.alerte]?.urgent).map(ligneAlerte), aut: A.filter((a) => !NIVEAUX[a.alerte]?.urgent).map(ligneAlerte) };
+  }
+  function blocAlertes() {
+    const A = S.alertes;
+    if (!A || !A.length) return "";
+    const urg = A.filter((a) => NIVEAUX[a.alerte]?.urgent), aut = A.filter((a) => !NIVEAUX[a.alerte]?.urgent);
+    let h = `<div class="card alertes"><h2>Alertes sur mes titres</h2>`;
+    if (urg.length) h += `<ul class="list">${urg.map(ligneAlerte).join("")}</ul>`;
+    else h += `<p class="small muted">Rien d'urgent sur vos titres ce soir.</p>`;
+    if (aut.length) h += `<details class="aide"><summary>${aut.length} point${aut.length > 1 ? "s" : ""} de vigilance</summary><ul class="list">${aut.map(ligneAlerte).join("")}</ul></details>`;
+    return h + `<p class="small muted">Calculées après chaque séance. Une alerte est un signal à examiner, jamais une vente automatique : chaque vente coûte environ ${nf1.format(FEES * 100)} % de frais.</p></div>`;
+  }
+  function pastille(a) {
+    if (!a) return "";
+    const n = NIVEAUX[a.alerte] || NIVEAUX.INFO;
+    return ` <button type="button" class="al-btn al-${n.c}" data-alerte="${esc(a.ticker)}" aria-label="Alerte : ${esc(n.t)}. Voir le détail"><span class="al-pt" aria-hidden="true"></span>${esc(n.t)}</button>`;
+  }
+  // Démo : quelques alertes calculées sur les données fictives (même logique simplifiée que la vue)
+  function alertesDemo() {
+    const out = [];
+    for (const p of replay(S.ops).positions) {
+      const [cat, r] = S.lignesMk?.get(p.code) || [];
+      if (cat === "actions" && ok(r.cours)) {
+        const plancher = p.pru * 0.85;                           // la vue suit aussi le plus haut depuis l'achat
+        if (r.cours <= plancher) out.push({ ticker: p.code, alerte: "ORANGE", plancher, motif: `Clôture sous le plancher (${N(plancher)}) : à confirmer à la prochaine séance` });
+        else if (r.cours <= plancher * 1.05) out.push({ ticker: p.code, alerte: "JAUNE", plancher, motif: `Moins de 5 % au-dessus du plancher (${N(plancher)}) : vigilance` });
+        else if (ok(r.objectif) && r.cours >= r.objectif) out.push({ ticker: p.code, alerte: "VERT", plancher, motif: `Objectif atteint (${N(r.objectif)}) : prise de bénéfice partielle possible` });
+      } else if (cat === "obligations" && r.echeance) {
+        const j = Math.round((new Date(r.echeance) - new Date()) / 864e5);
+        if (j <= 90) out.push({ ticker: p.code, alerte: "BLEU", jours_echeance: j, motif: `Échéance dans ${j} jours : préparer le réinvestissement` });
+      }
+    }
+    const act = replay(S.ops).positions.find((p) => S.classes.get(p.code) === "actions");
+    if (!out.length && act) out.push({ ticker: act.code, alerte: "JAUNE", plancher: act.pru * 0.9,
+      motif: `Exemple de démonstration : le cours approche du plancher (${N(act.pru * 0.9)}), vigilance` });
+    return out;
+  }
+
+  // ---------------------------------------------------------------- assistant : données envoyées avec chaque question
+  // Uniquement ce que l'utilisateur voit déjà dans l'application (ses données et les analyses du soir).
+  const norm = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  function ligneTitre(cat, r) {
+    const x = { categorie: cat, ...r };
+    delete x.courbe; delete x.date;
+    const s = JSON.stringify(x);
+    return s.length > 6000 ? { ...x, analyse: JSON.stringify(x.analyse || "").slice(0, 3000) + "…" } : x;
+  }
+  const MOTS_COMMUNS = new Set(["societe", "banque", "generale", "internationale", "afrique", "africaine", "industrielle", "compagnie",
+    "senegal", "ivoire", "nationale", "regionale", "commerciale", "distribution", "obligation", "obligations", "tresor", "public",
+    "placement", "actions", "diversifie", "monetaire", "epargne", "capital", "finance", "financiere", "portefeuille", "marche"]);
+  const echap = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const contient = (t, w) => new RegExp(`(^|[^a-z0-9])${echap(w)}([^a-z0-9]|$)`).test(t);     // mot entier, pas un morceau de mot
+  function titresCites(q) {
+    const t = norm(q), out = [];
+    for (const [code, [cat, r]] of S.lignesMk || []) {
+      const nom = norm(r.nom);
+      const vu = contient(t, norm(code)) || (nom.length >= 4 && contient(t, nom))
+        || nom.split(/[\s\-']+/).some((w) => w.length >= 5 && !MOTS_COMMUNS.has(w) && contient(t, w));
+      if (vu) out.push(ligneTitre(cat, r));
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+  function contexteAssistant(question) {
+    const L = replay(S.ops), c = S.prop?.contenu;
+    const r0 = (v) => (ok(v) ? Math.round(+v) : null);
+    const derniers = {};
+    for (const i of S.indices || []) derniers[i.code] = i;
+    const top = (rows, n) => rows.filter((r) => BUY.includes(r.decision)).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, n)
+      .map((r) => ({ code: r.code, nom: r.nom, score: r.score, decision: r.decision, cours: r.cours ?? r.prix ?? r.vl,
+                     rendement: r.rendement_div ?? r.rendement_actuariel ?? r.rendement_attendu }));
+    return {
+      date_du_jour: today(), seance_analysee: S.seance?.date || null,
+      mode: SIM() ? "simulation" : "proposition", demo: DEMO,
+      utilisateur: { prenom: S.profil?.prenom || null, profil_de_risque: S.profil?.profil, budget: S.profil?.budget },
+      portefeuille: { valeur_totale: r0(L.valeur), disponible: r0(L.cash), place_en_bourse: r0(L.investi), gain_latent: r0(L.latent),
+                      gain_total_depuis_debut: r0(L.gainTotal), dividendes_recus: r0(L.dividendes),
+                      performance: c?.performance ? { portefeuille: c.performance.twr_total, indice: c.performance.bench_total } : null },
+      positions: L.positions.slice(0, 30).map((p) => ({ code: p.code, nom: S.names.get(p.code) || p.code, classe: CLASSES[p.classe] || p.classe,
+        quantite: p.quantite, prix_achat_moyen: r0(p.pru), cours: p.cours, valeur: r0(p.valeur), gain_latent: r0(p.pv),
+        decision_du_soir: S.decisions?.get(p.code) || null })),
+      alertes_titres: (S.alertes || []).map((a) => ({ code: a.ticker, niveau: NIVEAUX[a.alerte]?.t || a.alerte, motif: motifAlerte(a.motif) })),
+      alertes_journal: [...L.errors, ...((S.prop?.date === S.seance?.date && c?.alertes) || [])],
+      ordres_du_soir: (S.ordres || []).slice(0, 10).map((o) => ({ code: o.code, sens: o.sens, quantite: o.quantite, prix_limite: o.prix_limite, motif: o.motif })),
+      indices: Object.values(derniers).map((i) => ({ code: i.code, date: i.date, cloture: i.cloture, variation: i.variation })),
+      meilleures_analyses: { actions: top(S.mk.actions, 5), obligations: top(S.mk.obligations, 3), opcvm: top(S.mk.opcvm, 3) },
+      titres_cites: titresCites(question),
+    };
+  }
+  function suggestionsAssistant() {
+    const L = replay(S.ops);
+    const s = [L.positions.length ? "Où en est mon portefeuille ?" : "Par où commencer avec mon budget ?", "Comment va le marché aujourd'hui ?"];
+    if ((S.alertes || []).length) s.push("Que faire de mes alertes ?");
+    s.push(SIM() ? "Que dit la simulation du soir ?" : "Que me recommandez-vous ?");
+    const act = L.positions.find((p) => S.classes.get(p.code) === "actions");
+    if (act) s.push(`Perspectives de ${S.names.get(act.code) || act.code}`);
+    const obl = L.positions.find((p) => S.classes.get(p.code) === "obligations");
+    if (obl) s.push(`Que vaut mon obligation ${obl.code} ?`);
+    return s.slice(0, 5);
+  }
+  function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
+  let tutoDemo = {};
+  const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
+  function etatTutoriel() {
+    if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
+    if (DEMO) return tutoDemo;
+    try { return JSON.parse(localStorage.getItem(cleTuto()) || "{}"); } catch (e) { return {}; }
+  }
+  async function sauverTutoriel(e) {
+    if (S.profil && "tutoriel" in S.profil) {
+      S.profil.tutoriel = e;
+      try { await api.saveProfil(S.user.id, { tutoriel: e }); } catch (err) { /* réessayé à la prochaine étape */ }
+    } else if (DEMO) tutoDemo = e;
+    else try { localStorage.setItem(cleTuto(), JSON.stringify(e)); } catch (err) { /* navigateur sans stockage */ }
+  }
+
+  function vPortefeuille() {
+    const v = $("#v-portefeuille");
+    const L = replay(S.ops);
+    const ep = epargne(), cote = ep ? Math.max(0, ep.solde) : 0;
+    const total = cote + Math.max(0, L.cash) + L.investi;
+    const seg = (v, col) => (total > 0 && v > 0 ? `<i style="width:${(100 * v / total).toFixed(2)}%;background:${col}"></i>` : "");
+    let h = `<h1 id="h-pf">Portefeuille</h1>
+      <div class="card argent">
+        <div class="lbl">Mon argent pour la bourse</div><div class="val num big" data-count="${total}">${F(total)}</div>
+        <div class="bar3" aria-hidden="true">${seg(cote, "var(--s2)")}${seg(Math.max(0, L.cash), "var(--s3)")}${seg(L.investi, "var(--s1)")}</div>
+        <ul class="legende">
+          ${ep ? `<li><span class="pt" style="background:var(--s2)"></span><span>Mis de côté</span><b class="num">${F(cote)}</b></li>` : ""}
+          <li><span class="pt" style="background:var(--s3)"></span><span>Disponible chez ma SGI</span><b class="num">${F(L.cash)}</b></li>
+          <li><span class="pt" style="background:var(--s1)"></span><span>Placé en bourse</span><b class="num">${F(L.investi)}</b></li>
+        </ul>
+        <details class="aide"><summary>Que veulent dire ces montants ?</summary><dl>
+          ${ep ? `<dt>Mis de côté</dt><dd>L'argent que vous gardez pour la bourse (espèces, banque, mobile money), pas encore envoyé à votre SGI.</dd>` : ""}
+          <dt>Disponible chez ma SGI</dt><dd>L'argent déjà envoyé à votre SGI, prêt pour vos prochains achats.</dd>
+          <dt>Placé en bourse</dt><dd>Ce que valent vos actions, obligations et OPCVM au cours de la dernière séance.</dd>
+          <dt>Total chez ma SGI</dt><dd>Disponible + placé en bourse : ${F(L.valeur)}.</dd></dl></details>
+      </div>
+      <div class="card kpis">
+        <div class="kpi"><div class="lbl">Total envoyé à ma SGI</div><div class="val num">${F(L.apports)}</div><div class="small muted">dépôts moins retraits</div></div>
+        <div class="kpi"><div class="lbl">Gain total depuis le début</div><div class="val num ${cls(L.gainTotal)}">${L.gainTotal > 0 ? "+" : ""}${F(L.gainTotal)}</div><div class="small muted">dividendes et ventes compris</div></div>
+        <div class="kpi"><div class="lbl">Gain si je vendais aujourd'hui</div><div class="val num ${cls(L.latent)}">${L.latent > 0 ? "+" : ""}${F(L.latent)}</div><div class="small muted">titres détenus, frais de vente déduits</div></div>
+        <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
+      </div>`;
+    if (ep) h += carteEpargne(ep);
+    h += `
+      <div class="actions"><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
+    for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
+    h += `<div class="card positions"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
+    if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
+    else {
+      h += `<ul class="list">`;
+      for (const p of L.positions) {
+        const d = S.decisions?.get(p.code);
+        const act = S.actions?.get(p.code);
+        const al = S.alertesMap?.get(p.code);
+        h += `<li${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
+          <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
+          <div class="sub etats">${chip(d)}${pastille(al)}</div></div>
+          <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
+      }
+      h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
+    }
+    h += `</div><div class="card journal"><h2>Journal des opérations</h2>`;
+    if (!S.ops.length) h += `<p class="muted">Aucune opération enregistrée.</p>`;
+    else {
+      h += `<ul class="list">`;
+      for (const o of [...S.ops].reverse()) {
+        const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
+        h += `<li data-op-row="${esc(o.id)}"><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker ? (S.names.get(o.ticker) || o.ticker) : "")}</div>
+          <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
+          <div class="right num">${what}<div><button class="btn link small del" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
+      }
+      h += `</ul><p class="small muted">Une erreur de saisie se corrige en supprimant la ligne, jamais par une opération inverse.</p>`;
+    }
+    v.innerHTML = h + `</div>`;
+    $("#gain-aide", v).addEventListener("click", aideGain);
+  }
+
+  function vMarche() {
+    const v = $("#v-marche"), u = S.ui;
+    const rows = S.mk[u.mkTab] || [];
+    const q = u.mkQuery.trim().toLowerCase();
+    const list = rows.filter((r) => (u.mkFilter === "all" || BUY.includes(r.decision))
+      && (!q || (r.code + " " + (r.nom || "")).toLowerCase().includes(q))).sort((a, b) => (b.score || 0) - (a.score || 0));
+    let h = `<h1 id="h-mk">Marché</h1>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Classe d'actifs">
+          ${[["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]].map(([k, t]) =>
+            `<button type="button" data-mk="${k}" aria-pressed="${u.mkTab === k}">${t}</button>`).join("")}
+        </div>
+        <input id="mk-q" type="search" placeholder="Rechercher un titre" value="${esc(u.mkQuery)}" aria-label="Rechercher un titre">
+        <select id="mk-f" aria-label="Filtre" style="width:auto">
+          <option value="opp"${u.mkFilter === "opp" ? " selected" : ""}>Opportunités</option>
+          <option value="all"${u.mkFilter === "all" ? " selected" : ""}>Tous</option>
+        </select>
+      </div>
+      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "l'analyse financière" : "le détail"}</p>
+      <div class="card"><ul class="list">`;
+    for (const r of list.slice(0, u.mkShow)) {
+      let px, det;
+      if (u.mkTab === "actions") {
+        px = `${spark(r.courbe)}<div>${F(r.cours)} <span class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</span></div>`;
+        det = `<p>Achat limite ${F(r.limite_achat)} · stop ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
+          + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>` + (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "")
+          + analyse(r.analyse);
+      } else if (u.mkTab === "obligations") {
+        px = `${P(r.rendement_actuariel, false)}<div class="sub">${F(r.prix)}</div>`;
+        det = `${esc(r.emetteur || "")} · échéance ${D(r.echeance)} · duration ${ok(r.duration) ? nf1.format(r.duration) + " ans" : "–"} · coupon ${P(r.taux_coupon, false)}`;
+      } else {
+        px = `${F(r.vl)}<div class="sub">VL du ${D(r.date_vl)}</div>`;
+        const acc = accesFcp();
+        det = `${esc(r.gestionnaire || "")}${acc ? (acc.has(r.gestionnaire) ? " · souscriptible via vos comptes" : " · non souscriptible via vos SGI") : ""} · ${esc(CLASSES[r.classe] || r.classe || "")} · volatilité ${P(r.volatilite, false)} · rendement attendu ${P(r.rendement_attendu, false)}`;
+      }
+      const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Note financière">${esc(r.analyse.note)}</span>` : "";
+      if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
+      h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}${note}</div>
+          <div class="sub">${esc(r.code)} · score ${N(r.score)} ${chip(r.decision)}</div></div>
+          <div class="right num">${px}</div></summary>
+          <div class="why">${det}</div></details></li>`;
+    }
+    h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
+      <p class="small muted">Score de 0 à 100 calculé par l'outil (technique, fondamentaux, dividende, valorisation, liquidité).
+      Aide à la décision, pas un conseil en investissement. Données de marché : BRVM.</p>`;
+    v.innerHTML = h;
+    v.querySelectorAll("[data-mk]").forEach((b) => b.addEventListener("click", () => { u.mkTab = b.dataset.mk; u.mkShow = 30; vMarche(); }));
+    const qi = $("#mk-q", v);
+    qi.addEventListener("input", () => { u.mkQuery = qi.value; u.mkShow = 30; vMarche(); $("#mk-q").focus(); const n = $("#mk-q"); n.setSelectionRange(n.value.length, n.value.length); });
+    $("#mk-f", v).addEventListener("change", (e) => { u.mkFilter = e.target.value; vMarche(); });
+    $("#mk-more", v)?.addEventListener("click", () => { u.mkShow += 30; vMarche(); });
+  }
+
+  function formPlan(pl) {
+    return `<form id="f-plan" class="card" novalidate><h2>Mon plan d'épargne</h2>
+      <p class="small muted">L'argent reste chez vous (espèces, banque, mobile money) : l'application vous aide seulement à suivre votre régularité.</p>
+      <div class="grid2"><label>Montant (F)<input name="montant" type="number" min="0" step="500" inputmode="numeric" value="${pl.montant || ""}" placeholder="ex. 5000"></label>
+        <label>Rythme<select name="rythme">${Object.entries({ quotidien: "Chaque jour", hebdo: "Chaque semaine", mensuel: "Chaque mois" })
+          .map(([k, t]) => `<option value="${k}"${(pl.rythme || "mensuel") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label></div>
+      <label class="switch" id="pl-ouvres"><input type="checkbox" name="jours_ouvres"${pl.jours_ouvres !== false ? " checked" : ""}> Du lundi au vendredi seulement</label>
+      <label>Objectif à atteindre (F, facultatif)<input name="objectif" type="number" min="0" step="10000" inputmode="numeric" value="${pl.objectif || ""}" placeholder="ex. 500000"></label>
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer mon plan</button></div></form>`;
+  }
+
+  const radios = (name, opts, cur) => `<div class="radios">${Object.entries(opts).map(([k, [t, d]]) => `<label><input type="radio" name="${name}" value="${k}"${cur === k ? " checked" : ""}>
+      <span><b>${t}</b>${d ? `<br><span class="small muted">${d}</span>` : ""}</span></label>`).join("")}</div>`;
+  function formUnivers(p) {
+    return `<form id="f-univers" class="card" novalidate><h2>Mes comptes et mes placements</h2>
+      <p class="small muted">Le portefeuille ne retient que ce que vous pouvez et voulez acheter. Les titres que vous détenez déjà ne sont pas concernés.</p>
+      ${champsUnivers(p)}
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer mes choix</button></div></form>`;
+  }
+  function champsUnivers(p) {
+    const mes = new Set(p.mes_sgi || []);
+    return `<fieldset class="fs"><legend>Mes SGI</legend><div class="radios sgi">${listeSgi(mes) || `<p class="small muted">Liste pas encore disponible.</p>`}</div>
+        <p class="small muted">Votre SGI n'est pas dans la liste ? Écrivez-nous : elle sera ajoutée.</p></fieldset>
+      <label class="switch" style="margin-top:6px"><input type="checkbox" name="souscription_sgo"${p.souscription_sgo ? " checked" : ""}> Je peux aussi souscrire directement auprès des sociétés de gestion</label>
+      <fieldset class="fs"><legend>FCP</legend>${radios("choix_fcp", CHOIX_FCP, p.choix_fcp || "accessibles")}</fieldset>
+      <fieldset class="fs"><legend>Obligations</legend>${radios("choix_obligations", CHOIX_OBLIG, p.choix_obligations || "toutes")}</fieldset>
+      <label class="switch" style="margin-top:14px"><input type="checkbox" name="choix_actions"${p.choix_actions !== false ? " checked" : ""}> Actions cotées</label>`;
+  }
+  // SGI regroupées par pays, celui de l'utilisateur en premier ; drapeau devant chaque nom
+  function listeSgi(mes) {
+    const pref = S.profil?.pays || paysParDefaut(), groupes = new Map();
+    for (const n of S.univ.sgi) {
+      const c = S.univ.paysSgi?.get(n) || "";
+      if (!groupes.has(c)) groupes.set(c, []);
+      groupes.get(c).push(n);
+    }
+    const ordre = [...groupes.keys()].sort((a, b) => (b === pref) - (a === pref) || !a - !b || nomPays(a).localeCompare(nomPays(b), "fr"));
+    const titres = ordre.length > 1 || (ordre[0] && ordre[0] !== pref);
+    return ordre.map((c) => (titres ? `<p class="sgi-pays small"><span class="drapeau" aria-hidden="true">${c ? drapeau(c) : ""}</span>
+        ${c ? esc(nomPays(c)) : "Autres SGI"}${c === pref ? ` <span class="muted">· votre pays</span>` : ""}</p>` : "")
+      + groupes.get(c).map((n) => `<label><input type="checkbox" name="mes_sgi" value="${esc(n)}"${mes.has(n) ? " checked" : ""}>
+        <span>${c ? `<span class="drapeau" aria-hidden="true">${drapeau(c)}</span> ` : ""}${esc(n)}${c ? `<span class="sr-only"> (${esc(nomPays(c))})</span>` : ""}</span></label>`).join("")).join("");
+  }
+  // → champs du profil, ou message d'erreur
+  function lireUnivers(fu) {
+    const upd = { mes_sgi: [...fu.querySelectorAll('[name="mes_sgi"]:checked')].map((x) => x.value), souscription_sgo: fu.souscription_sgo.checked,
+      choix_fcp: fu.choix_fcp.value || "accessibles", choix_obligations: fu.choix_obligations.value || "toutes", choix_actions: fu.choix_actions.checked };
+    if (upd.choix_fcp === "aucun" && upd.choix_obligations === "aucune" && !upd.choix_actions) return "Gardez au moins une catégorie de placements.";
+    return upd;
+  }
+
+  // ---------------------------------------------------------------- création de compte guidée (onboarding)
+  const UEMOA = ["CI", "SN", "ML", "BF", "NE", "TG", "BJ", "GW"];
+  const DIASPORA = ["FR", "BE", "CH", "CA", "US", "GB", "DE", "IT", "ES", "MA", "GH", "NG", "GN", "CM", "GA"];
+  const FUSEAUX = { "Africa/Abidjan": "CI", "Africa/Dakar": "SN", "Africa/Bamako": "ML", "Africa/Ouagadougou": "BF", "Africa/Niamey": "NE",
+    "Africa/Lome": "TG", "Africa/Porto-Novo": "BJ", "Africa/Bissau": "GW", "Europe/Paris": "FR", "Europe/Brussels": "BE" };
+  const INDICATIFS = { CI: "225", SN: "221", ML: "223", BF: "226", NE: "227", TG: "228", BJ: "229", GW: "245" };   // secours sans la bibliothèque
+  const drapeau = (iso) => String.fromCodePoint(...[...iso].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  let telLib = null, noms = null;
+  // Bibliothèque des numéros de téléphone (vendor/), chargée seulement quand on en a besoin ; null si indisponible
+  function chargerTel() {
+    return telLib ??= new Promise((ok) => {
+      if (window.libphonenumber) return ok(window.libphonenumber);
+      const sc = document.createElement("script");
+      sc.src = "../vendor/libphonenumber-min.js";
+      sc.onload = () => ok(window.libphonenumber || null);
+      sc.onerror = () => ok(null);
+      document.head.appendChild(sc);
+    });
+  }
+  function nomPays(iso) {
+    try { noms ??= new Intl.DisplayNames(["fr"], { type: "region" }); return noms.of(iso) || iso; } catch (e) { return iso; }
+  }
+  function indicatif(lib, iso) { try { return lib ? lib.getCountryCallingCode(iso) : INDICATIFS[iso] || ""; } catch (e) { return INDICATIFS[iso] || ""; } }
+  function paysParDefaut() { try { return FUSEAUX[Intl.DateTimeFormat().resolvedOptions().timeZone] || "CI"; } catch (e) { return "CI"; } }
+  function optionsPays(lib, cur) {
+    const tous = lib ? lib.getCountries() : UEMOA;
+    const opt = (c) => `<option value="${c}"${c === cur ? " selected" : ""}>${drapeau(c)} ${esc(nomPays(c))} (+${indicatif(lib, c)})</option>`;
+    const reste = tous.filter((c) => !UEMOA.includes(c) && !DIASPORA.includes(c)).sort((a, b) => nomPays(a).localeCompare(nomPays(b), "fr"));
+    return `<optgroup label="UEMOA">${UEMOA.map(opt).join("")}</optgroup>` + (lib ? `<optgroup label="Diaspora">${DIASPORA.filter((c) => tous.includes(c)).map(opt).join("")}</optgroup>
+      <optgroup label="Tous les pays">${reste.map(opt).join("")}</optgroup>` : "");
+  }
+  // Prénom, nom, pays (drapeau + indicatif) et téléphone sans indicatif : assistant et Profil
+  function champsIdentite(p, lib) {
+    const pays = p.pays || paysParDefaut();
+    let tel = "";
+    try { tel = p.telephone && lib ? lib.parsePhoneNumberFromString(p.telephone)?.formatNational() || "" : p.telephone || ""; } catch (e) { tel = p.telephone || ""; }
+    // Pays et téléphone sur une seule ligne : le sélecteur (drapeau + indicatif) donne aussi le pays enregistré
+    return `<div class="grid2"><label>Prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}"></label>
+        <label>Nom<input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
+      <label for="ob-tel">Pays et téléphone <span class="muted">(numéro facultatif)</span></label>
+      <div class="tel"><span class="indicatif"><span class="drapeau" aria-hidden="true">${drapeau(pays)} +${indicatif(lib, pays)} <span class="chevron">▾</span></span>
+        <select name="pays" aria-label="Pays (et indicatif)">${optionsPays(lib, pays)}</select></span>
+        <input id="ob-tel" name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" value="${esc(tel)}" placeholder="Numéro sans l'indicatif"></div>
+      <p class="small muted">Touchez le drapeau pour choisir votre pays. Le numéro sert seulement à vous recontacter si vous demandez de l'aide
+        (par exemple pour ouvrir un compte chez une SGI) ; il n'est jamais transmis à des tiers.</p>`;
+  }
+  function brancherIdentite(f, lib) {
+    f.pays.addEventListener("change", () => {
+      const c = f.pays.value;
+      $(".indicatif .drapeau", f).innerHTML = `${drapeau(c)} +${esc(indicatif(lib, c))} <span class="chevron">▾</span>`;
+      f.telephone.focus();
+    });
+    f.telephone.addEventListener("blur", () => {
+      const t = f.telephone.value.trim();
+      if (lib && t) try { f.telephone.value = new lib.AsYouType(f.pays.value).input(t); } catch (e) { /* laissé tel quel */ }
+    });
+  }
+  // → { prenom, nom, pays, telephone } (téléphone au format international), ou message d'erreur
+  function lireIdentite(f, lib) {
+    const prenom = f.prenom.value.trim(), nom = f.nom.value.trim(), pays = f.pays.value, brut = f.telephone.value.trim();
+    if (!prenom || !nom) return "Indiquez votre prénom et votre nom.";
+    let telephone = null;
+    if (brut) {
+      if (lib) {
+        let n = null;
+        try { n = lib.parsePhoneNumberFromString(brut, pays); } catch (e) { n = null; }
+        if (!n || !n.isValid()) return `Ce numéro ne correspond pas à un numéro de ${nomPays(pays)} : saisissez-le sans l'indicatif +${indicatif(lib, pays)}.`;
+        telephone = n.number;
+      } else {
+        const d = brut.replace(/\D/g, "");
+        if (d.length < 6 || d.length > 12) return "Numéro de téléphone invalide.";
+        telephone = "+" + indicatif(null, pays) + d;
+      }
+    }
+    return { prenom, nom, pays, telephone };
+  }
+
+  // Profil de risque déduit de 3 questions (plutôt qu'un choix direct)
+  const QUESTIONS = [
+    { id: "horizon", q: "Dans combien de temps pourriez-vous avoir besoin de cet argent ?", r: [["moins2", "Dans moins de 2 ans"], ["2a5", "Entre 2 et 5 ans"], ["plus5", "Dans plus de 5 ans"]] },
+    { id: "baisse", q: "Votre placement perd 20 % en quelques mois. Que faites-vous ?", r: [["vendre", "Je vends pour limiter la perte"], ["attendre", "J'attends que ça remonte"], ["racheter", "J'en profite pour en racheter"]] },
+    { id: "priorite", q: "Quelle est votre priorité ?", r: [["proteger", "Protéger mon capital"], ["equilibre", "Un équilibre entre sécurité et rendement"], ["croissance", "Faire croître mon épargne sur le long terme"]] }];
+  function profilDepuis(rep) {
+    if (rep.horizon === "moins2") return "prudent";                  // argent nécessaire bientôt : pas de risque
+    const sc = QUESTIONS.reduce((t, q) => t + Math.max(0, q.r.findIndex(([k]) => k === rep[q.id])), 0);
+    return sc <= 2 ? "prudent" : sc <= 4 ? "equilibre" : "dynamique";
+  }
+
+  // Assistant en 5 étapes : chaque étape est enregistrée tout de suite (reprise là où on s'est arrêté)
+  async function onboarding(completer = false) {
+    const v = $("#v-onboarding"), p = S.profil;
+    document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = true));
+    document.querySelectorAll("main > .view").forEach((n) => (n.hidden = n !== v));
+    v.hidden = false;
+    v.innerHTML = `<p class="center muted">Chargement…</p>`;
+    const lib = await chargerTel();
+    const etapes = [
+      { n: 1, titre: "Vous", oblig: true },
+      { n: 2, titre: "Votre objectif", oblig: true },
+      { n: 3, titre: "Votre épargne" },
+      ...(S.univ ? [{ n: 4, titre: "Vos comptes" }] : []),
+      { n: 5, titre: "Vos préférences", oblig: true }];
+    let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.n > (+p.onboarding_etape || 0)));
+    const rep = { ...(p.questionnaire || {}) };
+    return new Promise((fini) => {
+      const finir = (msg) => {
+        v.hidden = true;
+        document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
+        history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
+        render();
+        if (msg) toast(msg);
+        fini();
+      };
+      const corps = (e) => {
+        if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace. Votre adresse : <b>${esc(S.user.email || p.email || "")}</b></p>` + champsIdentite(p, lib);
+        if (e.n === 2) return QUESTIONS.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
+          + `<p class="notice info small" id="ob-profil"${rep.horizon && rep.baisse && rep.priorite ? "" : " hidden"}></p>`;
+        if (e.n === 3) {
+          const pl = S.coffre?.plan || {};
+          return (S.coffre ? `<p class="small muted">Mettez de côté un peu, régulièrement : c'est la clé. L'argent reste chez vous (espèces, banque, mobile money).</p>
+            <div class="grid2"><label>Je mets de côté (F)<input name="montant" type="number" min="0" step="500" inputmode="numeric" value="${pl.montant || ""}" placeholder="ex. 5000"></label>
+              <label>Rythme<select name="rythme">${Object.entries({ quotidien: "Chaque jour", hebdo: "Chaque semaine", mensuel: "Chaque mois" })
+                .map(([k, t]) => `<option value="${k}"${(pl.rythme || "mensuel") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label></div>
+            <label>Objectif à atteindre (F, facultatif)<input name="objectif" type="number" min="0" step="10000" inputmode="numeric" value="${pl.objectif || ""}" placeholder="ex. 500000"></label>` : "")
+            + `<label>Montant que vous souhaitez investir en bourse (F, facultatif)<input name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${+p.budget || ""}" placeholder="ex. 500000"></label>
+            <p class="small muted">Vous pourrez le changer à tout moment${S.coffre ? ", ou le faire suivre automatiquement votre épargne (Profil)" : ""}.</p>`;
+        }
+        if (e.n === 4) return champsUnivers(p) + `<p class="small muted">Pas encore de compte chez une SGI ? Passez cette étape : vous pourrez l'indiquer plus tard dans votre profil.</p>`;
+        return `<label class="switch"><input type="checkbox" name="recevoir_email"${p.recevoir_email !== false ? " checked" : ""}> Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
+          ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:12px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}> Animations de félicitations (confettis)</label>` : ""}
+          <h3 style="margin-top:18px">Récapitulatif</h3><ul class="recap small">
+            <li><b>${esc(p.prenom || "")}${p.nom ? " " + esc(p.nom) : ""}</b>${p.pays ? ` · ${drapeau(p.pays)} ${esc(nomPays(p.pays))}` : ""}</li>
+            <li>Profil de risque : <b>${esc(PROFILS[p.profil]?.t || p.profil || "–")}</b></li>
+            ${S.coffre?.plan?.montant ? `<li>Épargne : <b>${F(S.coffre.plan.montant)}</b> ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[S.coffre.plan.rythme] || ""}</li>` : ""}
+            ${+p.budget ? `<li>Montant à investir : <b>${F(p.budget)}</b></li>` : ""}
+            ${(p.mes_sgi || []).length ? `<li>SGI : <b>${esc(p.mes_sgi.join(", "))}</b></li>` : ""}</ul>
+          <p class="small muted">Tout se modifie ensuite dans l'onglet Profil.</p>`;
+      };
+      const lire = async (e, f) => {
+        if (e.n === 1) return lireIdentite(f, lib);
+        if (e.n === 2) {
+          for (const q of QUESTIONS) { rep[q.id] = f[q.id].value; if (!rep[q.id]) return "Répondez aux trois questions."; }
+          return { questionnaire: { ...rep }, profil: profilDepuis(rep) };
+        }
+        if (e.n === 3) {
+          const montant = S.coffre ? Math.max(0, +f.montant.value || 0) : 0;
+          if (montant) {
+            const pl = { ...(S.coffre.plan || {}), montant, rythme: f.rythme.value, jours_ouvres: S.coffre.plan?.jours_ouvres ?? true,
+              objectif: +f.objectif.value || null, debut: S.coffre.plan?.debut || new Date().toISOString().slice(0, 10) };
+            await api.savePlan(pl);
+            S.coffre.plan = pl;
+          }
+          const budget = Math.max(0, +f.budget.value || 0);
+          return budget ? { budget } : {};
+        }
+        if (e.n === 4) return lireUnivers(f);
+        const upd = { recevoir_email: f.recevoir_email.checked };
+        if (f.felicitations) upd.felicitations = f.felicitations.checked;
+        if (!p.onboarding_fini_le) upd.onboarding_fini_le = new Date().toISOString();
+        return upd;
+      };
+      const afficher = () => {
+        const e = etapes[i], dernier = i === etapes.length - 1;
+        v.innerHTML = `<h1 id="h-ob">${completer ? "Compléter mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
+          <div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
+            <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
+          <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
+          <form id="f-ob" class="card" novalidate><h2>${e.titre}</h2>${corps(e)}<p class="msg" role="status" aria-live="polite"></p>
+            <div class="actions">${i > 0 ? `<button class="btn" type="button" data-retour>Retour</button>` : ""}
+              ${e.oblig ? "" : `<button class="btn" type="button" data-passer>Passer</button>`}
+              <button class="btn primary" type="submit">${dernier ? "Terminer" : "Continuer"}</button></div></form>
+          ${i > 0 || completer ? `<p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard</button></p>` : ""}`;
+        const f = $("#f-ob", v), msg = $(".msg", f);
+        if (e.n === 1) brancherIdentite(f, lib);
+        if (e.n === 2) {
+          const maj = () => {
+            QUESTIONS.forEach((q) => { rep[q.id] = f[q.id].value || rep[q.id]; });
+            const el = $("#ob-profil", f);
+            if (!(rep.horizon && rep.baisse && rep.priorite)) return;
+            const pr = PROFILS[profilDepuis(rep)];
+            el.hidden = false;
+            el.innerHTML = `Votre profil : <b>${esc(pr.t)}</b>. ${esc(pr.d)}`;
+          };
+          f.addEventListener("change", maj); maj();
+        }
+        f.addEventListener("submit", async (ev) => {
+          ev.preventDefault();
+          const b = $("button[type=submit]", f);
+          b.disabled = true;
+          try {
+            const upd = await lire(e, f);
+            if (typeof upd === "string") { msg.textContent = upd; b.disabled = false; return; }
+            if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.n);
+            await api.saveProfil(S.user.id, upd);
+            const avant = p.profil;
+            Object.assign(p, upd);
+            if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
+            if (dernier) return finir(completer ? "Profil complété." : `Bienvenue${p.prenom ? ", " + p.prenom : ""} ! Votre espace est prêt.`);
+            i++; afficher();
+            window.scrollTo(0, 0);
+          } catch (err) { msg.textContent = "Enregistrement impossible : " + err.message; b.disabled = false; }
+        });
+        $("[data-retour]", v)?.addEventListener("click", () => { i--; afficher(); });
+        $("[data-passer]", v)?.addEventListener("click", () => { i++; afficher(); });
+        $("[data-plus-tard]", v)?.addEventListener("click", () => {
+          try { sessionStorage.setItem("brvm-ob-plus-tard", "1"); } catch (e) { /* stockage indisponible */ }
+          finir(completer ? "" : "D'accord : vous reprendrez votre profil à la prochaine connexion.");
+        });
+        $("input, select", f)?.focus();
+      };
+      afficher();
+    });
+  }
+
+  function vProfil() {
+    const v = $("#v-profil"), p = S.profil || {};
+    v.innerHTML = `<h1 id="h-pr">Profil</h1>
+      <form id="f-profil" class="card" novalidate>
+        <p class="muted small">Connecté avec <b>${esc(S.user.email || p.email || "")}</b></p>
+        ${S.coffre ? `<fieldset class="fs"><legend>Montant à investir</legend><div class="radios">
+          <label><input type="radio" name="budget_mode" value="manuel"${p.budget_mode !== "auto" ? " checked" : ""}><span><b>Je le saisis</b><br>
+            <span class="small muted">Un montant fixe, que vous changez quand vous voulez.</span></span></label>
+          <label><input type="radio" name="budget_mode" value="auto"${p.budget_mode === "auto" ? " checked" : ""}><span><b>Automatique : ${F(budgetAuto())}</b><br>
+            <span class="small muted">Mis de côté + total chez ma SGI : il grandit avec votre épargne.</span></span></label></div></fieldset>` : ""}
+        <div id="pr-budget-w"${S.coffre && p.budget_mode === "auto" ? " hidden" : ""}>
+          <label for="pr-budget">${S.coffre ? "Montant saisi (F)" : "Montant à investir (F)"}</label>
+          <input id="pr-budget" name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${p.budget ?? ""}"></div>
+        <fieldset style="border:0;padding:0;margin:12px 0 0"><legend style="font-weight:600;font-size:.9rem">Profil de risque</legend>
+          <div class="radios">${Object.entries(PROFILS).map(([k, x]) => `<label><input type="radio" name="profil" value="${k}"${p.profil === k ? " checked" : ""}>
+            <span><b>${x.t}</b><br><span class="small muted">${x.d}</span></span></label>`).join("")}</div>
+        </fieldset>
+        ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:14px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}>
+          Animations de félicitations (confettis)</label>` : ""}
+        <label class="switch" style="margin-top:14px"><input type="checkbox" name="recevoir_email"${p.recevoir_email ? " checked" : ""}>
+          Recevoir ma ${SIM() ? "simulation" : "proposition"} par e-mail chaque soir de séance</label>
+        <div class="actions"><button class="btn primary" type="submit">Enregistrer mes réglages</button></div>
+      </form>
+      ${DEMO || "prenom" in p ? `<form id="f-identite" class="card" novalidate><h2>Mes coordonnées</h2><div class="ident"><p class="muted small">Chargement…</p></div>
+        <p class="msg" role="status" aria-live="polite"></p><div class="actions"><button class="btn primary" type="submit">Enregistrer mes coordonnées</button></div></form>` : ""}
+      ${S.univ && (DEMO || "mes_sgi" in p) ? formUnivers(p) : ""}
+      ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
+      ${DEMO && S.coffre ? `<div class="card"><h2>Essayer les félicitations</h2><p class="small muted">Démonstration uniquement.</p>
+        <div class="actions" style="justify-content:flex-start">
+          <button class="btn small" data-essai="jour">Petite victoire</button><button class="btn small" data-essai="serie">Série de 7 jours</button>
+          <button class="btn small" data-essai="objectif">Objectif atteint</button><button class="btn small" data-essai="seuil">Prêt à investir</button>
+          <button class="btn small" data-essai="perdue">Série perdue</button></div></div>` : ""}
+      <div class="card">
+        <h2>À propos</h2>
+        <p class="small">Chaque soir de séance, l'outil analyse les actions, obligations et OPCVM cotés à la BRVM, puis calcule
+          ${SIM() ? "une simulation de portefeuille et les ajustements pour la rejoindre, à partir des réglages que vous choisissez (budget, profil) et de votre journal."
+            : "pour vous un portefeuille cible et les ordres pour le rejoindre, à partir de votre budget, de votre profil et de votre journal."}</p>
+        ${S.docs?.avertissement ? `<div class="doc-texte small muted">${esc(S.docs.avertissement.texte)}</div>`
+          : `<p class="small muted">${AVERT()} Les performances passées ne préjugent
+          pas des performances futures. Vos données (profil, journal) ne sont visibles que par vous.</p>`}
+        ${S.docs?.cgu ? `<p class="small"><button class="btn link" type="button" id="voir-cgu">${esc(S.docs.cgu.titre)} (version ${esc(S.docs.cgu.version)})</button>
+          ${p.cgu_acceptee_le ? `<span class="muted">acceptée le ${new Date(p.cgu_acceptee_le).toLocaleDateString("fr-FR")}</span>` : ""}</p>` : ""}
+        <div class="actions"><button class="btn" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button></div>
+      </div>`;
+    const f = $("#f-profil", v);
+    f.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const upd = { budget: Math.max(0, +f.budget.value || 0), profil: f.profil.value || "equilibre", recevoir_email: f.recevoir_email.checked };
+      if (S.coffre) { upd.budget_mode = f.budget_mode.value; if (f.felicitations) upd.felicitations = f.felicitations.checked; }
+      const fin = occupe(ev.submitter || $('[type="submit"]', f));
+      try {
+        await api.saveProfil(S.user.id, upd);
+        const changed = upd.profil !== S.profil.profil;
+        Object.assign(S.profil, upd);
+        if (changed && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
+        fin("✓ Enregistré");
+        confirmeForm(f, `la ${SIM() ? "simulation" : "proposition"} sera recalculée ce soir`);
+      } catch (err) { fin(); toast("Enregistrement impossible : " + err.message); }
+    });
+    const fi = $("#f-identite", v);
+    if (fi) chargerTel().then((lib) => {
+      if (!fi.isConnected) return;
+      $(".ident", fi).innerHTML = champsIdentite(p, lib);
+      brancherIdentite(fi, lib);
+      fi.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const upd = lireIdentite(fi, lib), msg = $(".msg", fi);
+        if (typeof upd === "string") { msg.textContent = upd; return; }
+        msg.textContent = "";
+        const fin = occupe(ev.submitter || $('[type="submit"]', fi));
+        try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); fin("✓ Enregistré"); confirmeForm(fi, ""); }
+        catch (err) { fin(); msg.textContent = "Enregistrement impossible : " + err.message; }
+      });
+    });
+    $("#f-univers", v)?.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fu = ev.currentTarget, upd = lireUnivers(fu);
+      if (typeof upd === "string") { toast(upd); return; }
+      const fin = occupe(ev.submitter || $('[type="submit"]', fu));
+      try {
+        await api.saveProfil(S.user.id, upd);
+        Object.assign(S.profil, upd);
+        fin("✓ Enregistré");
+        confirmeForm(fu, `${SIM() ? "la simulation" : "la proposition"} en tiendra compte ce soir, l'estimation immédiate tout de suite`);
+      } catch (err) { fin(); toast("Enregistrement impossible : " + err.message); }
+    });
+    $("#logout", v).addEventListener("click", () => api.logout());
+    $("#voir-cgu", v)?.addEventListener("click", () => showCgu(S.docs.cgu, false));
+    v.querySelectorAll("[data-essai]").forEach((b) => b.addEventListener("click", () => {
+      const tr = trophees(epargne()), e = b.dataset.essai;
+      if (e === "jour") { location.hash = "portefeuille"; setTimeout(() => feter(5000), 300); }
+      else if (e === "perdue") { S.demoPerdue = true; location.hash = "portefeuille"; setTimeout(() => (S.demoPerdue = false), 800); }
+      else bravo([{ serie: { titre: "7 jours d'affilée", marque: "7", metal: "argent", msg: "Petit à petit, l'oiseau fait son nid : 7 jours sans interruption. Continuez sur cette lancée !", ok: true },
+        objectif: { titre: "Objectif atteint", marque: "100%", metal: "platine", msg: "Vous avez mis de côté 500 000 F : objectif atteint. Bravo pour votre discipline !", ok: true },
+        seuil: tr.find((t) => t.id === "seuil") }[e]].map((t) => ({ ...t, ok: true })));
+    }));
+    f.querySelectorAll('[name="budget_mode"]').forEach((r) => r.addEventListener("change", () => ($("#pr-budget-w", v).hidden = f.budget_mode.value === "auto")));
+    const fp = $("#f-plan", v);
+    if (fp) {
+      const sync = () => ($("#pl-ouvres", fp).hidden = fp.rythme.value !== "quotidien");
+      fp.rythme.addEventListener("change", sync); sync();
+      fp.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const montant = Math.round(+fp.montant.value || 0);
+        if (montant <= 0) { toast("Indiquez le montant à mettre de côté."); return; }
+        const plan = { montant, rythme: fp.rythme.value, jours_ouvres: fp.jours_ouvres.checked, objectif: Math.round(+fp.objectif.value || 0) || null,
+                       debut: S.coffre.plan?.debut || today() };
+        const fin = occupe(ev.submitter || $('[type="submit"]', fp));
+        try { await api.savePlan(plan); S.coffre.plan = plan; vProfil(); confirmeForm($("#f-plan"), "votre rythme d'épargne est mis à jour"); }
+        catch (e) { fin(); toast("Enregistrement impossible : " + e.message); }
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------- performance quotidienne
+  const PERIODES = [[1, "Séance"], [5, "5 séances"], [21, "1 mois"], [63, "3 mois"], [0, "Depuis le début"]];
+  const SERIES = [["pf", "Portefeuille", "var(--s1)"], ["BRVM30", "BRVM 30", "var(--s2)"], ["BRVMC", "BRVM Composite", "var(--s3)"]];
+  const cumul = (rs) => (rs.some(ok) ? rs.reduce((a, r) => (ok(r) ? a * (1 + +r) : a), 1) - 1 : null);   // null si aucune donnée
+
+  function perfChart(rows, ix) {
+    // indices de performance cumulée (base 0 % la veille de la première séance), un seul axe en %
+    const pts = { pf: [0], BRVM30: [0], BRVMC: [0] };
+    const acc = { pf: 1, BRVM30: 1, BRVMC: 1 };
+    for (const r of rows) {
+      if (ok(r.pct)) acc.pf *= 1 + r.pct;
+      for (const k of ["BRVM30", "BRVMC"]) { const v = ix[k]?.get(r.date)?.variation; if (ok(v)) acc[k] *= 1 + +v; }
+      for (const k in acc) pts[k].push(acc[k] - 1);
+    }
+    const dates = [null, ...rows.map((r) => r.date)];
+    const Wd = 360, Ht = 210, L = 42, R = 58, T = 10, B = 22;
+    const all = Object.values(pts).flat();
+    let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+    const pad = (hi - lo || 0.01) * 0.12; lo -= pad; hi += pad;
+    const x = (i) => L + (i / (dates.length - 1)) * (Wd - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (Ht - T - B);
+    const ticks = []; const step = (hi - lo) / 4;
+    for (let k = 0; k <= 4; k++) ticks.push(lo + k * step);
+    let g = `<g class="grid">${ticks.map((t) => `<line x1="${L}" x2="${Wd - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${P(t)}</text>`).join("")}</g>`;
+    g += `<line class="zero" x1="${L}" x2="${Wd - R}" y1="${y(0)}" y2="${y(0)}"/>`;
+    g += `<g class="axis"><text x="${x(1)}" y="${Ht - 6}" text-anchor="start">${D(dates[1])}</text><text x="${x(dates.length - 1)}" y="${Ht - 6}" text-anchor="end">${D(dates[dates.length - 1])}</text></g>`;
+    // étiquettes de fin espacées pour ne pas se chevaucher
+    const has = { pf: true, BRVM30: rows.some((r) => ok(ix.BRVM30?.get(r.date)?.variation)), BRVMC: rows.some((r) => ok(ix.BRVMC?.get(r.date)?.variation)) };
+    const ends = SERIES.filter(([k]) => has[k]).map(([k, n, col]) => ({ k, n, col, v: pts[k][pts[k].length - 1], yy: y(pts[k][pts[k].length - 1]) })).sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) ends[i].yy = Math.max(ends[i].yy, ends[i - 1].yy + 14);
+    for (const [k, , col] of SERIES.filter(([k2]) => has[k2]))
+      g += `<path class="line" pathLength="1" stroke="${col}" d="${pts[k].map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("")}"/>`;
+    g += `<g class="end">${ends.map((e) => `<text x="${Wd - R + 6}" y="${e.yy + 4}"><tspan fill="${e.col}">●</tspan> ${P(e.v)}</text>`).join("")}</g>`;
+    g += `<g class="hover" visibility="hidden"><line class="cross" y1="${T}" y2="${Ht - B}"/>${SERIES.filter(([k]) => has[k]).map(([k, , col]) => `<circle class="dot" r="4" fill="${col}" data-k="${k}"/>`).join("")}</g>`;
+    const label = `Performance cumulée du ${D(dates[1])} au ${D(dates[dates.length - 1])} : ` + SERIES.filter(([k]) => has[k]).map(([k, n]) => `${n} ${P(pts[k][pts[k].length - 1])}`).join(", ");
+    return { html: `<div class="chart"><svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(label)}">${g}<rect class="hit" x="${L}" y="${T}" width="${Wd - L - R}" height="${Ht - T - B}" fill="transparent"/></svg><div class="tip" hidden></div></div>`,
+             pts, dates, x, y, Wd, has };
+  }
+
+  function vPerformance() {
+    const v = $("#v-performance");
+    const hist = (S.prop?.contenu?.historique || []).filter((r) => r.date);
+    const ix = {};
+    for (const r of S.indices || []) (ix[r.code] ||= new Map()).set(r.date, r);
+    let h = `<h1 id="h-perf">Performance</h1>`;
+    if (!hist.length) {
+      v.innerHTML = h + `<div class="notice info">Le gain ou la perte de chaque séance est calculé chaque soir à partir de votre journal.
+        Enregistrez vos opérations : les premiers chiffres apparaîtront après le prochain calcul.</div>`;
+      return;
+    }
+    const n = S.ui.perf, rows = n ? hist.slice(-n) : hist.slice();
+    const last = hist[hist.length - 1];
+    const gain = rows.reduce((a, r) => a + (+r.gain || 0), 0);
+    const pf = cumul(rows.map((r) => r.pct));
+    const idx = (k) => cumul(rows.map((r) => ix[k]?.get(r.date)?.variation));
+    const b30 = idx("BRVM30"), bc = idx("BRVMC");
+    const per = n === 1 ? `la séance du ${D(last.date)}` : `${D(rows[0].date)} → ${D(last.date)}`;
+    h += `<div class="seg scroll" role="group" aria-label="Période">${PERIODES.map(([k, t]) => `<button type="button" data-perf="${k}" aria-pressed="${S.ui.perf === k}">${t}</button>`).join("")}</div>
+      <div class="card"><p class="small muted">Sur ${per}</p>
+        <div class="kpi"><div class="lbl">Gain ou perte du portefeuille</div>
+          <div class="val num ${cls(gain)}">${gain > 0 ? "+" : ""}${F(gain)}</div></div>
+        <div class="cmp" style="margin-top:10px">
+          ${[["Portefeuille", pf, "var(--s1)"], ["BRVM 30", b30, "var(--s2)"], ["BRVM Composite", bc, "var(--s3)"]].map(([t, val, col]) =>
+            `<div class="kpi"><div class="lbl"><i style="background:${col}"></i>${t}</div><div class="val num ${cls(val)}">${n === 1 ? P2(val) : P(val)}</div></div>`).join("")}
+        </div>
+        <p class="small" style="margin-top:10px">${ok(pf) && ok(b30) ? `Écart avec le BRVM 30 : <b class="${cls(pf - b30)}">${(pf - b30 > 0 ? "+" : "") + nf1.format((pf - b30) * 100)} points</b>` + (pf >= b30 ? " — vous faites mieux que le marché." : " — le marché fait mieux sur cette période.") : ""}</p>
+        ${!ok(b30) || !ok(bc) ? `<p class="small muted">« – » : indice pas encore disponible pour ces séances.</p>` : ""}
+        <p class="small muted">Gain sur la période choisie, hors dépôts et retraits : évolution des cours, dividendes et frais.
+          À ne pas confondre avec le « gain si je vendais aujourd'hui » de Portefeuille.</p></div>`;
+    const chartRows = rows.length >= 5 ? rows : hist.slice(-21);
+    const ch = perfChart(chartRows, ix);
+    h += `<div class="card"><h2>Évolution comparée</h2>
+      <div class="legend">${SERIES.map(([, n2, col]) => `<span><i class="s" style="background:${col}"></i>${n2}</span>`).join("")}</div>${ch.html}
+      <p class="small muted">Performance cumulée${chartRows === rows ? "" : " sur le dernier mois"}, en partant de 0 %. Touchez le graphique pour le détail d'un jour.</p></div>`;
+    const nTab = S.ui.perfRows || 10, tab = hist.slice(-nTab).reverse();
+    h += `<div class="card"><h2>Jour par jour</h2><div class="tbl" role="region" aria-label="Gain par séance" tabindex="0"><table>
+      <thead><tr><th scope="col">Séance</th><th scope="col">Gain (F)</th><th scope="col">Portef.</th><th scope="col">BRVM 30</th><th scope="col">Compos.</th></tr></thead>
+      <tbody>${tab.map((r) => { const a = ix.BRVM30?.get(r.date)?.variation, c2 = ix.BRVMC?.get(r.date)?.variation;
+        return `<tr><th scope="row">${Dc(r.date)}</th><td class="${cls(r.gain)}">${ok(r.gain) ? (r.gain > 0 ? "+" : "") + N(r.gain) : "–"}</td><td class="${cls(r.pct)}">${P2(r.pct)}</td><td>${P2(a)}</td><td>${P2(c2)}</td></tr>`; }).join("")}</tbody></table></div>
+      ${hist.length > nTab ? `<div class="actions"><button class="btn small" id="perf-more">Afficher plus de séances</button></div>` : ""}
+      <p class="small muted">Calculé chaque soir avec votre journal ; une opération enregistrée aujourd'hui apparaît après le calcul du soir.</p></div>`;
+    v.innerHTML = h;
+    v.querySelectorAll("[data-perf]").forEach((b) => b.addEventListener("click", () => { S.ui.perf = +b.dataset.perf; vPerformance(); }));
+    $("#perf-more", v)?.addEventListener("click", () => { S.ui.perfRows = (S.ui.perfRows || 10) + 20; vPerformance(); });
+    // info-bulle : le jour le plus proche du doigt ou de la souris
+    const svg = $(".chart svg", v), tip = $(".chart .tip", v), hov = $(".hover", svg);
+    const show = (ev) => {
+      const bb = svg.getBoundingClientRect(), sx = ((ev.clientX - bb.left) / bb.width) * ch.Wd;
+      let i = 1, best = Infinity;
+      for (let k = 1; k < ch.dates.length; k++) { const d = Math.abs(ch.x(k) - sx); if (d < best) { best = d; i = k; } }
+      hov.setAttribute("visibility", "visible");
+      $(".cross", hov).setAttribute("x1", ch.x(i)); $(".cross", hov).setAttribute("x2", ch.x(i));
+      hov.querySelectorAll(".dot").forEach((c) => { c.setAttribute("cx", ch.x(i)); c.setAttribute("cy", ch.y(ch.pts[c.dataset.k][i])); });
+      tip.innerHTML = `<b>${D(ch.dates[i])}</b>` + SERIES.filter(([k]) => ch.has[k]).map(([k, n2, col]) => `<span style="color:${col}">●</span> ${n2} ${P(ch.pts[k][i])}`).join("<br>");
+      tip.hidden = false;
+      const px = (ch.x(i) / ch.Wd) * bb.width;
+      tip.style.left = Math.min(Math.max(px - tip.offsetWidth / 2, 0), bb.width - tip.offsetWidth) + "px";
+    };
+    svg.addEventListener("pointermove", show);
+    svg.addEventListener("pointerdown", show);
+    svg.addEventListener("pointerleave", () => { hov.setAttribute("visibility", "hidden"); tip.hidden = true; });
+  }
+
+  const VIEWS = { aujourdhui: vAujourdhui, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
+
+  // ---------------------------------------------------------------- saisie d'une opération chez la SGI
+  // Étapes : que s'est-il passé ? → catégorie → titre (liste « code – nom ») → quantité, prix, total en direct.
+  const dlg = $("#dlg-op"), fop = $("#f-op");
+  const AUTRE = "__autre__";
+  const catDe = (code) => { const c = S.classes.get(code) || ""; return c === "actions" ? "actions" : c === "obligations" ? "obligations" : c ? "opcvm" : null; };
+  const TABLES = { actions: "actions", obligations: "obligations", opcvm: "opcvm" };
+  const prixDe = (r, cat) => (cat === "actions" ? r.cours : cat === "obligations" ? r.prix : r.vl);
+  const court = (t, n = 34) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  function libelle(r, cat) {
+    const nom = r.nom || r.code;
+    if (cat === "actions") return `${r.code} – ${court(nom, 30)}`;
+    if (cat === "obligations") return `${court(nom, 30)} – ${r.code}`;
+    return `${court(nom, 26)} – ${court(r.gestionnaire || r.code, 14)}`;
+  }
+  const opType = () => fop.querySelector('[name="type"]:checked')?.value || "ACHAT";
+  const opCat = () => fop.querySelector('[name="cat"]:checked')?.value || "actions";
+  function remplirTitres(garder) {
+    const t = opType(), q = $("#op-q").value.trim().toLowerCase(), sel = $("#op-titre");
+    const match = (txt) => !q || txt.toLowerCase().includes(q);
+    let html = `<option value="">Choisir un titre…</option>`, n = 0;
+    if (t === "ACHAT") {
+      const cat = opCat(), rows = (S.mk[TABLES[cat]] || []).filter((r) => r.code && match(libelle(r, cat) + " " + r.code));
+      const tri = cat === "actions" ? (a, b) => a.code.localeCompare(b.code) : (a, b) => (a.nom || "").localeCompare(b.nom || "");
+      const prop = rows.filter((r) => BUY.includes(r.decision)).sort((a, b) => (b.score || 0) - (a.score || 0));
+      const opt = (r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))}</option>`;
+      if (prop.length) html += `<optgroup label="${SIM() ? "Les mieux notés ce soir" : "Proposés ce soir"}">${prop.map(opt).join("")}</optgroup>`;
+      html += `<optgroup label="Tous les titres">${rows.slice().sort(tri).map(opt).join("")}</optgroup>`;
+      n = rows.length;
+      $('[data-for="recherche"]', fop).hidden = cat === "actions";            // ~48 actions : la liste suffit
+    } else {
+      // vente, dividende : seulement les titres détenus, regroupés par catégorie
+      const pos = replay(S.ops).positions;
+      for (const [cat, nom] of [["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]]) {
+        const rows = pos.filter((p) => (catDe(p.code) || "actions") === cat).map((p) => ({ ...(S.mk[TABLES[cat]] || []).find((r) => r.code === p.code), code: p.code, nom: S.names.get(p.code) || p.code, q: p.quantite }))
+          .filter((r) => match(libelle(r, cat)));
+        if (rows.length) html += `<optgroup label="${nom}">${rows.map((r) => `<option value="${esc(r.code)}">${esc(libelle(r, cat))} (${N(r.q)})</option>`).join("")}</optgroup>`;
+        n += rows.length;
+      }
+      $('[data-for="recherche"]', fop).hidden = n <= 30 && !q;
+    }
+    html += `<option value="${AUTRE}">Autre titre (saisir le code)</option>`;
+    sel.innerHTML = html;
+    if (garder && [...sel.options].some((o) => o.value === garder)) sel.value = garder;
+    else if (garder) { sel.value = AUTRE; fop.autre.value = garder; }
+    infoTitre(false);
+  }
+  function infoTitre(prefill) {
+    const t = opType(), code = fop.ticker.value, info = $("#op-info");
+    $('[data-for="autre"]', fop).hidden = code !== AUTRE;
+    if (!code || code === AUTRE) { info.textContent = ""; total(); return; }
+    const cat = catDe(code) || opCat(), r = (S.mk[TABLES[cat]] || []).find((x) => x.code === code);
+    const px = r ? prixDe(r, cat) : null, held = replay(S.ops).positions.find((p) => p.code === code)?.quantite || 0;
+    const parts = [];
+    if (ok(px)) parts.push(`${cat === "opcvm" ? "Valeur liquidative" : cat === "obligations" ? "Prix (coupon couru compris)" : "Cours"} de la séance du ${D(S.seance?.date)} : ${F(px)}`);
+    if (r?.decision) parts.push(`analyse : ${r.decision}`);
+    if (held) parts.push(`vous en détenez ${N(held)}`);
+    info.textContent = parts.join(" · ");
+    if (prefill && ok(px) && (t === "ACHAT" || t === "VENTE") && (!fop.prix.value || fop.dataset.prixAuto === "1")) { fop.prix.value = px; fop.dataset.prixAuto = "1"; }
+    if (t === "VENTE" && held && !fop.quantite.value) fop.quantite.value = held;
+    total();
+  }
+  function total() {
+    const t = opType(), out = $("#op-total");
+    const q = +fop.quantite.value || 0, p = +fop.prix.value || 0, brut = q * p;
+    const fee = fop.frais.value !== "" ? +fop.frais.value : brut * FEES, dispo = replay(S.ops).cash;
+    out.className = "op-total";
+    if (t === "ACHAT" && brut > 0) {
+      out.innerHTML = `${N(q)} × ${F(p)} = ${F(brut)} + frais ${F(fee)} = <b>${F(brut + fee)}</b><br><span class="small">Disponible chez ma SGI : ${F(dispo)}</span>`;
+      if (brut + fee > dispo + 1) { out.classList.add("warn"); out.innerHTML += `<br><span class="small">Le disponible ne suffit pas : enregistrez d'abord l'argent versé à votre SGI.</span>`; }
+    } else if (t === "VENTE" && brut > 0) out.innerHTML = `Vous recevez environ <b>${F(brut - fee)}</b> (${F(brut)} − frais ${F(fee)})`;
+    else out.textContent = "";
+    libelleOp();
+  }
+  // Le bouton dit ce qui va être enregistré, avec le montant : « Enregistrer l'achat · 503 250 F »
+  const LIB_OP = { ACHAT: "l'achat", VENTE: "la vente", DIVIDENDE: "le dividende", DEPOT: "le dépôt", RETRAIT: "le retrait", FRAIS: "les frais", SOLDE: "le solde" };
+  function libelleOp() {
+    const b = $("#op-ok");
+    if (!b || b.getAttribute("aria-busy")) return;
+    if (fop.dataset.dupOk) { b.textContent = "Enregistrer quand même"; return; }
+    const t = opType(), q = +fop.quantite.value || 0, p = +fop.prix.value || 0, brut = q * p;
+    const fee = fop.frais.value !== "" ? +fop.frais.value : brut * FEES, m = +fop.montant.value || 0;
+    const montant = t === "ACHAT" ? brut + fee : t === "VENTE" ? brut - fee : m;
+    b.textContent = `Enregistrer ${LIB_OP[t] || "l'opération"}${montant > 0 ? " · " + F(montant) : ""}`;
+  }
+  function syncOpForm() {
+    const t = opType();
+    const titre = ["ACHAT", "VENTE", "DIVIDENDE"].includes(t);
+    fop.querySelectorAll('[data-for="titre"]').forEach((e) => (e.hidden = !titre));
+    $('[data-for="cat"]', fop).hidden = t !== "ACHAT";
+    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !["ACHAT", "VENTE"].includes(t)));
+    $('[data-for="montant"]', fop).hidden = ["ACHAT", "VENTE"].includes(t);
+    $('[data-for="vers-epargne"]', fop).hidden = !(t === "RETRAIT" && S.coffre);
+    if (titre) remplirTitres(fop.ticker.value || null);
+    total();
+  }
+  function openOp(pre = {}) {
+    fop.reset();
+    delete fop.dataset.dupOk; delete fop.dataset.prixAuto;
+    fop.date.value = today();
+    $(".msg", fop).textContent = "";
+    $("#op-q").value = "";
+    const t = pre.type || "ACHAT";
+    fop.querySelector(`[name="type"][value="${t}"]`).checked = true;
+    const cat = (pre.ticker && catDe(pre.ticker)) || S.ui.opCat || "actions";
+    fop.querySelector(`[name="cat"][value="${cat}"]`).checked = true;
+    $("#dlg-op-title").textContent = "Opération chez ma SGI";
+    fop.ticker.innerHTML = "";
+    syncOpForm();
+    if (pre.ticker) remplirTitres(pre.ticker);
+    for (const k of ["quantite", "prix", "montant"]) if (pre[k] !== undefined && pre[k] !== null) fop[k].value = pre[k];
+    infoTitre(!pre.prix);
+    dlg.showModal();
+  }
+  fop.querySelectorAll('[name="type"]').forEach((r) => r.addEventListener("change", () => { fop.ticker.value = ""; fop.quantite.value = ""; fop.prix.value = ""; syncOpForm(); }));
+  fop.querySelectorAll('[name="cat"]').forEach((r) => r.addEventListener("change", () => { S.ui.opCat = opCat(); $("#op-q").value = ""; remplirTitres(null); }));
+  $("#op-q").addEventListener("input", () => remplirTitres(fop.ticker.value || null));
+  fop.ticker.addEventListener("change", () => { fop.quantite.value = opType() === "VENTE" ? "" : fop.quantite.value; infoTitre(true); });
+  fop.prix.addEventListener("input", () => { delete fop.dataset.prixAuto; total(); });
+  fop.quantite.addEventListener("input", total);
+  fop.frais.addEventListener("input", total);
+  fop.montant.addEventListener("input", libelleOp);
+  fop.addEventListener("input", () => { if (fop.dataset.dupOk) { delete fop.dataset.dupOk; $(".msg", fop).textContent = ""; libelleOp(); } });
+  fop.addEventListener("submit", async (ev) => {
+    if (ev.submitter?.value !== "ok") return;                    // « Annuler » ferme simplement la fenêtre
+    ev.preventDefault();
+    const t = opType(), num = (n) => (fop[n].value === "" ? null : +fop[n].value);
+    const code = fop.ticker.value === AUTRE ? (fop.autre.value || "").trim().toUpperCase() : fop.ticker.value;
+    const op = { date: fop.date.value, type: t, ticker: code || null,
+                 quantite: null, prix: null, frais: null, montant: null, note: fop.note.value.trim() || null };
+    const err = (m) => { $(".msg", fop).textContent = m; };
+    if (!op.date) return err("Indiquez la date.");
+    if (op.date > today()) return err("La date ne peut pas être dans le futur.");
+    if (t === "ACHAT" || t === "VENTE") {
+      Object.assign(op, { quantite: num("quantite"), prix: num("prix"), frais: num("frais") });
+      if (!op.ticker) return err("Choisissez le titre.");
+      if (!(op.quantite > 0) || !(op.prix > 0)) return err("Indiquez une quantité et un prix positifs.");
+      if (t === "VENTE") {
+        const held = replay(S.ops).positions.find((p) => p.code === op.ticker)?.quantite || 0;
+        if (op.quantite > held + 1e-9) return err(`Vous ne détenez que ${N(held)} ${op.ticker}.`);
+      }
+    } else {
+      op.montant = num("montant");
+      if (!(op.montant > 0)) return err("Indiquez un montant positif.");
+      if (t === "DIVIDENDE" && !op.ticker) return err("Choisissez le titre qui a versé le dividende ou le coupon.");
+      if (t !== "DIVIDENDE") op.ticker = null;
+    }
+    const dup = S.ops.some((o) => o.date === op.date && o.type === op.type && (o.ticker || null) === op.ticker
+      && +o.quantite === +op.quantite && +o.prix === +op.prix && +o.montant === +op.montant);
+    if (dup && !fop.dataset.dupOk) { fop.dataset.dupOk = "1"; libelleOp(); return err("Une opération identique existe déjà ce jour-là. Si c'est bien une deuxième opération, appuyez sur « Enregistrer quand même »."); }
+    delete fop.dataset.dupOk;
+    const versEpargne = t === "RETRAIT" && S.coffre && fop.vers_epargne.checked;
+    const avant = replay(S.ops).cash, ids = new Set(S.ops.map((o) => o.id));
+    const fin = occupe($("#op-ok"));
+    try {
+      await api.addOperation(op);
+      if (versEpargne) {
+        await api.addMouvement({ date: op.date, type: "VERSEMENT", montant: op.montant, source: "banque", note: "Retiré de ma SGI" });
+        S.coffre = await api.coffre(S.user.id);
+      }
+      S.ops = await api.operations(S.user.id);
+      fin();
+      dlg.close();
+      render();
+      const nouvelle = S.ops.find((o) => !ids.has(o.id));
+      confirmerOperation(op, nouvelle, avant, !versEpargne);
+      if (nouvelle && tab() === "portefeuille") montrerOperation(nouvelle.id);
+    } catch (e) { fin(); libelleOp(); err("Enregistrement impossible : " + e.message); }
+  });
+  function confirmerOperation(op, o, avant, annulable) {
+    const apres = replay(S.ops).cash;
+    const msg = {
+      ACHAT: `Achat de ${N(op.quantite)} ${op.ticker} à ${F(op.prix)} enregistré`,
+      VENTE: `Vente de ${N(op.quantite)} ${op.ticker} à ${F(op.prix)} enregistrée`,
+      DIVIDENDE: `Dividende de ${F(op.montant)}${op.ticker ? " sur " + op.ticker : ""} enregistré`,
+      DEPOT: `Dépôt de ${F(op.montant)} enregistré`, RETRAIT: `Retrait de ${F(op.montant)} enregistré`,
+      FRAIS: `Frais de ${F(op.montant)} enregistrés`, SOLDE: `Solde de ${F(op.montant)} enregistré`,
+    }[op.type] || "Opération enregistrée";
+    const actions = [];
+    if (o && annulable) actions.push({ label: "Annuler", fn: () => annulerOperation(o) });
+    if (o) actions.push({ label: "Voir", fn: () => montrerOperation(o.id) });
+    toast(msg, { detail: Math.abs(apres - avant) >= 1 ? `Disponible chez ma SGI : ${F(avant)} → ${F(apres)}` : "", actions });
+  }
+  async function annulerOperation(o) {
+    try {
+      await api.deleteOperation(o.id);
+      S.ops = await api.operations(S.user.id);
+      render();
+      toast("Opération annulée : elle a été retirée du journal.");
+    } catch (e) { toast("Annulation impossible : " + e.message); }
+  }
+  // Va au journal, fait défiler jusqu'à la ligne et la surligne un instant
+  function montrerOperation(id) {
+    const aller = () => {
+      const li = document.querySelector(`[data-op-row="${CSS.escape(String(id))}"]`);
+      if (!li) return;
+      li.scrollIntoView({ block: "center", behavior: CALME ? "auto" : "smooth" });
+      li.classList.remove("surligne"); void li.offsetWidth; li.classList.add("surligne");
+      li.setAttribute("tabindex", "-1"); li.focus({ preventScroll: true });
+    };
+    if (tab() !== "portefeuille") { location.hash = "portefeuille"; setTimeout(aller, 350); } else setTimeout(aller, 50);
+  }
+
+  // ---------------------------------------------------------------- saisie rapide : « J'ai épargné » / « J'ai envoyé à ma SGI »
+  const dcf = $("#dlg-coffre"), fcf = $("#f-coffre");
+  let cfMode = "verser";
+  function openCoffre(mode) {
+    const ep = epargne();
+    if (!ep) return;
+    cfMode = mode;
+    fcf.reset();
+    fcf.date.value = today();
+    $(".msg", fcf).textContent = "";
+    const verser = mode === "verser", m = +ep.plan?.montant || 0;
+    $("#dlg-coffre-title").textContent = verser ? "J'ai épargné" : mode === "reprendre" ? "J'ai repris de mon épargne" : "J'ai envoyé à ma SGI";
+    $("#dlg-coffre-sub").textContent = verser
+      ? "Notez l'argent que vous venez de mettre de côté pour la bourse."
+      : mode === "reprendre"
+        ? `Cet argent sort de votre épargne (${F(ep.solde)} mis de côté) pour un autre usage. Il ne compte plus pour la bourse.`
+        : `Cet argent quitte votre épargne (${F(ep.solde)} mis de côté) et devient disponible chez votre SGI : un dépôt est ajouté à votre journal.`;
+    const presets = verser ? (m ? [m, 2 * m, 5 * m] : [1000, 5000, 10000]) : [ep.solde];
+    $("#cf-presets").innerHTML = presets.filter((x) => x > 0).map((x, i) => `<button type="button" class="btn small" data-v="${x}">${!verser ? "Tout : " : ""}${F(x)}</button>`).join("");
+    $("#cf-presets").querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => {
+      fcf.montant.value = b.dataset.v;
+      $("#cf-presets").querySelectorAll("[data-v]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    }));
+    fcf.montant.value = presets[0] > 0 ? presets[0] : "";
+    $("#cf-presets [data-v]")?.setAttribute("aria-pressed", "true");
+    $("#cf-src").hidden = !verser;
+    $("#cf-ok").textContent = verser ? "Mettre de côté" : mode === "reprendre" ? "Confirmer" : "Confirmer l'envoi";
+    dcf.showModal();
+  }
+  fcf.addEventListener("submit", async (ev) => {
+    if (ev.submitter?.value !== "ok") return;
+    ev.preventDefault();
+    const ep = epargne(), montant = Math.round(+fcf.montant.value || 0), date = fcf.date.value || today();
+    const err = (t) => ($(".msg", fcf).textContent = t);
+    if (montant <= 0) return err("Indiquez un montant.");
+    if (date > today()) return err("La date ne peut pas être dans le futur.");
+    const fin = occupe($("#cf-ok"));
+    try {
+      if (cfMode === "verser") {
+        await api.addMouvement({ date, type: "VERSEMENT", montant, source: fcf.source.value });
+        S.feteMontant = montant;
+      } else if (cfMode === "reprendre") {
+        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté.`);
+        await api.addMouvement({ date, type: "RETRAIT", montant });
+        toast(`${F(montant)} repris de votre épargne.`);
+      } else {
+        if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour de l'argent venant d'ailleurs, utilisez « Opération chez ma SGI » → Argent versé à ma SGI.`);
+        await api.envoyerSgi(date, montant);                     // une seule transaction : épargne et journal ensemble
+        S.ops = await api.operations(S.user.id);
+        toast(`${F(montant)} envoyés à votre SGI : vos ordres sont recalculés.`);
+      }
+      S.coffre = await api.coffre(S.user.id);
+      dcf.close();
+      render();
+      feter(cfMode === "verser" ? S.feteMontant : 0);
+    } catch (e) { err("Enregistrement impossible : " + e.message); }
+    finally { fin(); }
+  });
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
+    else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); openCoffre(b.dataset.coffre); }
+    else if (b.dataset.alerte !== undefined) {
+      const a = S.alertesMap?.get(b.dataset.alerte);
+      if (a) showInfo(`${S.names.get(a.ticker) || a.ticker} : ${NIVEAUX[a.alerte]?.t || a.alerte}`,
+        `<p>${esc(motifAlerte(a.motif))}</p>${ok(a.plancher) ? `<p class="small muted">Plancher suiveur : ${F(a.plancher)}. Il monte avec le plus haut cours atteint depuis l'achat et ne redescend jamais.</p>` : ""}
+        <p class="small muted">Une alerte est un signal à examiner, jamais une vente automatique. ${AVERT()}</p>`);
+    }
+    else if (b.dataset.op !== undefined) openOp(b.dataset.op ? { type: b.dataset.op } : {});
+    else if (b.dataset.ordre !== undefined) {
+      const o = S.ordres[+b.dataset.ordre];
+      openOp({ type: o.sens, ticker: o.code, quantite: String(o.quantite), prix: String(o.prix_limite) });
+    } else if (b.dataset.ligne !== undefined) {
+      const l = S.lines[+b.dataset.ligne];
+      openOp({ type: "ACHAT", ticker: l.code, quantite: String(l.quantite), prix: String(l.prix) });
+    } else if (b.dataset.del !== undefined) {
+      if (!confirm("Supprimer définitivement cette opération du journal ?")) return;
+      try {
+        await api.deleteOperation(isNaN(+b.dataset.del) ? b.dataset.del : +b.dataset.del);
+        S.ops = await api.operations(S.user.id);
+        toast("Opération supprimée.");
+        render();
+      } catch (e) { toast("Suppression impossible : " + e.message); }
+    }
+  });
+
+  // ---------------------------------------------------------------- navigation
+  let current = null;
+  function tab() { const h = location.hash.slice(1); return TABS.includes(h) ? h : "aujourdhui"; }
+  const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  function countUp(el) {
+    const to = +el.dataset.count;
+    if (CALME || !isFinite(to) || !to) return;
+    const t0 = performance.now(), d = 600;
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - k, 3);
+      if (el.dataset.unite) el.innerHTML = montantHtml(to * e); else el.textContent = F(to * e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  function render() {
+    const t = tab();
+    for (const k of TABS) $("#v-" + k).hidden = k !== t;
+    document.querySelectorAll("[data-tab]").forEach((a) => (a.dataset.tab === t ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    VIEWS[t]();
+    const fab = $("#fab-coffre"), showFab = !!S.coffre && ["aujourdhui", "portefeuille"].includes(t);
+    fab.hidden = !showFab;
+    document.body.classList.toggle("has-fab", showFab);
+    const aFaire = !!epargne()?.aFaire;
+    $(".fab-dot", fab).hidden = !aFaire;
+    fab.setAttribute("aria-label", aFaire ? "Noter mon épargne (pas encore notée pour cette période)" : "Noter mon épargne");
+    if (current !== t) {                                   // transition douce et compteur, sauf « mouvement réduit »
+      const v = $("#v-" + t);
+      v.classList.remove("v-in"); void v.offsetWidth; v.classList.add("v-in");
+      // première visite de l'onglet : cartes en cascade, barres et courbes qui se dessinent (une seule fois)
+      v.classList.toggle("cascade", !S.vus.has(t));
+      if (!S.vus.has(t)) {
+        [...v.children].slice(0, 8).forEach((c, i) => c.style.setProperty("--i", i));
+        S.vus.add(t);
+        setTimeout(() => v.classList.remove("cascade"), 1400);   // une saisie ensuite ne rejoue pas l'animation
+      }
+      v.querySelectorAll("[data-count]").forEach(countUp);
+    }
+    if (current && current !== t) { $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
+    current = t;
+    if (S.alertesCle !== cleJournal()) chargerAlertes().then(() => { if (S.user && tab() === t && ["aujourdhui", "portefeuille"].includes(t)) VIEWS[t](); signalerAssistant(); });
+    signalerAssistant();
+  }
+  window.addEventListener("hashchange", () => { if (S.user) render(); });
+
+  // ---------------------------------------------------------------- démarrage
+  async function loadAll() {
+    const uid = S.user.id;
+    await chargerMode();
+    try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
+    if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
+    try { const [sg, ge] = await Promise.all([api.sgi(), api.gestionnaires()]); S.univ = { sgi: (sg || []).map((x) => x.nom), paysSgi: new Map((sg || []).map((x) => [x.nom, x.pays || ""])), gest: ge || [] }; }
+    catch (e) { S.univ = null; }     // univers.sql pas encore installé
+    S.paysGest = new Map((S.univ?.gest || []).filter((g) => g.pays).map((g) => [g.gestionnaire, g.pays]));
+    try { S.paysTitres = new Map(((await api.titresPays()) || []).map((x) => [x.code, x.pays])); } catch (e) { S.paysTitres = new Map(); }
+    try {                                                              // versions les plus récentes de chaque texte
+      const docs = await api.documents();
+      S.docs = {};
+      for (const d of docs || []) if (!S.docs[d.type]) S.docs[d.type] = d;
+    } catch (e) { S.docs = {}; }                                       // table pas encore créée
+    const [profil, seance, prop, ops] = await Promise.all([api.profil(uid), api.seance(), api.proposition(uid), api.operations(uid)]);
+    S.profil = profil || { id: uid, email: S.user.email, budget: 0, profil: "equilibre", recevoir_email: true };
+    Object.assign(S, { seance, prop, ops: ops || [] });
+    if (seance) {
+      const [a, o, f, c] = await Promise.all([api.table("actions_analyse", seance.date), api.table("obligations_analyse", seance.date),
+        api.table("opcvm_analyse", seance.date), ciblesLisibles(seance.date, S.profil.profil)]);
+      for (const r of [...(a || []), ...(o || []), ...(f || [])]) r.nom = nomLisible(r.nom);
+      for (const x of [...(S.prop?.contenu?.ordres || []), ...(S.prop?.contenu?.proposition?.lignes || [])]) if (x.libelle) x.libelle = nomLisible(x.libelle);
+      S.mk = { actions: a || [], obligations: o || [], opcvm: f || [] };
+      S.cibles = c || [];
+      try { S.indices = await api.indices(); } catch (e) { S.indices = []; }   // table pas encore créée
+      S.prices = new Map(); S.names = new Map(); S.classes = new Map(); S.decisions = new Map();
+      S.actions = new Map(S.mk.actions.map((r) => [r.code, r]));
+      for (const r of S.mk.actions) { S.prices.set(r.code, r.cours); S.names.set(r.code, r.nom); S.classes.set(r.code, "actions"); S.decisions.set(r.code, r.decision); }
+      for (const r of S.mk.obligations) { S.prices.set(r.code, r.prix); S.names.set(r.code, r.nom); S.classes.set(r.code, "obligations"); S.decisions.set(r.code, r.decision); }
+      for (const r of S.mk.opcvm) { S.prices.set(r.code, r.vl); S.names.set(r.code, r.nom); S.classes.set(r.code, r.classe); S.decisions.set(r.code, r.decision); }
+      S.lignesMk = new Map([...S.mk.actions.map((r) => [r.code, ["actions", r]]), ...S.mk.obligations.map((r) => [r.code, ["obligations", r]]),
+        ...S.mk.opcvm.map((r) => [r.code, ["opcvm", r]])]);
+    }
+    await chargerAlertes();
+  }
+
+  // Lit le mode (lisible sans connexion) et adapte les textes statiques marqués data-sim ; « proposition » par défaut
+  async function chargerMode() {
+    if (!DEMO) try { MODE = (await api.mode()) === "simulation" ? "simulation" : "proposition"; } catch (e) { /* fonction pas encore installée */ }
+    document.querySelectorAll("[data-sim]").forEach((el) => {
+      el.dataset.prop ??= el.textContent;
+      el.textContent = SIM() ? el.dataset.sim : el.dataset.prop;
+    });
+  }
+
+  let started = false;
+  async function start(user) {
+    if (started) return;
+    started = true;
+    S.user = user;
+    $("#v-connexion").hidden = true;
+    $("#loading").hidden = false;
+    try {
+      await loadAll();
+    } catch (e) {
+      $("#loading").textContent = "Chargement impossible : " + e.message;
+      return;
+    }
+    $("#loading").hidden = true;
+    const ss = (k) => { try { const x = sessionStorage.getItem(k); sessionStorage.removeItem(k); return x; } catch (e) { return null; } };
+    try { localStorage.setItem("brvm-a-un-compte", "1"); } catch (e) { /* stockage indisponible */ }
+    const cgu = S.docs?.cgu, accepte = +ss("brvm-cgu-acceptee") || 0, inscription = ss("brvm-inscription");
+    if (cgu && accepte === cgu.version && (+S.profil.cgu_version || 0) < cgu.version) {      // case cochée à la création du compte
+      const upd = { cgu_version: cgu.version, cgu_acceptee_le: new Date().toISOString() };
+      try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); } catch (e) { /* demandée ci-dessous */ }
+    }
+    if (cgu && (+S.profil.cgu_version || 0) < cgu.version && !(await showCgu(cgu, true))) return;
+    const plusTard = (() => { try { return sessionStorage.getItem("brvm-ob-plus-tard"); } catch (e) { return null; } })();
+    if (("onboarding_etape" in S.profil && !S.profil.onboarding_fini_le && !plusTard) || (DEMO && new URLSearchParams(location.search).has("onboarding"))) {
+      await onboarding();
+      return;
+    }
+    if (inscription && S.profil.onboarding_fini_le) setTimeout(() => toast("Vous aviez déjà un compte avec cette adresse : bienvenue !"), 600);
+    document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
+    if (!TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
+    render();
+    window.BRVM_APP = { demo: DEMO, demander: (body) => api.assistant(body), contexte: contexteAssistant, suggestions: suggestionsAssistant,
+                        // prise en main (tutoriel.js)
+                        tab, aller: (t) => { if (location.hash.slice(1) !== t) location.hash = t; }, render, toast, sim: () => SIM(),
+                        ouvrirOperation: (type) => openOp({ type }), nbOps: () => S.ops.length,
+                        faits: () => ({ depot: S.ops.some((o) => o.type === "DEPOT" || o.type === "SOLDE"), achat: S.ops.some((o) => o.type === "ACHAT"),
+                                        plan: S.coffre ? !!S.coffre.plan : null }),
+                        tutoriel: etatTutoriel, sauverTutoriel,
+                        evenement: (e, x) => { api.evenementTutoriel(e, x ?? null).catch(() => {}); },
+                        prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length };
+    window.dispatchEvent(new Event("brvm:pret"));
+  }
+
+  // Conditions d'utilisation : lecture seule, ou acceptation obligatoire d'une nouvelle version (true si acceptée)
+  function showCgu(doc, accept) {
+    return new Promise((resolve) => {
+      const d = $("#dlg-cgu"), f = $("form", d), msg = $(".msg", f);
+      $("#dlg-cgu-title").textContent = doc.titre;
+      $("#dlg-cgu-sub").textContent = `Version ${doc.version} du ${new Date(doc.publie_le).toLocaleDateString("fr-FR")}`
+        + (accept ? (S.profil.cgu_version ? " : les conditions ont changé, merci de les relire." : " : merci de les lire avant de continuer.") : "");
+      $("#dlg-cgu-texte").textContent = doc.texte;
+      msg.textContent = "";
+      $(".actions", f).innerHTML = accept
+        ? `<button class="btn" type="button" data-non>Me déconnecter</button><button class="btn primary" type="button" data-oui>J'accepte</button>`
+        : `<button class="btn primary" value="ok">Fermer</button>`;
+      d.oncancel = accept ? (e) => e.preventDefault() : null;           // acceptation : pas de fermeture par Échap
+      if (accept) {
+        $("[data-non]", f).addEventListener("click", () => api.logout());
+        $("[data-oui]", f).addEventListener("click", async () => {
+          const upd = { cgu_version: doc.version, cgu_acceptee_le: new Date().toISOString() };
+          try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); d.close(); resolve(true); }
+          catch (e) { msg.textContent = "Enregistrement impossible : " + e.message; }
+        });
+      } else d.addEventListener("close", () => resolve(false), { once: true });
+      d.showModal();
+    });
+  }
+
+  async function showAnnonce() {
+    try {
+      const a = await api.annonce();
+      const el = $("#annonce");
+      if (!a) { el.hidden = true; return; }
+      el.className = "annonce " + (a.niveau || "info");
+      const lbl = { maintenance: "Maintenance", attention: "Attention" }[a.niveau];
+      el.innerHTML = (lbl ? `<b>${lbl}</b> · ` : "") + esc(a.message);
+      el.hidden = false;
+    } catch (e) { /* table pas encore créée : pas de bannière */ }
+  }
+
+  // Connexion : « Créer mon compte » ou « J'ai déjà un compte » ; code à 6 chiffres reçu par e-mail (le lien marche aussi)
+  function showLogin() {
+    $("#loading").hidden = true;
+    $("#v-connexion").hidden = false;
+    const fl = $("#f-login"), fc = $("#f-code"), m = $(".msg", fl);
+    let mode = location.hash === "#connexion" ? "connexion" : location.hash === "#inscription" ? "inscription"
+      : (() => { try { return localStorage.getItem("brvm-a-un-compte") ? "connexion" : "inscription"; } catch (e) { return "inscription"; } })();
+    let cgu = null, wait = 0;
+    const regler = () => {
+      const ins = mode === "inscription";
+      document.querySelectorAll("[data-auth]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.auth === mode)));
+      $("#auth-titre").textContent = ins ? "Créer mon compte gratuit" : "Me connecter";
+      $("#auth-aide").textContent = ins ? "Votre adresse e-mail sert d'identifiant : pas de mot de passe à retenir."
+        : "Saisissez l'adresse de votre compte : nous vous envoyons un lien de connexion.";
+      $("#auth-cgu").hidden = !ins || !cgu;
+      if (cgu) $("#lire-cgu").textContent = cgu.titre || "conditions d'utilisation";
+      m.textContent = "";
+    };
+    document.querySelectorAll("[data-auth]").forEach((b) => b.addEventListener("click", () => {
+      mode = b.dataset.auth; fc.hidden = true; fl.hidden = false; regler();
+      history.replaceState(null, "", location.pathname + location.search + "#" + mode);
+      fl.email.focus();
+    }));
+    $("#lire-cgu").addEventListener("click", (ev) => { ev.preventDefault(); if (cgu) showCgu(cgu, false); });
+    api.documents().then((docs) => { cgu = (docs || []).find((d) => d.type === "cgu") || null; regler(); }).catch(() => {});
+    regler();
+    const bouton = fl.querySelector("button[type=submit]"), label = bouton.textContent, renvoi = $("#code-renvoi");
+    const attendre = (sec) => {
+      wait = sec;
+      const tick = () => {
+        if (wait <= 0) { bouton.disabled = renvoi.disabled = false; bouton.textContent = label; renvoi.textContent = "Renvoyer l'e-mail"; return; }
+        bouton.textContent = `Nouvel envoi possible dans ${wait} s`;
+        renvoi.textContent = `Renvoyer l'e-mail (${wait--} s)`;
+        setTimeout(tick, 1000);
+      };
+      bouton.disabled = renvoi.disabled = true; tick();
+    };
+    const envoyer = async () => {
+      const email = fl.email.value.trim(), creer = mode === "inscription";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { m.textContent = "Adresse e-mail invalide."; return; }
+      if (creer && cgu && !fl.cgu.checked) { m.textContent = "Acceptez les conditions d'utilisation pour créer votre compte."; return; }
+      bouton.disabled = true;
+      try {
+        await api.login(email, creer);
+        try {
+          if (creer && cgu) sessionStorage.setItem("brvm-cgu-acceptee", String(cgu.version));
+          if (creer) sessionStorage.setItem("brvm-inscription", "1");
+        } catch (e) { /* stockage indisponible */ }
+        m.textContent = "";
+        $("#code-email").textContent = email;
+        $(".msg", fc).textContent = "";
+        fl.hidden = true; $(".auth-choix").hidden = true;          // une seule chose à faire : ouvrir l'e-mail
+        fc.hidden = false;
+        fc.code.value = "";
+        attendre(60);                                  // évite les demandes répétées (limite d'envoi)
+      } catch (e) {
+        const msg = String(e.message || e);
+        bouton.disabled = false;
+        if (!creer && /signup|not allowed|not found|otp_disabled/i.test(msg)) {
+          m.innerHTML = `Aucun compte avec cette adresse. <button class="btn link" type="button" id="vers-inscription">Créer un compte avec cette adresse</button>`;
+          $("#vers-inscription").addEventListener("click", () => { mode = "inscription"; regler(); history.replaceState(null, "", location.pathname + location.search + "#inscription"); });
+        } else if (/rate limit|too many|429|security purposes/i.test(msg)) {
+          m.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un e-mail, touchez son lien ; sinon réessayez dans quelques minutes.";
+          fc.hidden = false; attendre(60);
+        } else m.textContent = "Envoi impossible : " + msg;
+      }
+    };
+    fl.addEventListener("submit", (ev) => { ev.preventDefault(); envoyer(); });
+    $("#code-renvoi").addEventListener("click", () => envoyer());
+    $("#code-modifier").addEventListener("click", () => { fc.hidden = true; fl.hidden = false; $(".auth-choix").hidden = false; fl.email.focus(); });
+    fc.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const mc = $(".msg", fc), code = fc.code.value.replace(/\s/g, "");
+      if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = "Saisissez le code reçu par e-mail (6 chiffres), ou touchez simplement le lien de l'e-mail."; return; }
+      try { await api.verify(fl.email.value.trim(), code); }
+      catch (e) { mc.textContent = /expired|invalid/i.test(String(e.message)) ? "Code incorrect ou expiré : touchez plutôt le lien de l'e-mail, ou demandez un nouvel e-mail." : "Code refusé : " + e.message; }
+    });
+  }
+
+
+  async function init() {
+    $("#badge-demo").hidden = !DEMO;
+    if (DEMO) document.title = "Démo – BafiBourse";
+    showAnnonce();
+    chargerMode();
+    try {
+      api.onAuth((s) => { if (s?.user) start(s.user); });
+      const s = await api.session();
+      if (s?.user) start(s.user); else showLogin();
+    } catch (e) {
+      $("#loading").textContent = "Impossible de joindre le service : " + e.message;
+    }
+  }
+  init();
+})();
