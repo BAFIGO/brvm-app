@@ -146,7 +146,16 @@
       deleteOperation: async (id) => r(await sb.from("operations").delete().eq("id", id)),
       table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
       cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
-      indices: async () => r(await sb.from("indices").select("date,code,cloture,variation").order("date").limit(3000)),
+      indices: async () => {
+        const depuis = new Date(Date.now() - 5.2 * 365 * 864e5).toISOString().slice(0, 10), out = [];
+        for (let a = 0; ; a += 1000) {
+          const page = r(await sb.from("indices").select("date,code,cloture,variation").gte("date", depuis)
+            .order("date").order("code").range(a, a + 999)) || [];
+          out.push(...page);
+          if (page.length < 1000) break;
+        }
+        return out;
+      },
       annonce: async () => r(await sb.from("annonces").select("message,niveau").order("cree_le", { ascending: false }).limit(1))[0] || null,
       // Épargne mise de côté (supabase/epargne.sql) : erreur si le fichier n'est pas installé → fonctions masquées
       coffre: async () => r(await sb.rpc("mon_epargne")),
@@ -271,7 +280,7 @@
   const api = DEMO ? demoApi() : supaApi();
   const S = { vus: new Set(), user: null, profil: null, seance: null, prop: null, ops: [], mk: { actions: [], obligations: [], opcvm: [] },
               cibles: [], prices: new Map(), names: new Map(), classes: new Map(),
-              ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30, perf: 1 } };
+              ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30, perf: 1, tend: "1a" } };
 
   // ---------------------------------------------------------------- journal → positions (même méthode que l'outil)
   function replay(ops) {
@@ -1063,13 +1072,111 @@
     $("#gain-aide", v).addEventListener("click", aideGain);
   }
 
+  // ---------------------------------------------------------------- tendance du marché : BRVM Composite et BRVM 30
+  // Évolution en % sur la période choisie (clôtures officielles BRVM, collectées via Sikafinance), et performance par année.
+  const PER_IDX = [["1m", "1 mois", 30], ["3m", "3 mois", 91], ["6m", "6 mois", 182], ["1a", "1 an", 365], ["5a", "5 ans", 1827]];
+  const IDX = [["BRVMC", "BRVM Composite", "var(--s3)"], ["BRVM30", "BRVM 30", "var(--s2)"]];
+  function tendance() {
+    const by = {};
+    for (const r of S.indices || []) if (ok(r.cloture) && IDX.some(([k]) => k === r.code)) (by[r.code] ||= []).push(r);
+    for (const k in by) by[k].sort((a, b) => (a.date < b.date ? -1 : 1));
+    const base = by.BRVMC?.length ? by.BRVMC : by.BRVM30;
+    if (!base?.length || base.length < 5) return null;
+    const fin = base[base.length - 1].date, per = PER_IDX.find((p) => p[0] === S.ui.tend) || PER_IDX[3];
+    const deb = new Date(new Date(fin + "T00:00:00") - per[2] * 864e5).toISOString().slice(0, 10);
+    let dates = base.filter((r) => r.date >= deb).map((r) => r.date);
+    const court = new Date(base[0].date) - new Date(deb) > 10 * 864e5;   // historique nettement plus court que la période
+    if (dates.length > 260) { const st = Math.ceil(dates.length / 260); dates = dates.filter((d, i) => i % st === 0 || i === dates.length - 1); }
+    const pts = {}, has = {}, res = {};
+    for (const [k] of IDX) {
+      const lignes = (by[k] || []).filter((r) => r.date >= dates[0] && r.date <= fin);
+      const m = new Map(lignes.map((r) => [r.date, +r.cloture])), b0 = lignes[0]?.cloture;
+      let prec = null;
+      pts[k] = dates.map((d) => { const c = m.get(d); if (ok(c) && ok(b0)) prec = c / b0 - 1; return prec; });
+      has[k] = lignes.length > 1;
+      if (has[k]) {
+        const cl = lignes.map((r) => +r.cloture);
+        res[k] = { var: cl[cl.length - 1] / cl[0] - 1, der: cl[cl.length - 1], haut: Math.max(...cl), bas: Math.min(...cl) };
+      }
+    }
+    // graphique (même dessin que la performance)
+    const Wd = 360, Ht = 200, L = 42, R = 58, T = 10, B = 22, n = dates.length;
+    const vals = IDX.flatMap(([k]) => (has[k] ? pts[k].filter(ok) : []));
+    let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+    const pad = (hi - lo || 0.01) * 0.12; lo -= pad; hi += pad;
+    const x = (i) => L + (i / Math.max(1, n - 1)) * (Wd - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (Ht - T - B);
+    const ticks = [0, 1, 2, 3, 4].map((k) => lo + (k * (hi - lo)) / 4);
+    let g = `<g class="grid">${ticks.map((t) => `<line x1="${L}" x2="${Wd - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${P(t)}</text>`).join("")}</g>`;
+    g += `<line class="zero" x1="${L}" x2="${Wd - R}" y1="${y(0)}" y2="${y(0)}"/>`;
+    g += `<g class="axis"><text x="${x(0)}" y="${Ht - 6}" text-anchor="start">${D(dates[0])}</text><text x="${x(n - 1)}" y="${Ht - 6}" text-anchor="end">${D(dates[n - 1])}</text></g>`;
+    const series = IDX.filter(([k]) => has[k]);
+    for (const [k, , col] of series)
+      g += `<path class="line" stroke="${col}" d="${pts[k].map((v, i) => (ok(v) ? `${i && ok(pts[k][i - 1]) ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}` : "")).join("")}"/>`;
+    const ends = series.map(([k, , col]) => ({ col, v: pts[k][n - 1], yy: y(pts[k][n - 1]) })).sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) ends[i].yy = Math.max(ends[i].yy, ends[i - 1].yy + 14);
+    g += `<g class="end">${ends.map((e) => `<text x="${Wd - R + 6}" y="${e.yy + 4}"><tspan fill="${e.col}">●</tspan> ${P(e.v)}</text>`).join("")}</g>`;
+    g += `<g class="hover" visibility="hidden"><line class="cross" y1="${T}" y2="${Ht - B}"/>${series.map(([k, , col]) => `<circle class="dot" r="4" fill="${col}" data-k="${k}"/>`).join("")}</g>`;
+    const label = `Évolution du ${D(dates[0])} au ${D(fin)} : ` + series.map(([k, nom]) => `${nom} ${P(res[k].var)}`).join(", ");
+    // performance par année civile (l'année en cours : depuis le 1er janvier)
+    const annees = [];
+    const ref = by.BRVMC || [], ref30 = by.BRVM30 || [];
+    const finAnnee = (lst, an) => { for (let i = lst.length - 1; i >= 0; i--) if (lst[i].date.slice(0, 4) <= String(an)) return lst[i].date.slice(0, 4) === String(an) ? +lst[i].cloture : null; return null; };
+    const debAnnee = (lst, an) => lst.find((r) => r.date.slice(0, 4) === String(an));
+    const perfAn = (lst, an) => {
+      const f = finAnnee(lst, an); if (!ok(f)) return null;
+      const p0 = finAnnee(lst, an - 1) ?? (debAnnee(lst, an) ? +debAnnee(lst, an).cloture : null);
+      return ok(p0) ? f / p0 - 1 : null;
+    };
+    const anFin = +fin.slice(0, 4);
+    for (let an = anFin; an > anFin - 6; an--) {
+      const c = perfAn(ref, an), t = perfAn(ref30, an);
+      if (ok(c) || ok(t)) annees.push({ an, c, t, partiel: an === anFin || !finAnnee(ref, an - 1) });
+    }
+    const html = `<div class="card tendance" aria-labelledby="h-tend"><h2 id="h-tend">Tendance du marché</h2>
+      <div class="seg tend-per" role="group" aria-label="Période de la tendance">${PER_IDX.map(([k, t]) =>
+        `<button type="button" data-tend="${k}" aria-pressed="${per[0] === k}">${t}</button>`).join("")}</div>
+      <div class="tend-kpi">${series.map(([k, nom, col]) => `<div><div class="lbl"><i class="s" style="background:${col}"></i>${nom}</div>
+        <div class="val num ${cls(res[k].var)}">${P(res[k].var)}</div>
+        <div class="small muted">clôture ${nf1.format(res[k].der)} · plus haut ${nf1.format(res[k].haut)} · plus bas ${nf1.format(res[k].bas)}</div></div>`).join("")}</div>
+      <div class="chart"><svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(label)}">${g}<rect class="hit" x="${L}" y="${T}" width="${Wd - L - R}" height="${Ht - T - B}" fill="transparent"/></svg><div class="tip" hidden></div></div>
+      <p class="small muted">Évolution en % depuis le début de la période, sur les clôtures officielles de la BRVM.
+        ${court ? `Historique disponible à partir du ${D(base[0].date)} : il s'allongera au fil des publications.` : ""} Les performances passées ne préjugent pas des performances futures.</p>
+      ${annees.length > 1 ? `<details class="aide"><summary>Performance par année</summary>
+        <div class="tbl" role="region" aria-label="Performance des indices par année" tabindex="0"><table>
+        <thead><tr><th scope="col">Année</th><th scope="col">BRVM Composite</th><th scope="col">BRVM 30</th></tr></thead>
+        <tbody>${annees.map((a) => `<tr><th scope="row">${a.an}${a.partiel ? "*" : ""}</th><td class="${cls(a.c)}">${P2(a.c)}</td><td class="${cls(a.t)}">${P2(a.t)}</td></tr>`).join("")}</tbody></table></div>
+        <p class="small muted">* année en cours (depuis le 1er janvier) ou incomplète dans l'historique disponible.</p></details>` : ""}</div>`;
+    const lier = (v) => {
+      const svg = $(".tendance .chart svg", v), tip = $(".tendance .chart .tip", v);
+      if (!svg) return;
+      const hov = $(".hover", svg);
+      const show = (ev) => {
+        const bb = svg.getBoundingClientRect(), sx = ((ev.clientX - bb.left) / bb.width) * Wd;
+        let i = 0, best = Infinity;
+        for (let k = 0; k < n; k++) { const d = Math.abs(x(k) - sx); if (d < best) { best = d; i = k; } }
+        hov.setAttribute("visibility", "visible");
+        $(".cross", hov).setAttribute("x1", x(i)); $(".cross", hov).setAttribute("x2", x(i));
+        hov.querySelectorAll(".dot").forEach((c) => { const vv = pts[c.dataset.k][i]; c.setAttribute("cx", x(i)); c.setAttribute("cy", ok(vv) ? y(vv) : -99); });
+        tip.innerHTML = `<b>${D(dates[i])}</b>` + series.map(([k, nom, col]) => `<span style="color:${col}">●</span> ${nom} ${P(pts[k][i])}`).join("<br>");
+        tip.hidden = false;
+        const px = (x(i) / Wd) * bb.width;
+        tip.style.left = Math.min(Math.max(px - tip.offsetWidth / 2, 0), bb.width - tip.offsetWidth) + "px";
+      };
+      svg.addEventListener("pointermove", show); svg.addEventListener("pointerdown", show);
+      svg.addEventListener("pointerleave", () => { hov.setAttribute("visibility", "hidden"); tip.hidden = true; });
+    };
+    return { html, lier };
+  }
+
   function vMarche() {
     const v = $("#v-marche"), u = S.ui;
     const rows = S.mk[u.mkTab] || [];
     const q = u.mkQuery.trim().toLowerCase();
     const list = rows.filter((r) => (u.mkFilter === "all" || BUY.includes(r.decision))
       && (!q || (r.code + " " + (r.nom || "")).toLowerCase().includes(q))).sort((a, b) => (b.score || 0) - (a.score || 0));
-    let h = `<h1 id="h-mk">Marché</h1>
+    const tend = tendance();
+    let h = `<h1 id="h-mk">Marché</h1>${tend ? tend.html : ""}
       <div class="toolbar">
         <div class="seg" role="group" aria-label="Classe d'actifs">
           ${[["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]].map(([k, t]) =>
@@ -1110,6 +1217,8 @@
       Aide à la décision, pas un conseil en investissement. Données de marché : BRVM.</p>`;
     v.innerHTML = h;
     v.querySelectorAll("[data-mk]").forEach((b) => b.addEventListener("click", () => { u.mkTab = b.dataset.mk; u.mkShow = 30; vMarche(); }));
+    v.querySelectorAll("[data-tend]").forEach((b) => b.addEventListener("click", () => { u.tend = b.dataset.tend; vMarche(); }));
+    tend?.lier(v);
     const qi = $("#mk-q", v);
     qi.addEventListener("input", () => { u.mkQuery = qi.value; u.mkShow = 30; vMarche(); $("#mk-q").focus(); const n = $("#mk-q"); n.setSelectionRange(n.value.length, n.value.length); });
     $("#mk-f", v).addEventListener("change", (e) => { u.mkFilter = e.target.value; vMarche(); });

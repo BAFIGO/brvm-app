@@ -183,3 +183,16 @@ form label { margin-top: 14px; }
 .av-fixes svg { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 1.6; }
 .av-fixes .on svg { fill: var(--etoile); stroke: var(--etoile); }
 textarea { font: inherit; line-height: 1.45; }
+
+/* =====================================================================================
+ * Tendance du marché (écran Marché)
+ * ===================================================================================== */
+.tendance .seg { margin: 4px 0 12px; }
+.tend-per { display: flex; width: 100%; }                         /* les cinq périodes tiennent sur un téléphone */
+.tend-per button { flex: 1 1 0; min-width: 0; padding: 8px 2px; font-size: clamp(.78rem, 3.6vw, .95rem); white-space: nowrap; }
+.tend-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; }
+.tend-kpi .lbl { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--muted); }
+.tend-kpi .lbl .s { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.tend-kpi .val { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tendance .chart { max-width: none; }
+.tendance details { margin-top: 8px; }
