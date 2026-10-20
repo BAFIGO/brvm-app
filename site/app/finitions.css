@@ -156,3 +156,30 @@ form label { margin-top: 14px; }
   #v-portefeuille > .positions { grid-row: span 40; }
   #v-portefeuille > .actions { margin-bottom: 12px !important; justify-content: flex-end; }
 }
+
+/* =====================================================================================
+ * Avis des utilisateurs (avis.js)
+ * ===================================================================================== */
+:root { --etoile: hsl(35 92% 52%); }
+.av-rangee { display: flex; gap: 4px; }
+.av-etoile { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 10px; }
+.av-etoile input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.av-etoile svg { width: 32px; height: 32px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linejoin: round; }
+.av-etoile.on svg { fill: var(--etoile); stroke: var(--etoile); }
+/* survol : les étoiles jusqu'à celle pointée s'allument */
+@media (hover: hover) {
+  .av-rangee:hover .av-etoile svg { fill: var(--etoile); stroke: var(--etoile); }
+  .av-rangee .av-etoile:hover ~ .av-etoile svg { fill: none; stroke: var(--muted); }
+}
+.av-etoile:has(input:focus-visible), .av-etoile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.av-etoiles { border: 0; padding: 0; margin: 4px 0 0; }
+.av-etoiles legend { font-weight: 600; margin-bottom: 4px; }
+.av-libelle { margin: 4px 0 0; font-weight: 600; min-height: 1.4em; }
+.av-accord { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin-top: 14px; }
+.av-accord input { flex: none; width: 20px; height: 20px; min-height: 0; margin-top: 2px; }
+.av-compte { margin: 4px 0 0; }
+.av-invite .av-rangee { margin: 6px 0 2px; }
+.av-fixes { display: inline-flex; gap: 2px; vertical-align: -4px; }
+.av-fixes svg { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.av-fixes .on svg { fill: var(--etoile); stroke: var(--etoile); }
+textarea { font: inherit; line-height: 1.45; }

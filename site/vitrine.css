@@ -206,3 +206,41 @@ body.vitrine main { max-width: none; padding: 0; }
 /* onglets Actions / Obligations / OPCVM de l'aperçu du marché : contenus dans l'écran dès 320 px */
 .apercu-card .seg { display: flex; width: 100%; max-width: 100%; }
 .apercu-card .seg button { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: clamp(.78rem, 3.7vw, 1rem); }
+
+/* =====================================================================================
+ * Avis des utilisateurs : carrousel des meilleurs avis
+ * ===================================================================================== */
+.avis-moy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 0; }
+.avis-moy:empty { display: none; }
+.et { display: inline-flex; gap: 2px; }
+.et svg { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linejoin: round; }
+.et .on svg { fill: hsl(35 92% 52%); stroke: hsl(35 92% 52%); }
+.car { margin-top: 28px; }
+.car-piste { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 4px 2px 8px;
+  overscroll-behavior-x: contain; }
+.car-piste::-webkit-scrollbar { display: none; }
+.car-piste:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 12px; }
+.avis-carte { flex: 0 0 100%; scroll-snap-align: start; margin: 0; display: flex; flex-direction: column; gap: 14px;
+  padding: 22px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); }
+@media (min-width: 760px) { .avis-carte { flex-basis: calc((100% - 16px) / 2); } }
+@media (min-width: 1100px) { .avis-carte { flex-basis: calc((100% - 32px) / 3); } }
+.avis-carte blockquote { margin: 0; flex: 1; font-size: 1.05rem; line-height: 1.55; color: var(--text); }
+.avis-carte figcaption { display: flex; align-items: center; gap: 12px; }
+.avis-carte figcaption b { display: block; }
+.avis-carte figcaption small { color: var(--muted); }
+.av-avatar { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 800; letter-spacing: .02em; }
+.avis-carte:nth-child(even) .av-avatar { background: hsl(35 92% 55% / .2); color: hsl(32 90% 32%); }
+.car-ctrl { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+.car-btn { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer; }
+.car-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.car-btn .i-lecture { display: none; fill: currentColor; stroke: none; }
+.car-btn.lecture .i-pause { display: none; }
+.car-btn.lecture .i-lecture { display: block; }
+.car-points { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.car-point { width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.car-point::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.car-point[aria-current="true"]::before { width: 20px; border-radius: 4px; background: var(--accent); }
+.avis-note { margin-top: 18px; max-width: 70ch; }
+@media (prefers-reduced-motion: no-preference) { .car-point::before { transition: width .2s ease, background .2s ease; } }

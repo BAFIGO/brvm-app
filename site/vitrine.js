@@ -7,6 +7,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const root = document.documentElement;
   const ANIM = root.classList.contains("js-anim") && window.gsap && window.ScrollTrigger;
+  const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;   // pas de défilement automatique
   const CFG = window.BRVM_CONFIG || {};
   const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 
@@ -41,6 +42,58 @@
       els.forEach((el, i) => { el.dataset.to = +s[el.dataset.k] || 0; if (!ANIM || el.dataset.started) odometer(el, ANIM ? 0.1 * i : 0); });
       $("#stats-src").textContent = `Chiffres de la dernière séance publiée, le ${new Date(s.date + "T00:00:00").toLocaleDateString("fr-FR")}.`;
     } catch (e) { /* hors ligne ou fonction pas encore installée : on garde l'exemple de démonstration */ }
+  }
+
+  // ------------------------------------------------------------ avis des utilisateurs : carrousel des 10 meilleurs
+  // Défilement automatique toutes les 7 s, seulement si la section est visible, jamais si l'appareil demande
+  // de réduire les animations ; il s'arrête au survol, au toucher, au clavier, et se met en pause d'un bouton.
+  const ETOILE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1 6L12 17l-5.35 2.85 1-6L3.3 9.6l6-.9z"/></svg>';
+  const etoiles = (n) => `<span class="et" role="img" aria-label="${n} sur 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= Math.round(n) ? "on" : ""}">${ETOILE}</i>`).join("")}</span>`;
+  const echapper = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  async function avis() {
+    let a;
+    try { a = await rest("rpc/avis_publics", { method: "POST", body: "{}" }); } catch (e) { return; }   // pas encore installé
+    const liste = a?.carrousel || [];
+    if (liste.length < 3) return;                                   // trop peu d'avis : la section reste masquée
+    const sec = $("#avis"), piste = $(".car-piste", sec), points = $(".car-points", sec);
+    if (a.nombre >= 5 && a.moyenne) $(".avis-moy", sec).innerHTML =
+      `${etoiles(a.moyenne)} <b>${String(a.moyenne).replace(".", ",")} sur 5</b> <span class="muted">· moyenne de ${a.nombre} avis</span>`;
+    const mois = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : "";
+    const initiales = (n) => String(n || "?").split(/\s+/).map((m) => m.charAt(0)).join("").slice(0, 2).toUpperCase();
+    piste.innerHTML = liste.map((x, i) => `<figure class="avis-carte" role="group" aria-roledescription="avis" aria-label="Avis ${i + 1} sur ${liste.length}">
+        ${etoiles(x.note)}<blockquote>« ${echapper(x.commentaire)} »</blockquote>
+        <figcaption><span class="av-avatar" aria-hidden="true">${echapper(initiales(x.nom))}</span>
+          <span><b>${echapper(x.nom)}</b><small>${[x.ville, mois(x.date)].filter(Boolean).map(echapper).join(" · ")}</small></span></figcaption></figure>`).join("");
+    points.innerHTML = liste.map((x, i) => `<button type="button" class="car-point" data-i="${i}" aria-label="Avis ${i + 1}"></button>`).join("");
+    sec.hidden = false; $("[data-avis-lien]").hidden = false;
+
+    const cartes = [...piste.children];
+    const actuel = () => { const g = piste.scrollLeft + 4; let k = 0; cartes.forEach((c, i) => { if (c.offsetLeft - piste.offsetLeft <= g) k = i; }); return k; };
+    const aller = (i) => { const c = cartes[(i + cartes.length) % cartes.length]; piste.scrollTo({ left: c.offsetLeft - piste.offsetLeft, behavior: CALME ? "auto" : "smooth" }); };
+    const majPoints = () => { const k = actuel(); points.querySelectorAll(".car-point").forEach((p, i) => p.setAttribute("aria-current", i === k ? "true" : "false")); };
+    piste.addEventListener("scroll", () => requestAnimationFrame(majPoints), { passive: true }); majPoints();
+    // dernière carte entièrement visible → on repart du début
+    const auBout = () => piste.scrollLeft + piste.clientWidth >= piste.scrollWidth - 8;
+    const suivant = () => (auBout() ? aller(0) : aller(actuel() + 1));
+    $('[data-car="prec"]', sec).addEventListener("click", () => aller(actuel() - 1));
+    $('[data-car="suiv"]', sec).addEventListener("click", suivant);
+    points.addEventListener("click", (ev) => { const p = ev.target.closest(".car-point"); if (p) aller(+p.dataset.i); });
+
+    const bPause = $('[data-car="pause"]', sec);
+    let enPause = CALME, survol = false, visible = false, minuteur = null;
+    const majPause = () => {
+      bPause.setAttribute("aria-pressed", String(enPause));
+      bPause.setAttribute("aria-label", enPause ? "Relancer le défilement automatique" : "Mettre en pause le défilement automatique");
+      bPause.classList.toggle("lecture", enPause);
+    };
+    majPause();
+    bPause.addEventListener("click", () => { enPause = !enPause; majPause(); });
+    const car = $(".car", sec);
+    car.addEventListener("pointerenter", () => (survol = true)); car.addEventListener("pointerleave", () => (survol = false));
+    car.addEventListener("focusin", () => (survol = true)); car.addEventListener("focusout", () => (survol = false));
+    piste.addEventListener("touchstart", () => { enPause = true; majPause(); }, { passive: true });   // l'utilisateur prend la main
+    new IntersectionObserver(([e]) => (visible = e.isIntersecting), { threshold: 0.4 }).observe(car);
+    minuteur = setInterval(() => { if (!enPause && !survol && visible && !document.hidden) suivant(); }, 7000);
   }
 
   // ------------------------------------------------------------ mode des portefeuilles (console → Moteur)
@@ -198,6 +251,7 @@
   if (ANIM) animate(); else draw();
   stats();
   mode();
+  avis();
   cgu();
 
   // Noms des titres en casse normale (« SERVAIR ABIDJAN CI » → « Servair Abidjan CI »)

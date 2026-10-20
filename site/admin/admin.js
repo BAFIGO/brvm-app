@@ -66,6 +66,8 @@
       moi: () => rpc("admin_moi"),
       tableau: () => rpc("admin_tableau_de_bord"),
       priseEnMain: (j) => rpc("admin_prise_en_main", { p_jours: j }),
+      avis: (st) => rpc("admin_avis", { p_statut: st }),
+      modererAvis: (id, dec, motif) => rpc("admin_moderer_avis", { p_id: id, p_decision: dec, p_motif: motif || null }),
       utilisateurs: (q) => rpc("admin_utilisateurs", { p_recherche: q || null }),
       portefeuille: (u, motif) => rpc("admin_portefeuille", { p_user: u, p_motif: motif }),
       suspendre: (u, s, motif) => rpc("admin_suspendre", { p_user: u, p_suspendre: s, p_motif: motif }),
@@ -115,11 +117,20 @@
       ["market.correct", "Données", "Corriger une donnée de marché"], ["engine.params", "Moteur", "Modifier les paramètres du moteur"],
       ["batch.read", "Traitements", "Voir l'historique des traitements"], ["batch.run", "Traitements", "Relancer le traitement du soir"],
       ["comms.manage", "Communication", "Bannière, maintenance, modèles d'e-mail"], ["audit.read", "Audit", "Consulter et exporter le journal d'audit"],
-      ["compliance.manage", "Conformité", "Versions des CGU et des avertissements"]].map(([code, module, libelle], i) => ({ code, module, libelle, ordre: i }));
+      ["compliance.manage", "Conformité", "Versions des CGU et des avertissements"], ["avis.moderate", "Communication", "Modérer les avis des utilisateurs"]].map(([code, module, libelle], i) => ({ code, module, libelle, ordre: i }));
     const M = { super_admin: perms.map((p) => p.code), admin: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.suspend", "users.delete", "users.export", "roles.read", "market.read", "engine.params", "batch.read", "batch.run", "comms.manage"],
       analyste: ["dashboard.read", "market.read", "market.correct", "engine.params", "batch.read", "batch.run"], support: ["dashboard.read", "users.read", "users.read_portfolio", "users.export"],
       conformite: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.export", "roles.read", "market.read", "batch.read", "audit.read", "compliance.manage"], observateur: ["dashboard.read"] };
     const attrib = [{ user_id: "f6", email: "admin@exemple.org", role: "super_admin", accorde_le: d(60), expire_le: null, accorde_par: null }];
+    M.admin.push("avis.moderate");
+    const AV = [
+      ["a1", "Awa D.", "Dakar", 5, "Enfin une application qui m'aide à épargner chaque mois sans me perdre dans les chiffres. Le coffre m'a donné une vraie discipline.", "publie", true, 12],
+      ["a2", "Koffi A.", "Abidjan", 5, "Les explications sont claires, même pour un débutant. Je comprends enfin ce que je possède chez ma SGI.", "publie", false, 20],
+      ["a3", "Mariam S.", "Bamako", 4, "Très pratique pour suivre mon portefeuille le soir. J'aimerais des notifications sur le téléphone.", "publie", false, 34],
+      ["a4", "Yao K.", "Lomé", 5, "Le robot répond vite et avec mes vrais chiffres, c'est bluffant.", "en_attente", false, 2],
+      ["a5", "Fatou N.", "Thiès", 2, "Trop de choses sur l'écran au début, je me suis perdue.", "prive", false, 5],
+      ["a6", "Ibrahima B.", null, 4, "J'ai gagné 25 % en trois mois grâce à l'outil !", "en_attente", false, 1],
+    ].map(([id, nom, ville, note, commentaire, statut, mis_en_avant, j]) => ({ id, nom, ville, note, commentaire, statut, mis_en_avant, publication: statut !== "prive", modifie_le: d(j), motif_refus: null }));
     const find = (id) => users.find((u) => u.id === id);
     const role = M[QS.get("role")] ? QS.get("role") : "super_admin";
     const can = (p) => M[role].includes(p);
@@ -157,6 +168,24 @@
       session: async () => ({ user: { id: "f6", email: "admin@exemple.org" } }), login: async () => {}, logout: async () => { location.href = location.pathname; },
       aal: async () => ({ currentLevel: "aal2", nextLevel: "aal2" }), factors: async () => ({ totp: [], all: [] }),
       moi: async () => ({ email: "admin@exemple.org", mfa: true, roles: [roles.find((r) => r.code === role).libelle], permissions: M[role] }),
+      avis: async (st) => {
+        need("avis.moderate");
+        const rep = [1, 2, 3, 4, 5].map((n) => AV.filter((a) => a.note === n).length);
+        return { stats: { nombre: AV.length, moyenne: +(AV.reduce((x, a) => x + a.note, 0) / AV.length).toFixed(2),
+                          en_attente: AV.filter((a) => a.statut === "en_attente").length, publies: AV.filter((a) => a.statut === "publie").length, repartition: rep },
+                 avis: AV.filter((a) => (st === "tous" ? a.statut !== "prive" : a.statut === st)) };
+      },
+      modererAvis: async (id, dec, motif) => {
+        need("avis.moderate");
+        const a = AV.find((x) => x.id === id);
+        if (!a) throw new Error("Avis introuvable");
+        if (dec === "refuser" && !motif) throw new Error("Motif obligatoire pour refuser un avis");
+        if (dec === "publier") a.statut = "publie";
+        if (dec === "refuser") { a.statut = "refuse"; a.mis_en_avant = false; a.motif_refus = motif; }
+        if (dec === "depublier") { a.statut = "en_attente"; a.mis_en_avant = false; }
+        if (dec === "mettre_en_avant") a.mis_en_avant = true;
+        if (dec === "retirer_avant") a.mis_en_avant = false;
+      },
       priseEnMain: async (j) => {
         const k = j / 30, x = (v) => Math.round(v * k);
         return { jours: j, cohorte: x(40), visite: { proposee: x(38), commencee: x(29), terminee: x(19), passee: x(8), plus_tard: x(9) },
@@ -322,6 +351,58 @@
           <td>${s.modele_valide ? "validé" : "non validé"}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aucune séance.</td></tr>`}</tbody></table></div></div>
       <div class="card" id="pem" aria-labelledby="h-pem"><h2 id="h-pem">Prise en main des nouveaux utilisateurs</h2><p class="muted">Chargement…</p></div>`;
     afficherPriseEnMain(30);
+    if (S.can("avis.moderate")) {
+      v.insertAdjacentHTML("beforeend", `<div class="card" id="avis-adm" aria-labelledby="h-avis"><h2 id="h-avis">Avis des utilisateurs</h2><p class="muted">Chargement…</p></div>`);
+      afficherAvis("en_attente");
+    }
+  }
+
+  // ---------------------------------------------------------------- modération des avis (avis.sql)
+  // Les 10 meilleurs avis publiés (notés 4 ou 5) défilent sur la vitrine ; « mettre en avant » leur donne un léger bonus.
+  const ET = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  const STATUT_AV = { en_attente: "En attente", publie: "Publié", refuse: "Refusé", prive: "Privé" };
+  async function afficherAvis(st) {
+    const c = $("#avis-adm");
+    if (!c) return;
+    const titre = `<h2 id="h-avis">Avis des utilisateurs</h2>`;
+    let r;
+    try { r = await api.avis(st); }
+    catch (e) { c.innerHTML = `${titre}<p class="small muted">Avis indisponibles : exécutez le fichier avis.sql dans Supabase. (${esc(e.message)})</p>`; return; }
+    const s = r.stats || {}, rep = s.repartition || [0, 0, 0, 0, 0], max = Math.max(1, ...rep);
+    const onglets = [["en_attente", "En attente"], ["publie", "Publiés"], ["refuse", "Refusés"], ["prive", "Privés"], ["tous", "Tous"]]
+      .map(([k, l]) => `<button type="button" class="btn small${k === st ? " primary" : ""}" data-avst="${k}" aria-pressed="${k === st}">${l}</button>`).join(" ");
+    const ligne = (a) => `<li><div class="main">
+        <div class="name"><span aria-label="${a.note} sur 5" style="color:hsl(35 92% 45%)">${ET(a.note)}</span> ${esc(a.nom || "Sans nom")}${a.ville ? ` · ${esc(a.ville)}` : ""}
+          ${a.mis_en_avant ? `<span class="status ok">mis en avant</span>` : ""} <span class="status ${a.statut === "publie" ? "ok" : a.statut === "refuse" ? "ko" : "att"}">${STATUT_AV[a.statut] || a.statut}</span></div>
+        <div class="sub">${a.commentaire ? "« " + esc(a.commentaire) + " »" : "<i>Sans commentaire</i>"}</div>
+        <div class="sub muted">${D(a.modifie_le)}${a.motif_refus ? ` · motif du refus : ${esc(a.motif_refus)}` : ""}</div></div>
+      <div class="right">${a.statut === "en_attente" ? `<button type="button" class="btn small primary" data-avd="publier" data-id="${esc(a.id)}">Publier</button>
+          <button type="button" class="btn small" data-avd="refuser" data-id="${esc(a.id)}">Refuser</button>` : ""}
+        ${a.statut === "publie" ? `<button type="button" class="btn small" data-avd="${a.mis_en_avant ? "retirer_avant" : "mettre_en_avant"}" data-id="${esc(a.id)}">${a.mis_en_avant ? "Retirer de la une" : "Mettre en avant"}</button>
+          <button type="button" class="btn small" data-avd="depublier" data-id="${esc(a.id)}">Dépublier</button>` : ""}
+        ${a.statut === "refuse" && a.publication ? `<button type="button" class="btn small" data-avd="publier" data-id="${esc(a.id)}">Publier</button>` : ""}</div></li>`;
+    c.innerHTML = `${titre}
+      <div class="tiles">
+        <div class="tile"><div class="lbl">Note moyenne</div><div class="val">${s.moyenne ? String(s.moyenne).replace(".", ",") : "–"} / 5</div><div class="sub">${N(s.nombre)} avis, publiés ou non</div></div>
+        <div class="tile"><div class="lbl">À relire</div><div class="val">${N(s.en_attente)}</div><div class="sub">avis en attente de publication</div></div>
+        <div class="tile"><div class="lbl">Publiés</div><div class="val">${N(s.publies)}</div><div class="sub">les 10 meilleurs (4 et 5 étoiles) défilent sur la vitrine</div></div>
+      </div>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Note</th><th class="num">Avis</th><th>Répartition</th></tr></thead><tbody>
+        ${[5, 4, 3, 2, 1].map((n) => `<tr><td>${ET(n)}</td><td class="num">${N(rep[n - 1])}</td>
+          <td><span style="display:inline-block;height:8px;border-radius:4px;background:hsl(35 92% 52%);width:${Math.round((rep[n - 1] / max) * 160)}px"></span></td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted">À ne pas publier : montants ou promesses de gain, recommandation d'un titre, informations personnelles, propos injurieux. Un avis refusé demande un motif, noté au journal d'audit.</p>
+      <div class="actions" role="group" aria-label="Filtrer les avis">${onglets}</div>
+      <ul class="list">${(r.avis || []).map(ligne).join("") || `<li class="muted">Aucun avis dans cette catégorie.</li>`}</ul>`;
+    c.querySelectorAll("[data-avst]").forEach((b) => b.addEventListener("click", () => afficherAvis(b.dataset.avst)));
+    c.querySelectorAll("[data-avd]").forEach((b) => b.addEventListener("click", async () => {
+      const dec = b.dataset.avd, refus = dec === "refuser";
+      const v = await ask({ title: { publier: "Publier cet avis sur la vitrine ?", refuser: "Refuser cet avis", depublier: "Retirer cet avis de la vitrine ?",
+        mettre_en_avant: "Mettre cet avis en avant ?", retirer_avant: "Retirer la mise en avant ?" }[dec],
+        body: refus ? "<p>Le motif est noté au journal d'audit et reste visible dans la console.</p>" : "", motif: refus, ok: refus ? "Refuser" : "Confirmer", danger: refus });
+      if (!v) return;
+      try { await api.modererAvis(b.dataset.id, dec, v.motif); toast("Avis mis à jour."); afficherAvis(st); }
+      catch (e) { toast("Action impossible : " + e.message); }
+    }));
   }
 
   // ---------------------------------------------------------------- suivi de qualité de la prise en main (tutoriel.sql)

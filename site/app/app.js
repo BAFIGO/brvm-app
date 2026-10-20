@@ -164,6 +164,17 @@
         return q.error ? r(await sb.from("gestionnaires_acces").select("gestionnaire,sgo_directe,distributeurs,confirme")) : q.data; },
       titresPays: async () => r(await sb.from("titres_pays").select("code,pays")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
+      // Avis des utilisateurs (avis.sql) : lecture de son propre avis, envoi par la fonction donner_avis
+      monAvis: async () => {
+        const { data, error } = await sb.from("avis").select("note,commentaire,publication,ville,statut,motif_refus").maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      donnerAvis: async (a) => {
+        const { data, error } = await sb.rpc("donner_avis", { p_note: a.note, p_commentaire: a.commentaire, p_publication: a.publication, p_ville: a.ville });
+        if (error) throw new Error(error.message);
+        return data;
+      },
       // Prise en main : événements pour les indicateurs de la console (tutoriel.sql) ; sans effet si la table manque
       evenementTutoriel: async (evenement, etape) => { await sb.from("tutoriel_evenements").insert({ evenement, etape }); },
       // Alertes des positions (vue v_alertes_positions, fichier alertes.sql) : erreur si la vue n'est pas installée → rubrique masquée
@@ -241,6 +252,11 @@
       documents: async () => (await load()).documents || [],
       alertes: async () => alertesDemo(),
       evenementTutoriel: async () => {},
+      monAvis: async () => avisDemo,
+      donnerAvis: async (a) => {
+        const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
+        avisDemo = { ...a, statut: st }; return { statut: st };
+      },
       assistant: async (body) => {
         await new Promise((ok) => setTimeout(ok, 700));
         const c = body.contexte || {}, pf = c.portefeuille || {}, al = c.alertes_titres || [];
@@ -970,7 +986,7 @@
     return s.slice(0, 5);
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
-  let tutoDemo = {};
+  let tutoDemo = {}, avisDemo = null;
   const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
   function etatTutoriel() {
     if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
@@ -2003,6 +2019,13 @@
                         faits: () => ({ depot: S.ops.some((o) => o.type === "DEPOT" || o.type === "SOLDE"), achat: S.ops.some((o) => o.type === "ACHAT"),
                                         plan: S.coffre ? !!S.coffre.plan : null }),
                         tutoriel: etatTutoriel, sauverTutoriel,
+                        // avis (avis.js)
+                        monAvis: () => api.monAvis(), donnerAvis: (a) => api.donnerAvis(a),
+                        nomAffiche: () => (S.profil?.prenom ? [S.profil.prenom, S.profil?.nom ? S.profil.nom.trim().charAt(0).toUpperCase() + "." : ""].filter(Boolean).join(" ") : DEMO ? "Utilisateur D." : ""),
+                        joursInscription: () => {
+                          const d = S.profil?.onboarding_fini_le || S.profil?.cree_le;
+                          return d ? Math.floor((Date.now() - new Date(d)) / 864e5) : 0;
+                        },
                         evenement: (e, x) => { api.evenementTutoriel(e, x ?? null).catch(() => {}); },
                         prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length };
     window.dispatchEvent(new Event("brvm:pret"));

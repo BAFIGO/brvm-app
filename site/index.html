@@ -26,7 +26,7 @@
   <header class="v-top">
     <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
     <nav class="v-nav" aria-label="Sections">
-      <a href="#methode">Méthode</a><a href="#epargne">Épargne</a><a href="#apercu">Aperçu</a><a href="#confiance">Confiance</a>
+      <a href="#methode">Méthode</a><a href="#epargne">Épargne</a><a href="#apercu">Aperçu</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a>
     </nav>
     <a class="btn primary small" href="app/#connexion" data-espace>Se connecter</a>
   </header>
@@ -199,6 +199,24 @@
     </section>
 
     <!-- 4. Confiance -->
+    <!-- Avis des utilisateurs : les 10 meilleurs avis publiés (fonction avis_publics, avis.sql). Section masquée tant qu'il y en a moins de 3. -->
+    <section id="avis" class="avis" aria-labelledby="avis-title" hidden>
+      <p class="eyebrow">Ils en parlent</p>
+      <h2 id="avis-title" class="display">Ils épargnent avec BafiBourse.</h2>
+      <p class="avis-moy"></p>
+      <div class="car" role="region" aria-roledescription="carrousel" aria-label="Avis des utilisateurs">
+        <div class="car-piste" tabindex="0" aria-label="Avis, faites défiler de côté"></div>
+        <div class="car-ctrl">
+          <button type="button" class="car-btn" data-car="prec" aria-label="Avis précédent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <div class="car-points" role="group" aria-label="Aller à un avis"></div>
+          <button type="button" class="car-btn" data-car="pause" aria-pressed="false" aria-label="Mettre en pause le défilement automatique">
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="i-lecture" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
+          <button type="button" class="car-btn" data-car="suiv" aria-label="Avis suivant"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+      <p class="small muted avis-note">Avis d'utilisateurs, publiés avec leur accord après relecture par l'équipe. Ils ne préjugent pas des résultats futurs : investir en bourse comporte un risque de perte en capital.</p>
+    </section>
+
     <section id="confiance" class="confiance" aria-labelledby="confiance-title">
       <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
       <ul class="points">
