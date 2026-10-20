@@ -142,6 +142,7 @@
       .fromTo(words, { yPercent: 105 }, { yPercent: 0, duration: 0.8, stagger: 0.055 }, 0.05)
       .fromTo([$(".lead", hero), $(".cta", hero), $(".stats", hero), $(".stats-src", hero)], { y: 18, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.6, stagger: 0.08 }, "-=0.45");
+    if ($(".hero-apercu", hero)) tl.fromTo($(".hero-apercu", hero), { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8 }, 0.35);
     $$(".odo").forEach((el, i) => { el.textContent = "0"; tl.add(() => { el.dataset.started = 1; odometer(el, 0.1 * i); }, 0.5); });
 
     // Titres de section : mot par mot, rejoué dans les deux sens (en descendant comme en remontant)
@@ -149,18 +150,13 @@
       const ws = split(h);
       const tw = gsap.fromTo(ws, { yPercent: 105 }, { yPercent: 0, duration: 0.7, stagger: 0.04, ease: "power3.out", paused: true });
       ScrollTrigger.create({ trigger: h, start: "top 88%", end: "bottom 8%",
-        onEnter: () => tw.restart(), onEnterBack: () => tw.restart(),
-        onLeave: () => tw.pause(0), onLeaveBack: () => tw.pause(0) });
+        once: true, onEnter: () => tw.restart() });
     });
 
-    // Apparitions au défilement : depuis le bas en descendant, depuis le haut en remontant ;
-    // un bloc sorti de l'écran se cache pour pouvoir réapparaître
-    gsap.set("[data-reveal]", { opacity: 0, y: 28 });
-    const montre = (els, dy) => gsap.fromTo(els, { opacity: 0, y: dy }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.07, ease: "power2.out", overwrite: true });
-    const cache = (els, dy) => gsap.set(els, { opacity: 0, y: dy, overwrite: true });
-    ScrollTrigger.batch("[data-reveal]", { start: "top 92%", end: "bottom 8%",
-      onEnter: (els) => montre(els, 28), onEnterBack: (els) => montre(els, -28),
-      onLeave: (els) => cache(els, -28), onLeaveBack: (els) => cache(els, 28) });
+    // Apparitions au défilement : une seule fois, en douceur ; un bloc déjà vu reste affiché
+    gsap.set("[data-reveal]", { opacity: 0, y: 20 });
+    ScrollTrigger.batch("[data-reveal]", { start: "top 94%", once: true,
+      onEnter: (els) => gsap.to(els, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: "power2.out", overwrite: true }) });
 
     // Épargne : jauge et barre qui se remplissent (dans les deux sens)
     const fills = $$(".epargne-v .ev-jauge i, .epargne-v .ev-barre i");
@@ -203,4 +199,25 @@
   stats();
   mode();
   cgu();
+
+  // Noms des titres en casse normale (« SERVAIR ABIDJAN CI » → « Servair Abidjan CI »)
+  const SIGLES = new Set(["CI", "BF", "SN", "ML", "NE", "TG", "BJ", "SA", "FCP", "SICAV", "UEMOA", "BOA", "CIE", "SIB", "SGB", "SGBC", "NSIA", "BICI", "BIIC", "CRRH", "SODE"]);
+  const ACC = { ETAT: "État", SOCIETE: "Société", GENERALE: "Générale", SENEGAL: "Sénégal", COTE: "Côte", BENIN: "Bénin", MONETAIRE: "Monétaire", TOTALENERGIES: "TotalEnergies" };
+  const PETITS = new Set(["de", "du", "des", "la", "le", "les", "et", "of", "the", "d", "l"]);
+  const lisible = (t) => {
+    const l = t.replace(/[^A-Za-zÀ-ÿ]/g, "");
+    if (l.length < 4 || l !== l.toUpperCase()) return t;
+    return t.split(/(\s+)/).map((m, i) => {
+      if (/^\s+$/.test(m) || /\d/.test(m)) return m;
+      const nu = m.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z'’-]/gi, "");
+      if (SIGLES.has(nu)) return m;
+      if (ACC[nu]) return ACC[nu];
+      const b = m.toLowerCase();
+      if (i > 0 && PETITS.has(b)) return b;
+      return b.replace(/(^|[-'’])(\p{L})/gu, (_, s1, c) => s1 + c.toUpperCase());
+    }).join("");
+  };
+  document.querySelectorAll(".apercu-tbl tbody td:nth-child(2), .apercu-tbl tbody th").forEach((td) => {
+    if (td.children.length === 0) td.textContent = lisible(td.textContent);
+  });
 })();

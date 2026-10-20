@@ -58,7 +58,7 @@
 }
 
 /* ---------------------------------------------------------------- éléments codés en dur dans l'ancienne charte */
-[data-charte="indigo"] .tel { background: hsl(232 34% 12%); }
+[data-charte="indigo"] .ha-tel { background: hsl(232 34% 12%); }   /* cadre du téléphone d'aperçu (vitrine) */
 [data-charte="indigo"] .syn-grid { border-top-color: hsl(230 55% 32% / .18); }
 
 /* ---------------------------------------------------------------- nom de marque : « Bafi » en ambre doré, « Bourse » en indigo

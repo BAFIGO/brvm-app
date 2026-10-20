@@ -141,3 +141,58 @@ body.vitrine { padding-bottom: 0; overflow-x: hidden; }
 .ev-barre { display: flex; gap: 4px; height: 14px; border-radius: 7px; overflow: hidden; }
 .ev-barre i { display: block; height: 100%; transform-origin: left center; }
 .ev-barre .c3 { flex: 20; } .ev-barre .c2 { flex: 35; } .ev-barre .c1 { flex: 45; }
+
+/* =====================================================================================
+ * Finitions (livraison 3) : titres plus mesurés, aperçu de l'application, liste du marché sur téléphone
+ * ===================================================================================== */
+.eyebrow { text-transform: none; letter-spacing: 0; font-size: .95rem; }
+.hero-title { font-size: clamp(2rem, 5.6vw, 4rem); line-height: 1.06; max-width: 16ch; }
+.display { font-size: clamp(1.6rem, 3.6vw, 2.6rem); }
+@media (max-width: 599px) {
+  .cta .btn { flex: 1 1 0; justify-content: center; text-align: center; padding: 12px 14px; }   /* deux boutons de même poids */
+}
+
+/* ---------------------------------------------------------------- aperçu de l'application dans le premier écran (grand écran) */
+.hero-apercu { display: none; }
+@media (min-width: 960px) {
+  .hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); column-gap: clamp(40px, 5vw, 80px); align-content: center; }
+  .hero > * { grid-column: 1; }
+  .hero > .hero-apercu { display: block; grid-column: 2; grid-row: 1 / span 6; align-self: center; justify-self: center; }
+}
+.ha-tel { width: 300px; padding: 10px; border-radius: 40px; background: #12201c; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .35); }
+.ha-ecran { height: 600px; overflow: hidden; border-radius: 31px; background: var(--bg); padding: 26px 14px 14px; font-size: 12px; color: var(--text); }
+.ha-titre { margin: 0 0 10px; font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.ha-syn { padding: 14px; border-radius: 14px; background: var(--accent-soft); }
+.ha-lbl, .ha-g i { display: block; font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.ha-val { display: block; font-size: 27px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.ha-val small { font-size: 15px; color: var(--muted); }
+.ha-up { color: var(--good); font-weight: 700; }
+.ha-g { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+.ha-g b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.ha-carte { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.ha-h { margin: 0 0 4px; font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; }
+.ha-h small { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.ha-li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border); }
+.ha-li:first-of-type { border-top: 0; }
+.ha-li span { flex: 1; min-width: 0; }
+.ha-li b { display: block; font-size: 12px; }
+.ha-li small { display: block; font-size: 10.5px; color: var(--muted); }
+.ha-li em { font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ha-pt { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.ha-pt.o { background: #c2560c; }
+.ha-pt.v { background: var(--accent); }
+
+/* ---------------------------------------------------------------- tableau des actions : une liste lisible sur téléphone */
+@media (max-width: 599px) {
+  .apercu-tbl table[data-tbl="actions"] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .apercu-tbl table[data-tbl="actions"], .apercu-tbl table[data-tbl="actions"] tbody { display: block; }
+  .apercu-tbl table[data-tbl="actions"] tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .apercu-tbl table[data-tbl="actions"] td { padding: 0; border: 0; }
+  .apercu-tbl table[data-tbl="actions"] td:nth-child(1) { grid-row: 2; grid-column: 1; font-size: .82rem; color: var(--muted); }
+  .apercu-tbl table[data-tbl="actions"] td:nth-child(1) b { font-weight: 500; }
+  .apercu-tbl table[data-tbl="actions"] td:nth-child(2) { grid-row: 1; grid-column: 1; color: var(--text); font-weight: 600; }
+  .apercu-tbl table[data-tbl="actions"] td:nth-child(3) { grid-row: 1; grid-column: 2; font-weight: 700; }
+  .apercu-tbl table[data-tbl="actions"] td:nth-child(4) { grid-row: 2; grid-column: 2; font-size: .82rem; }
+}
+/* la vitrine utilise sa propre largeur (--wrap), pas la colonne étroite de l'application */
+body.vitrine main { max-width: none; padding: 0; }
