@@ -153,7 +153,12 @@ body.vitrine { padding-bottom: 0; overflow-x: hidden; }
 }
 
 /* ---------------------------------------------------------------- aperçu de l'application dans le premier écran (grand écran) */
-.hero-apercu { display: none; }
+/* téléphone et tablette : l'aperçu se place sous les boutons et les chiffres, un peu plus court, fondu en bas */
+@media (max-width: 959px) {
+  .hero-apercu { display: block; margin: 40px auto 0; width: fit-content; }
+  .ha-tel { width: min(300px, 84vw) !important; }
+  .ha-ecran { height: 470px !important; -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); }
+}
 @media (min-width: 960px) {
   .hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); column-gap: clamp(40px, 5vw, 80px); align-content: center; }
   .hero > * { grid-column: 1; }
@@ -196,3 +201,8 @@ body.vitrine { padding-bottom: 0; overflow-x: hidden; }
 }
 /* la vitrine utilise sa propre largeur (--wrap), pas la colonne étroite de l'application */
 body.vitrine main { max-width: none; padding: 0; }
+/* sélecteur de profil : toujours contenu dans la largeur de l'écran */
+.m-viz .seg { display: flex; width: 100%; max-width: 100%; box-sizing: border-box; }
+/* onglets Actions / Obligations / OPCVM de l'aperçu du marché : contenus dans l'écran dès 320 px */
+.apercu-card .seg { display: flex; width: 100%; max-width: 100%; }
+.apercu-card .seg button { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: clamp(.78rem, 3.7vw, 1rem); }
