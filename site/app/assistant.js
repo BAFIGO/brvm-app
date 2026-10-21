@@ -156,7 +156,11 @@
     if (!matchMedia("(pointer: coarse)").matches) champ.focus();
   }
   fab.addEventListener("click", ouvrir);
-  window.addEventListener("brvm:ouvrir-assistant", () => { if (!fab.hidden) ouvrir(); });
+  window.addEventListener("brvm:ouvrir-assistant", (ev) => {
+    if (fab.hidden) return;
+    ouvrir();
+    if (ev.detail?.question) setTimeout(() => poser(ev.detail.question), 250);   // premiers pas : question posée en une touche
+  });
   $(".ia-fermer", dlg).addEventListener("click", () => dlg.close());
   dlg.addEventListener("click", (ev) => { if (ev.target === dlg) dlg.close(); });     // toucher le fond ferme
   dlg.addEventListener("close", () => fab.focus());

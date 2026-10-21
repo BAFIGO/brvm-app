@@ -2183,6 +2183,7 @@
                         monAvis: () => api.monAvis(), donnerAvis: (a) => api.donnerAvis(a),
                         noterDemandeAvis: (d) => api.noterDemandeAvis(d).catch(() => {}),
                         alerteRouge: () => (S.alertes || []).some((a) => a.alerte === "ROUGE"),
+                        celebrer: (t) => bravo([t]),
                         nomAffiche: () => (S.profil?.prenom ? [S.profil.prenom, S.profil?.nom ? S.profil.nom.trim().charAt(0).toUpperCase() + "." : ""].filter(Boolean).join(" ") : DEMO ? "Utilisateur D." : ""),
                         joursInscription: () => {
                           const d = S.profil?.onboarding_fini_le || S.profil?.cree_le;

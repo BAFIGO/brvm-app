@@ -146,8 +146,10 @@
 
   // ---------------------------------------------------------------- 1. visite de bienvenue
   const ETAPES_VISITE = () => [
-    { tab: "aujourdhui", cible: "#v-aujourdhui h1", titre: "Aujourd'hui",
-      texte: `Chaque soir après la séance : le point sur votre argent, vos alertes et ${app.sim() ? "la simulation" : "la proposition"} du jour.` },
+    { tab: "aujourdhui", cible: ["#v-aujourdhui .card.a-faire", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "Vos alertes",
+      texte: (c) => c?.matches(".a-faire")
+        ? "Chaque soir après la séance, vos alertes et ce qu'il y a à faire apparaissent ici. Une alerte est un signal à examiner, jamais une vente automatique."
+        : `Chaque soir après la séance : le point sur votre argent, puis vos alertes et ${app.sim() ? "la simulation" : "la proposition"} du jour juste en dessous.` },
     { tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Noter vos opérations",
       texte: "Après chaque achat, vente ou versement chez votre SGI, notez-le ici : tous les calculs partent de ce journal." },
     { cible: "#fab-coffre", optionnel: true, titre: "Votre coffre",
@@ -172,11 +174,19 @@
     });
     const e2 = etat();
     e2.astuces.portefeuille = 1; e2.astuces.marche = 1;        // déjà vus pendant la visite
-    if (fin === "fin") { e2.visite = "terminee"; noter("visite_terminee"); }
-    else if (!e2.visite) e2.visite = "passee";
+    if (fin === "fin") {
+      e2.visite = "terminee"; noter("visite_terminee");
+      if (!e2.pas.alertes) { e2.pas.alertes = 1; noter("pas_termine", "alertes"); }   // la visite a montré les alertes
+    } else if (!e2.visite) e2.visite = "passee";
     sauver(e2);
     app.aller("aujourdhui");
-    if (fin === "fin") app.toast("Visite terminée", { detail: "Vos premiers pas vous attendent en haut de cet écran." });
+    app.render();
+    if (fin === "fin") {
+      await attendre(400);
+      const reste = premiersPas().filter((p) => !p.fait);
+      if (reste.length) proposerSuite(null, `Visite terminée ! Il vous reste ${reste.length > 1 ? `${reste.length} premiers pas` : "1 premier pas"}, moins d'une minute. On continue ?`);
+      else app.toast("Visite terminée", { detail: "Vous connaissez maintenant l'essentiel de l'application." });
+    }
   }
   async function proposerVisite() {
     const p = app.prenom();
@@ -188,27 +198,27 @@
   }
 
   // ---------------------------------------------------------------- 2. « Mes premiers pas »
-  const ouvrirAssistant = () => window.dispatchEvent(new Event("brvm:ouvrir-assistant"));
+  const ouvrirAssistant = (question) => window.dispatchEvent(new CustomEvent("brvm:ouvrir-assistant", { detail: { question } }));
   function premiersPas() {
     const f = app.faits(), e = etat(), robot = !!$("#fab-ia");
     return [
-      { id: "depot", t: "Noter l'argent versé à ma SGI", fait: f.depot,
+      { id: "depot", t: "Noter l'argent versé à ma SGI", duree: "1 min", fait: f.depot,
         guide: [{ tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Noter l'argent versé",
                   texte: "Chaque fois que vous envoyez de l'argent à votre SGI, notez-le ici : c'est le point de départ de tous les calculs.",
                   action: { label: "Noter un versement", fn: () => app.ouvrirOperation("DEPOT") } }] },
-      { id: "achat", t: "Enregistrer mon premier achat", fait: f.achat,
+      { id: "achat", t: "Enregistrer mon premier achat", duree: "1 min", fait: f.achat,
         guide: [{ tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Enregistrer un achat",
                   texte: "Quand votre SGI confirme un achat (avis d'opéré), notez-le ici avec la quantité, le prix et les frais.",
                   action: { label: "Noter un achat", fn: () => app.ouvrirOperation("ACHAT") } }] },
-      { id: "alertes", t: "Découvrir mes alertes", fait: !!e.pas.alertes,
+      { id: "alertes", t: "Découvrir mes alertes", duree: "20 s", fait: !!e.pas.alertes,
         guide: [{ tab: "aujourdhui", cible: ["#v-aujourdhui .card.a-faire", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "Vos alertes",
                   texte: (c) => c?.matches(".a-faire")
                     ? "Ce bloc « À faire » réunit après chaque séance les titres qui demandent votre attention, avec l'explication. Une alerte est un signal à examiner, jamais une vente automatique."
                     : "Dès que vous détiendrez des titres, leurs alertes apparaîtront dans un bloc « À faire » sur cet écran. Une alerte est un signal à examiner, jamais une vente automatique." }] },
-      ...(robot ? [{ id: "robot", t: "Poser une question au robot", fait: !!e.pas.robot,
-        guide: [{ cible: "#fab-ia", titre: "Votre assistant", texte: "Posez-lui une question sur votre portefeuille ou le marché : il répond avec vos chiffres.",
-                  action: { label: "Poser une question", fn: ouvrirAssistant } }] }] : []),
-      ...(f.plan !== null ? [{ id: "epargne", t: "Choisir mon rythme d'épargne", fait: f.plan,
+      ...(robot ? [{ id: "robot", t: "Poser une question au robot", duree: "30 s", fait: !!e.pas.robot,
+        guide: [{ cible: "#fab-ia", titre: "Votre assistant", texte: "Il répond avec vos propres chiffres. Essayez avec une question toute prête : vous pourrez ensuite poser les vôtres.",
+                  action: { label: "Essayer : « Combien ai-je gagné ce mois-ci ? »", fn: () => ouvrirAssistant("Combien ai-je gagné ce mois-ci ?") } }] }] : []),
+      ...(f.plan !== null ? [{ id: "epargne", t: "Choisir mon rythme d'épargne", duree: "30 s", fait: f.plan,
         guide: [{ tab: "profil", cible: ["#f-plan", "#v-profil h1"], titre: "Votre rythme d'épargne",
                   texte: "Choisissez combien mettre de côté et à quel rythme : le coffre vous aide ensuite à le tenir." }] }] : []),
     ];
@@ -216,10 +226,17 @@
   // Note chaque premier pas une seule fois, au moment où il devient fait
   function suivrePas(liste) {
     const e = etat(); let change = false;
+    const avant = liste.filter((p) => e.pas[p.id]).length;
     for (const p of liste) if (p.fait && !e.pas[p.id]) { e.pas[p.id] = 1; change = true; if (["depot", "achat", "epargne"].includes(p.id)) noter("pas_termine", p.id); }
+    if (!e.pas_progres || liste.filter((p) => e.pas[p.id]).length > avant) { e.pas_progres = Date.now(); change = true; }
     if (liste.length && liste.every((p) => p.fait) && e.liste !== "terminee") {
       e.liste = "terminee"; e.liste_le = Date.now(); change = true; noter("liste_terminee");
-      app.toast("Bravo, vos premiers pas sont faits !", { detail: "Vous savez maintenant tout ce qu'il faut pour suivre votre épargne." });
+      // trophée de prise en main, célébré comme les trophées d'épargne
+      setTimeout(() => {
+        if (document.querySelector("dialog[open]")) return app.toast("Bravo, vos premiers pas sont faits !", { detail: "Vous savez maintenant tout ce qu'il faut pour suivre votre épargne." });
+        app.celebrer({ id: "prise-en-main", titre: "Prise en main réussie", marque: "✓", metal: "saphir",
+                       msg: "Vos premiers pas sont faits : vous savez maintenant tout ce qu'il faut pour suivre votre épargne." });
+      }, 600);
     }
     if (change) sauver(e);
   }
@@ -236,12 +253,12 @@
     if (r === "fin") { await attendre(350); proposerSuite(id); }
     else if (r === "action") enAttente = id;               // la suite sera proposée à la fermeture de la fenêtre
   }
-  async function proposerSuite(apres) {
+  async function proposerSuite(apres, message) {
     if (enCours) return;
     const liste = premiersPas(), faits = liste.filter((x) => x.fait).length;
     const suivant = liste.find((x) => !x.fait && x.id !== apres);
-    if (!suivant) return;                                   // tout est fait : la liste affiche « Bravo »
-    const r = await derouler([{ titre: "Étape suivante", texte: `${suivant.t}. On continue ?` }],
+    if (!suivant) return;                                   // tout est fait : le trophée de prise en main s'affiche
+    const r = await derouler([{ titre: message ? "Et maintenant ?" : "Étape suivante", texte: message || `${suivant.t} (${suivant.duree || "1 min"}). On continue ?` }],
       { surtitre: `Premiers pas : ${faits} sur ${liste.length} faits`, passer: "Plus tard", terminer: "Continuer" });
     if (r === "fin") lancerPas(suivant.id);
   }
@@ -267,13 +284,22 @@
     const liste = premiersPas(), faits = liste.filter((p) => p.fait).length;
     suivrePas(liste);
     if (faits === liste.length) return;
-    const html = `<div class="card tuto-liste" aria-labelledby="tuto-liste-t">
+    const reste = liste.filter((p) => !p.fait), suivant = reste[0], e3 = etat();
+    const reduite = e3.pas_progres && Date.now() - e3.pas_progres > 7 * 864e5;   // 7 jours sans progrès : une seule ligne
+    const html = reduite
+      ? `<div class="card tuto-liste tuto-reduite" aria-label="Mes premiers pas"><p><b>${reste.length > 1 ? `${reste.length} premiers pas restants` : "1 premier pas restant"}</b>
+          <span class="small muted"> · ${faits} sur ${liste.length} faits</span></p>
+          <p class="tuto-liens"><button type="button" class="btn small primary" data-pas="${suivant.id}">Continuer : ${esc(suivant.t)}</button>
+          <button type="button" class="btn link small" data-tuto="masquer">Masquer</button></p></div>`
+      : `<div class="card tuto-liste" aria-labelledby="tuto-liste-t">
       <div class="tuto-tete"><h2 id="tuto-liste-t">Mes premiers pas</h2><span class="small muted">${faits} sur ${liste.length}</span></div>
       <div class="tuto-barre" role="progressbar" aria-label="Avancement des premiers pas" aria-valuemin="0" aria-valuemax="${liste.length}" aria-valuenow="${faits}">
         <i style="width:${Math.round((faits / liste.length) * 100)}%"></i></div>
-      <ul class="tuto-pas">${liste.map((p) => p.fait
-        ? `<li class="fait"><span class="tuto-coche" aria-hidden="true">✓</span><span>${esc(p.t)}<span class="sr-only"> : fait</span></span></li>`
-        : `<li><button type="button" class="tuto-go" data-pas="${p.id}"><span class="tuto-coche" aria-hidden="true"></span><span>${esc(p.t)}</span><span class="tuto-fleche" aria-hidden="true">›</span></button></li>`).join("")}</ul>
+      ${faits ? `<details class="tuto-faits"><summary><span class="tuto-coche" aria-hidden="true">✓</span> ${faits > 1 ? `${faits} étapes faites` : "1 étape faite"}</summary>
+        <ul class="tuto-pas">${liste.filter((p) => p.fait).map((p) => `<li class="fait"><span class="tuto-coche" aria-hidden="true">✓</span><span>${esc(p.t)}</span></li>`).join("")}</ul></details>` : ""}
+      <ul class="tuto-pas">${reste.map((p, k) => `<li><button type="button" class="tuto-go${k === 0 ? " suivant" : ""}" data-pas="${p.id}">
+          <span class="tuto-coche" aria-hidden="true"></span><span class="tuto-t">${esc(p.t)}<span class="tuto-duree">${p.duree || ""}</span></span><span class="tuto-fleche" aria-hidden="true">›</span></button></li>`).join("")}</ul>
+      <div class="tuto-cta"><button type="button" class="btn primary" data-pas="${suivant.id}">Continuer : ${esc(suivant.t)}</button></div>
       <p class="small tuto-liens">${e.visite !== "terminee" ? `<button type="button" class="btn link" data-tuto="visite">Faire la visite guidée (1 min)</button> · ` : ""}
         <button type="button" class="btn link" data-tuto="masquer">Masquer</button></p></div>`;
     const synthese = $(".synthese", v), avant = $(".card", v);          // juste après la synthèse du jour

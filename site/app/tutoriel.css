@@ -44,3 +44,15 @@
 li.fait .tuto-coche { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .tuto-fleche { color: var(--accent); font-size: 1.4rem; line-height: 1; }
 .tuto-liens { margin: 8px 0 0; }
+
+/* Liste des premiers pas : étapes faites regroupées, prochaine étape mise en avant, durées */
+.tuto-faits { margin: 4px 0 2px; }
+.tuto-faits > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; color: var(--muted); font-weight: 600; }
+.tuto-faits > summary .tuto-coche { width: 22px; height: 22px; font-size: .75rem; }
+.tuto-t { display: flex; flex-direction: column; flex: 1; }
+.tuto-duree { font-size: .78rem; font-weight: 500; color: var(--muted); }
+.tuto-go.suivant .tuto-coche { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tuto-cta { margin-top: 12px; }
+.tuto-cta .btn { width: 100%; }
+.tuto-reduite p { margin: 0; }
+.tuto-reduite .tuto-liens { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
