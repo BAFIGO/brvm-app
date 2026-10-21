@@ -1239,6 +1239,50 @@
     return { html, lier };
   }
 
+  // ---------------------------------------------------------------- trois titres à regarder ce soir
+  // Pour ne pas noyer un débutant dans 48 actions : un de ses titres qui demande attention (ou qui a le plus bougé),
+  // le meilleur score du soir parmi les titres qu'il n'a pas, et le plus fort mouvement de la séance.
+  // Une sélection pour orienter le regard, jamais une recommandation.
+  function aRegarder() {
+    const actions = S.mk.actions || [];
+    if (actions.length < 5) return [];
+    const detenus = new Set(replay(S.ops).positions.map((p) => p.code)), pris = new Set(), choix = [];
+    const ajouter = (r, raison, classe = "actions", etiquette = "") => { if (r && !pris.has(r.code)) { pris.add(r.code); choix.push({ r, raison, classe, etiquette }); } };
+    // 1. un titre détenu : d'abord celui qui a une alerte importante, sinon celui qui a le plus bougé
+    const al = (S.alertes || []).find((a) => NIVEAUX[a.alerte]?.urgent);
+    if (al) {
+      const c = al.ticker, r = [...actions, ...(S.mk.obligations || []), ...(S.mk.opcvm || [])].find((x) => x.code === c);
+      const classe = (S.mk.obligations || []).some((x) => x.code === c) ? "obligations" : (S.mk.opcvm || []).some((x) => x.code === c) ? "opcvm" : "actions";
+      ajouter(r || { code: c, nom: S.names.get(c) || c }, `${NIVEAUX[al.alerte]?.t || "Alerte"} : ${motifAlerte(al.motif)}`, classe, "Votre titre");
+    } else {
+      const r = actions.filter((x) => detenus.has(x.code) && ok(x.var_1j)).sort((a, b) => Math.abs(b.var_1j) - Math.abs(a.var_1j))[0];
+      if (r && Math.abs(r.var_1j) >= 0.005) ajouter(r, `${r.var_1j > 0 ? "En hausse" : "En baisse"} de ${P(Math.abs(r.var_1j), false)} ce soir`, "actions", "Votre titre");
+    }
+    // 2. le meilleur score du soir parmi les titres non détenus
+    ajouter(actions.filter((x) => !detenus.has(x.code) && ok(x.score)).sort((a, b) => b.score - a.score)[0],
+      "Score le plus élevé ce soir", "actions", "Meilleur score");
+    // 3. le plus fort mouvement de la séance
+    const m = actions.filter((x) => ok(x.var_1j) && !pris.has(x.code)).sort((a, b) => Math.abs(b.var_1j) - Math.abs(a.var_1j))[0];
+    if (m && Math.abs(m.var_1j) >= 0.01) ajouter(m, `Plus forte ${m.var_1j > 0 ? "hausse" : "baisse"} de la séance`, "actions", "Mouvement du jour");
+    // complément : scores suivants
+    for (const r of actions.filter((x) => !detenus.has(x.code) && ok(x.score)).sort((a, b) => b.score - a.score)) {
+      if (choix.length >= 3) break;
+      ajouter(r, "Parmi les meilleurs scores du soir", "actions", "Score élevé");
+    }
+    return choix.slice(0, 3);
+  }
+  function blocARegarder() {
+    const c = aRegarder();
+    if (c.length < 2) return "";
+    return `<section class="card a-regarder" aria-labelledby="h-reg"><h2 id="h-reg">${c.length} titres à regarder ce soir</h2>
+      <ul class="reg-liste">${c.map((x) => `<li><button type="button" class="reg" data-regarder="${esc(x.r.code)}" data-classe="${x.classe}">
+          <span class="reg-et">${esc(x.etiquette)}</span>
+          <span class="reg-nom">${mq(x.r.code)}${esc(x.r.nom || x.r.code)}</span>
+          <span class="reg-ligne">${ok(x.r.cours) ? `<b class="num">${F(x.r.cours)}</b>` : ""}${ok(x.r.var_1j) ? ` <span class="num ${cls(x.r.var_1j)}">${P(x.r.var_1j)}</span>` : ""}${ok(x.r.score) ? ` · score ${N(x.r.score)}` : ""}</span>
+          <span class="reg-raison">${esc(x.raison)}</span></button></li>`).join("")}</ul>
+      <p class="small muted">Une sélection pour orienter votre regard, pas une recommandation. Touchez un titre pour voir son analyse.</p></section>`;
+  }
+
   function vMarche() {
     const v = $("#v-marche"), u = S.ui;
     const rows = S.mk[u.mkTab] || [];
@@ -1246,7 +1290,7 @@
     const list = rows.filter((r) => (u.mkFilter === "all" || BUY.includes(r.decision))
       && (!q || (r.code + " " + (r.nom || "")).toLowerCase().includes(q))).sort((a, b) => (b.score || 0) - (a.score || 0));
     const tend = tendance();
-    let h = `<h1 id="h-mk">Marché</h1>${tend ? tend.html : ""}
+    let h = `<h1 id="h-mk">Marché</h1>${!q ? blocARegarder() : ""}${tend ? tend.html : ""}
       <div class="toolbar">
         <div class="seg" role="group" aria-label="Classe d'actifs">
           ${[["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]].map(([k, t]) =>
@@ -1288,6 +1332,13 @@
     v.innerHTML = h;
     v.querySelectorAll("[data-mk]").forEach((b) => b.addEventListener("click", () => { u.mkTab = b.dataset.mk; u.mkShow = 30; vMarche(); }));
     v.querySelectorAll("[data-tend]").forEach((b) => b.addEventListener("click", () => { u.tend = b.dataset.tend; vMarche(); }));
+    // un titre « à regarder » : la liste se filtre sur lui et son analyse s'ouvre
+    v.querySelectorAll("[data-regarder]").forEach((b) => b.addEventListener("click", () => {
+      Object.assign(u, { mkTab: b.dataset.classe, mkFilter: "all", mkQuery: b.dataset.regarder, mkShow: 30 });
+      vMarche();
+      const d = $("#v-marche .list details");
+      if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: CALME ? "auto" : "smooth" }); d.querySelector("summary")?.focus({ preventScroll: true }); }
+    }));
     tend?.lier(v);
     const qi = $("#mk-q", v);
     qi.addEventListener("input", () => { u.mkQuery = qi.value; u.mkShow = 30; vMarche(); $("#mk-q").focus(); const n = $("#mk-q"); n.setSelectionRange(n.value.length, n.value.length); });
@@ -2062,7 +2113,29 @@
     const actions = [];
     if (o && annulable) actions.push({ label: "Annuler", fn: () => annulerOperation(o) });
     if (o) actions.push({ label: "Voir", fn: () => montrerOperation(o.id) });
-    toast(msg, { detail: Math.abs(apres - avant) >= 1 ? `Disponible chez ma SGI : ${F(avant)} → ${F(apres)}` : "", actions });
+    const progres = progresApres(op);
+    const dispo = Math.abs(apres - avant) >= 1 ? `Disponible chez ma SGI : ${F(avant)} → ${F(apres)}` : "";
+    toast(msg, { detail: [progres, dispo].filter(Boolean).join(" · "), actions });
+  }
+  // Après chaque enregistrement, un point de progrès plutôt qu'un simple accusé de réception
+  function progresApres(op) {
+    const L = replay(S.ops), nb = L.positions.length;
+    const mois = new Date().toISOString().slice(0, 7);
+    if (op.type === "DEPOT") {
+      const ceMois = S.ops.filter((o) => o.type === "DEPOT" && String(o.date).startsWith(mois)).reduce((a, o) => a + (+o.montant || 0), 0);
+      return `Total envoyé à votre SGI : ${F(L.apports)}${ceMois > +op.montant ? `, dont ${F(ceMois)} ce mois-ci` : ""}`;
+    }
+    if (op.type === "ACHAT") {
+      const premier = S.ops.filter((o) => o.type === "ACHAT").length === 1;
+      return premier ? "Votre premier titre : bienvenue parmi les actionnaires de la BRVM !" : `Votre portefeuille compte maintenant ${nb} titre${nb > 1 ? "s" : ""}`;
+    }
+    if (op.type === "DIVIDENDE") return `Dividendes et coupons reçus depuis le début : ${F(L.dividendes)}`;
+    if (op.type === "VENTE") {
+      const avant = replay(S.ops.filter((o) => !(o.date === op.date && o.type === "VENTE" && o.ticker === op.ticker && +o.quantite === +op.quantite))).realise;
+      const r = L.realise - avant;
+      return r > 0 ? `Plus-value réalisée sur cette vente : +${F(r)}` : "";
+    }
+    return "";
   }
   async function annulerOperation(o) {
     try {
