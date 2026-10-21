@@ -143,6 +143,17 @@
       operations: async () => r(await sb.from("operations").select("id,date,type,ticker,quantite,prix,frais,montant,note")
         .order("date").order("id")),
       addOperation: async (op) => r(await sb.from("operations").insert(op)),
+      // Import d'un document de la SGI : plusieurs opérations en une seule écriture (tout ou rien)
+      addOperations: async (ops) => (r(await sb.from("operations").insert(ops).select("id")) || []).map((x) => x.id),
+      lireDocument: async (type, donnees) => {
+        const { data, error } = await sb.functions.invoke("lire-document", { body: { type, donnees } });
+        if (error) {
+          let m = error.message;
+          try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ }
+          throw new Error(m);
+        }
+        return data;
+      },
       deleteOperation: async (id) => r(await sb.from("operations").delete().eq("id", id)),
       table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
       // Dernier cours connu d'un titre absent de l'analyse du jour : on cherche dans les trois tables
@@ -236,6 +247,31 @@
         d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
       },
       deleteOperation: async (id) => { const d = await load(); d.operations = d.operations.filter((o) => o.id !== id); },
+      addOperations: async (ops) => {
+        const d = await load(), ids = ops.map(() => nextId++);
+        ops.forEach((op, k) => d.operations.push({ ...op, id: ids[k] }));
+        d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+        return ids;
+      },
+      // Démonstration : lecture simulée d'un avis d'exécution et d'un relevé (aucun envoi)
+      lireDocument: async (type) => {
+        await new Promise((ok) => setTimeout(ok, 1400));
+        return type === "application/pdf" ? {
+          document: { nature: "releve_compte", sgi: "SGI de démonstration", periode_debut: "2026-07-01", periode_fin: "2026-09-30" },
+          operations: [
+            { type: "DIVIDENDE", date: "2026-08-14", titre: "SONATEL SENEGAL", montant_net: 18200, libelle: "Encaissement Div SONATEL 2025" },
+            { type: "FRAIS", date: "2026-09-30", montant_net: 3540, libelle: "Retenues Frais accès WEB" },
+            { type: "FRAIS", date: "2026-09-30", montant_net: 1770, libelle: "Retenues Frais de gestion" },
+            { type: "DEPOT", date: "2026-07-03", montant_net: 600000, libelle: "Versement espèces" },
+            { type: "VENTE", date: "2026-07-20", titre: "ORANGE COTE D'IVOIRE", quantite: 30, cours: 341, frais: 133, montant_net: 10097, libelle: "Vente ORAC" }],
+          positions: [{ titre: "SONATEL SENEGAL", quantite: 20 }, { titre: "ORANGE COTE D'IVOIRE", quantite: 30 }, { titre: "PALM CI", quantite: 40 }],
+          liquidites: { date: "2026-09-30", montant: 1890000 },
+        } : {
+          document: { nature: "avis_execution", sgi: "SGI de démonstration", date: "2026-10-09" },
+          operations: [{ type: "ACHAT", date: "2026-10-09", titre: "SOCIETE GENERALE COTE D'IVOIRE", isin: "CI0000000600", quantite: 6,
+                         cours: 10100, montant_brut: 60600, frais: 962, montant_net: 61562, reference: "2026100912" }],
+        };
+      },
       table: async (name) => (await load())[names[name]],
       dernierCours: async () => null,
       cibles: async (_d, profil) => (await load()).cibles.filter((c) => c.profil === profil),
@@ -1073,7 +1109,7 @@
       </div>`;
     if (ep) h += carteEpargne(ep);
     h += `
-      <div class="actions"><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
+      <div class="actions"><button class="btn" data-import="">Importer un avis ou un relevé</button><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
     h += `<div class="card positions"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
     if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
@@ -2292,6 +2328,17 @@
                         alerteRouge: () => (S.alertes || []).some((a) => a.alerte === "ROUGE"),
                         celebrer: (t) => bravo([t]),
                         portrait: () => voirPortrait(),
+                        // import des documents de la SGI (import.js)
+                        lireDocument: (type, d) => api.lireDocument(type, d),
+                        titres: () => [...S.mk.actions.map((r) => ({ code: r.code, nom: r.nom, classe: "actions" })),
+                                       ...S.mk.obligations.map((r) => ({ code: r.code, nom: r.nom, classe: "obligations" })),
+                                       ...S.mk.opcvm.map((r) => ({ code: r.code, nom: r.nom, classe: "opcvm" }))],
+                        nomTitre: (c) => S.names.get(c) || c,
+                        operations: () => S.ops,
+                        journal: () => { const L = replay(S.ops); return { positions: L.positions.map((x) => ({ code: x.code, quantite: x.quantite })), cash: L.cash }; },
+                        ajouterOperations: async (ops) => { const ids = await api.addOperations(ops); S.ops = await api.operations(S.user.id); render(); return ids; },
+                        supprimerOperations: async (ids) => { for (const id of ids) await api.deleteOperation(id); S.ops = await api.operations(S.user.id); render(); },
+                        fermerOperation: () => $("#dlg-op").open && $("#dlg-op").close(),
                         nomAffiche: () => (S.profil?.prenom ? [S.profil.prenom, S.profil?.nom ? S.profil.nom.trim().charAt(0).toUpperCase() + "." : ""].filter(Boolean).join(" ") : DEMO ? "Utilisateur D." : ""),
                         joursInscription: () => {
                           const d = S.profil?.onboarding_fini_le || S.profil?.cree_le;

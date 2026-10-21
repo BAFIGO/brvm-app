@@ -237,3 +237,33 @@ textarea { font: inherit; line-height: 1.45; }
 .syn-disc .btn.link { padding: 0; min-height: 0; font-size: inherit; }
 .syn-mkt { font-weight: 500; color: var(--muted); }
 .syn-ctx { margin: 12px 0 0; font-size: .9rem; line-height: 1.45; color: var(--text); }
+
+/* =====================================================================================
+ * Import des documents de la SGI (import.js)
+ * ===================================================================================== */
+.op-import { margin: -4px 0 6px; }
+#dlg-import { width: min(640px, 100vw); }
+.imp h2 { margin-bottom: 10px; }
+.imp-boutons { display: grid; gap: 10px; margin: 14px 0; }
+.imp-btn { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; cursor: pointer; }
+.imp-btn input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.imp-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.imp-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.imp-lecture { display: grid; justify-items: center; gap: 14px; padding: 36px 0; text-align: center; }
+.imp-roue { width: 40px; height: 40px; border-radius: 50%; border: 4px solid var(--surface-2); border-top-color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .imp-roue { animation: imp-tourne 0.9s linear infinite; } @keyframes imp-tourne { to { transform: rotate(360deg); } } }
+.imp-liste { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 10px; }
+.imp-op { padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.imp-op.a-voir { border-left: 4px solid var(--warn); }
+.imp-op.off { opacity: .62; }
+.imp-tete { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.imp-tete select, .imp-tete input[type=date] { min-height: 40px; }
+.imp-sel input { width: 22px; height: 22px; min-height: 0; margin: 0; }
+.imp-titre { display: block; margin-top: 8px; }
+.imp-titre select { width: 100%; margin-top: 4px; }
+.imp-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; }
+.imp-ch { display: grid; gap: 4px; margin: 0; font-size: .85rem; font-weight: 600; }
+.imp-ch input { width: 100%; box-sizing: border-box; }
+.imp-note { margin: 8px 0 0; }
+.imp-alerte { margin: 6px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--text); font-size: .85rem; }
+.imp-controle { margin-top: 10px; }
