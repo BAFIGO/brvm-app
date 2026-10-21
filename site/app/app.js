@@ -693,15 +693,17 @@
       const perf = changed ? {} : c?.performance || {};       // performance du soir : valable pour ce journal-là
       const hist = c?.historique || [], der = hist[hist.length - 1];
       const jour = !changed && der && der.date === S.seance.date && ok(der.gain) ? der : null;
-      h += `<div class="card synthese">
+      const vm = jour ? varMarche(jour.date) : null;
+      const ctx = changed ? "" : contexteMarche(perf.twr_total, perf.bench_total, hist[0]?.date);
+      h += `<div class="card synthese">${bandeDiscipline(L)}
         <div class="syn-lbl">Total chez ma SGI</div>
         <div class="syn-val num" data-count="${L.valeur ?? ""}" data-unite="1">${montantHtml(L.valeur)}</div>
-        ${jour ? `<div class="syn-jour ${cls(jour.gain)}"><b class="num">${jour.gain > 0 ? "+" : ""}${F(jour.gain)}${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</b> sur la séance du ${D(jour.date).slice(0, 5)}</div>` : ""}
+        ${jour ? `<div class="syn-jour ${cls(jour.gain)}"><b class="num">${jour.gain > 0 ? "+" : ""}${F(jour.gain)}${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</b> sur la séance du ${D(jour.date).slice(0, 5)}${ok(vm) ? `<span class="syn-mkt"> · marché ${P(vm)}</span>` : ""}</div>` : ""}
         <div class="syn-grid">
           <div><div class="syn-lbl">Disponible chez ma SGI</div><div class="syn-sec num">${montantHtml(L.cash)}</div></div>
           <div><div class="syn-lbl">Performance</div><div class="syn-sec num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
-            <div class="small muted">${changed ? "recalculée ce soir" : "indice " + P(perf.bench_total)}</div></div>
-        </div></div>`;
+            <div class="small muted">${changed ? "recalculée ce soir" : "marché " + P(perf.bench_total)}</div></div>
+        </div>${ctx ? `<p class="syn-ctx">${ctx}</p>` : ""}</div>`;
       h += blocFaire;
       const inst = changed ? instantOrders(L) : null;
       const ordres = changed ? inst.ordres : c?.ordres || [];
@@ -1062,7 +1064,10 @@
       </div>
       <div class="card kpis">
         <div class="kpi"><div class="lbl">Total envoyé à ma SGI</div><div class="val num">${F(L.apports)}</div><div class="small muted">dépôts moins retraits</div></div>
-        <div class="kpi"><div class="lbl">Gain total depuis le début</div><div class="val num ${cls(L.gainTotal)}">${L.gainTotal > 0 ? "+" : ""}${F(L.gainTotal)}</div><div class="small muted">dividendes et ventes compris</div></div>
+        <div class="kpi"><div class="lbl">Gain total depuis le début</div><div class="val num ${cls(L.gainTotal)}">${L.gainTotal > 0 ? "+" : ""}${F(L.gainTotal)}</div><div class="small muted">dividendes et ventes compris${(() => {
+          const c2 = S.prop?.contenu, b = S.prop?.date === S.seance?.date && !journalChanged(L, c2) ? c2?.performance?.bench_total : null;
+          return ok(b) ? ` · marché ${P(b)} sur la période` : "";
+        })()}</div></div>
         <div class="kpi"><div class="lbl">Gain si je vendais aujourd'hui</div><div class="val num ${cls(L.latent)}">${L.latent > 0 ? "+" : ""}${F(L.latent)}</div><div class="small muted">titres détenus, frais de vente déduits</div></div>
         <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
       </div>`;
@@ -1526,6 +1531,38 @@
       };
       afficher();
     });
+  }
+
+  // ---------------------------------------------------------------- la bourse remise dans son contexte
+  // Une perte isolée effraie ; comparée au marché sur la même période, elle se comprend. Phrases factuelles, sans conseil.
+  function contexteMarche(pf, ix, depuis) {
+    if (!ok(pf) || !ok(ix)) return "";
+    const pct = (v) => nf1.format(Math.abs(v) * 100) + " %", d = depuis ? ` depuis le ${D(depuis)}` : "";
+    const vous = (v) => `${v >= 0 ? "progresse" : "recule"} de ${pct(v)}`, marche = (v) => `${v >= 0 ? "progressé" : "reculé"} de ${pct(v)}`;
+    if (pf < 0 && ix < 0) return pf >= ix
+      ? `Le marché a ${marche(ix)}${d} ; votre portefeuille ne recule que de ${pct(pf)} : il résiste mieux.`
+      : `Le marché a ${marche(ix)}${d}, votre portefeuille ${vous(pf)}. Sur une courte période, c'est fréquent : la bourse se juge sur plusieurs années.`;
+    if (pf < 0) return `Votre portefeuille ${vous(pf)} alors que le marché a ${marche(ix)}${d} : regardez les alertes de vos titres.`;
+    if (ix < 0) return `Votre portefeuille ${vous(pf)} alors que le marché a ${marche(ix)}${d}.`;
+    return `Votre portefeuille ${vous(pf)} ; le marché a ${marche(ix)}${d}.`;
+  }
+  // Variation de la BRVM Composite lors d'une séance donnée
+  const varMarche = (date) => {
+    const r = (S.indices || []).find((x) => x.code === "BRVMC" && x.date === date);
+    return ok(r?.variation) ? +r.variation : null;
+  };
+  // La discipline d'épargne : ce qui dépend entièrement de l'utilisateur, montré en premier
+  function bandeDiscipline(L) {
+    const ep = epargne();
+    if (ep?.plan?.montant) {
+      const unites = ep.unite === "mois" ? "mois" : ep.unite + "s";
+      return `<div class="syn-disc"><span class="syn-disc-ic" aria-hidden="true">${ep.serie > 0 ? "🔥" : "＋"}</span><div>
+        <b>${ep.serie > 0 ? `Série de ${pluriel(ep.serie, ep.unite)}` : "Une nouvelle série à lancer"}</b> · ${F(ep.verse)} mis de côté
+        ${ep.total ? `<div class="small">Régularité : ${ep.tenus} ${unites} tenus sur ${ep.total}${ep.record > ep.serie ? ` · record : ${pluriel(ep.record, ep.unite)}` : ""}</div>` : ""}</div></div>`;
+    }
+    if (L.apports > 0) return `<div class="syn-disc"><span class="syn-disc-ic" aria-hidden="true">＋</span><div><b>${F(L.apports)} investis</b> au fil de vos versements à votre SGI
+      <div class="small"><button type="button" class="btn link small" data-coffre="plan">Fixer un rythme d’épargne</button> pour suivre votre régularité.</div></div></div>`;
+    return "";
   }
 
   // ---------------------------------------------------------------- portrait d'épargnant

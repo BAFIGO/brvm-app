@@ -224,3 +224,16 @@ textarea { font: inherit; line-height: 1.45; }
 .pt-trophee h2 { margin: 0 0 4px; }
 .pt-trophee p { margin: 0; }
 .portrait > .actions .btn { width: 100%; }
+
+/* =====================================================================================
+ * Discipline d'épargne en tête de la synthèse, bourse remise en contexte
+ * ===================================================================================== */
+.syn-disc { display: flex; align-items: flex-start; gap: 10px; margin: -4px 0 14px; padding: 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.syn-disc-ic { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: hsl(35 92% 55% / .22); font-size: 1rem; line-height: 1; }
+.syn-disc b { font-weight: 700; }
+.syn-disc .small { margin-top: 2px; color: var(--muted); }
+.syn-disc .btn.link { padding: 0; min-height: 0; font-size: inherit; }
+.syn-mkt { font-weight: 500; color: var(--muted); }
+.syn-ctx { margin: 12px 0 0; font-size: .9rem; line-height: 1.45; color: var(--text); }
