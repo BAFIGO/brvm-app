@@ -1502,7 +1502,16 @@
             const avant = p.profil;
             Object.assign(p, upd);
             if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
-            if (dernier) return finir(completer ? "Profil complété." : `Bienvenue${p.prenom ? ", " + p.prenom : ""} ! Votre espace est prêt.`);
+            if (dernier && completer) return finir("Profil complété.");
+            if (dernier) {                                       // premier « waouh » : le portrait, avant d'entrer dans l'espace
+              v.innerHTML = `<div class="portrait">${portraitHtml(true)}
+                <div class="actions"><button class="btn primary" type="button" data-entrer>Découvrir mon espace</button></div></div>`;
+              window.scrollTo(0, 0);
+              animerPortrait(v);
+              $("[data-entrer]", v).addEventListener("click", () => finir(`Bienvenue${p.prenom ? ", " + p.prenom : ""} ! Votre espace est prêt.`));
+              $("[data-entrer]", v).focus({ preventScroll: true });
+              return;
+            }
             i++; afficher();
             window.scrollTo(0, 0);
           } catch (err) { msg.textContent = "Enregistrement impossible : " + err.message; b.disabled = false; }
@@ -1517,6 +1526,67 @@
       };
       afficher();
     });
+  }
+
+  // ---------------------------------------------------------------- portrait d'épargnant
+  // Ce que la régularité seule permet de mettre de côté (aucun rendement de bourse supposé : pas de promesse de gain),
+  // le portefeuille cible du profil de risque, et le premier trophée à portée de main.
+  const PAR_AN = (pl) => pl.rythme === "quotidien" ? (pl.jours_ouvres === false ? 365 : 260) : pl.rythme === "hebdo" ? 52 : 12;
+  function portraitHtml(debut = false) {
+    const p = S.profil || {}, pl = S.coffre?.plan || {}, pr = PROFILS[p.profil] || PROFILS.equilibre;
+    const exemple = !(+pl.montant > 0);
+    const plan = exemple ? { montant: 1000, rythme: "quotidien", jours_ouvres: true } : pl;
+    const n = PAR_AN(plan), unite = { quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" }[plan.rythme] || "";
+    const horizons = [["Dans 6 mois", n / 2], ["Dans 1 an", n], ["Dans 3 ans", n * 3]].map(([t, k]) => [t, Math.round(k) * plan.montant]);
+    const max = horizons[2][1];
+    // objectif : date approximative d'arrivée au rythme choisi
+    let objectif = "";
+    if (!exemple && +pl.objectif > 0) {
+      const deja = epargne()?.verse || 0, reste = Math.max(0, pl.objectif - deja);
+      const jours = Math.ceil(reste / plan.montant) * (365 / n);
+      const quand = new Date(Date.now() + jours * 864e5).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+      objectif = reste ? `<p>Votre objectif de <b>${F(pl.objectif)}</b> serait atteint vers <b>${quand}</b>.</p>` : `<p>Votre objectif de <b>${F(pl.objectif)}</b> est déjà atteint : bravo !</p>`;
+    }
+    // portefeuille cible du profil : poids des cibles regroupés par classe d'actifs
+    const parClasse = {};
+    for (const c of S.cibles || []) parClasse[c.classe] = (parClasse[c.classe] || 0) + (+c.poids || 0);
+    const total = Object.values(parClasse).reduce((a, b) => a + b, 0);
+    const classes = Object.entries(parClasse).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const repartition = total ? `<div class="pt-barre" role="img" aria-label="${esc(classes.map(([k, v]) => `${CLASSES[k] || k} ${Math.round((v / total) * 100)} %`).join(", "))}">
+        ${classes.map(([k, v]) => `<i style="width:${(v / total) * 100}%;background:${COLORS[k] || "var(--muted)"}"></i>`).join("")}</div>
+      <ul class="pt-leg">${classes.map(([k, v]) => `<li><i style="background:${COLORS[k] || "var(--muted)"}"></i>${esc(CLASSES[k] || k)} <b>${Math.round((v / total) * 100)} %</b></li>`).join("")}</ul>` : "";
+    const verse = epargne()?.verse || 0;
+    return `<p class="pt-sur">${debut ? "Votre espace est prêt" : "Votre portrait d'épargnant"}</p>
+      <h1 id="h-portrait">${p.prenom ? `${esc(p.prenom)}, voici` : "Voici"} ce que votre régularité peut construire</h1>
+      <section class="card pt-carte" aria-labelledby="pt-ep">
+        <h2 id="pt-ep">${exemple ? "Par exemple, avec 1 000 F par jour ouvré" : `Avec ${F(plan.montant)} ${unite}`}</h2>
+        <ul class="pt-proj">${horizons.map(([t, m]) => `<li><span class="pt-t">${t}</span>
+          <span class="pt-piste"><i data-l="${Math.max(6, (m / max) * 100).toFixed(1)}"></i></span><b class="num">${montantHtml(m)}</b></li>`).join("")}</ul>
+        <p class="small muted">Votre épargne seule, mise de côté avec régularité : sans compter aucun gain ni aucune perte de la bourse.</p>
+        ${objectif}
+        ${exemple ? `<p class="small">Choisissez votre propre rythme dans le Profil : ce portrait s'y adaptera.</p>` : ""}
+      </section>
+      <section class="card pt-carte" aria-labelledby="pt-pf">
+        <h2 id="pt-pf">Votre profil : ${esc(pr.t)}</h2>
+        <p>${esc(pr.d)}</p>
+        ${repartition ? `<p class="small muted">Répartition de ${SIM() ? "la simulation" : "votre portefeuille cible"} ce soir :</p>${repartition}` : ""}
+      </section>
+      <section class="card pt-carte pt-trophee" aria-labelledby="pt-tr">
+        ${medaille({ marque: "1", metal: "emeraude", ok: verse > 0 })}
+        <div><h2 id="pt-tr">${verse > 0 ? "Premier trophée gagné" : "Votre premier trophée vous attend"}</h2>
+          <p class="small">${verse > 0 ? "Vous avez déjà commencé à mettre de côté : continuez votre série !" : "Mettez de côté vos premiers francs avec le coffre : la médaille « Premier pas » est à vous."}</p></div>
+      </section>
+      <p class="small muted">Projection de l'épargne seule, à titre d'illustration. Ce n'est pas un conseil en investissement ; investir en bourse comporte un risque de perte en capital.</p>`;
+  }
+  // Les barres de la projection se remplissent une fois (sauf si l'appareil demande moins d'animations)
+  function animerPortrait(hote) {
+    const barres = hote.querySelectorAll(".pt-piste i");
+    if (CALME) { barres.forEach((b) => (b.style.width = b.dataset.l + "%")); return; }
+    requestAnimationFrame(() => setTimeout(() => barres.forEach((b, k) => setTimeout(() => (b.style.width = b.dataset.l + "%"), k * 160)), 200));
+  }
+  function voirPortrait() {
+    showInfo("Mon portrait d'épargnant", `<div class="portrait">${portraitHtml(false).replace(/<p class="pt-sur">[^<]*<\/p>\s*<h1[^>]*>[^<]*<\/h1>/, "")}</div>`);
+    animerPortrait($("#dlg-info"));
   }
 
   function vProfil() {
@@ -2184,6 +2254,7 @@
                         noterDemandeAvis: (d) => api.noterDemandeAvis(d).catch(() => {}),
                         alerteRouge: () => (S.alertes || []).some((a) => a.alerte === "ROUGE"),
                         celebrer: (t) => bravo([t]),
+                        portrait: () => voirPortrait(),
                         nomAffiche: () => (S.profil?.prenom ? [S.profil.prenom, S.profil?.nom ? S.profil.nom.trim().charAt(0).toUpperCase() + "." : ""].filter(Boolean).join(" ") : DEMO ? "Utilisateur D." : ""),
                         joursInscription: () => {
                           const d = S.profil?.onboarding_fini_le || S.profil?.cree_le;

@@ -200,3 +200,27 @@ textarea { font: inherit; line-height: 1.45; }
 .av-intro { margin: 0 0 4px; font-weight: 600; color: var(--accent); }
 .av-jamais-l { margin: 8px 0 0; text-align: right; }
 #dlg-avis textarea, #dlg-avis input:not([type="checkbox"]):not([type="radio"]) { width: 100%; box-sizing: border-box; }
+
+/* =====================================================================================
+ * Portrait d'épargnant (fin de l'inscription, et Profil)
+ * ===================================================================================== */
+.portrait { display: grid; gap: 14px; }
+.portrait h1 { margin: 0; font-size: clamp(1.45rem, 5.5vw, 1.9rem); line-height: 1.2; }
+.pt-sur { margin: 0; font-weight: 700; color: var(--accent); }
+.pt-carte h2 { margin-bottom: 8px; }
+.pt-proj { list-style: none; margin: 4px 0 10px; padding: 0; display: grid; gap: 12px; }
+.pt-proj li { display: grid; grid-template-columns: 6.6em 1fr auto; align-items: center; gap: 10px; }
+.pt-t { font-size: .88rem; color: var(--muted); font-weight: 600; }
+.pt-piste { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.pt-piste i { display: block; height: 100%; width: 0; border-radius: 6px; background: var(--ambre, var(--accent)); }
+@media (prefers-reduced-motion: no-preference) { .pt-piste i { transition: width .7s cubic-bezier(.2, .8, .2, 1); } }
+.pt-proj b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.pt-barre { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 6px 0 8px; }
+.pt-barre i { display: block; height: 100%; }
+.pt-leg { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .88rem; }
+.pt-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.pt-trophee { display: flex; align-items: center; gap: 16px; }
+.pt-trophee .medaille { flex: none; width: 56px; height: 74px; }
+.pt-trophee h2 { margin: 0 0 4px; }
+.pt-trophee p { margin: 0; }
+.portrait > .actions .btn { width: 100%; }

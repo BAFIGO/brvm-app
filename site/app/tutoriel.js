@@ -328,8 +328,9 @@
     if (!v || v.hidden || $(".tuto-aide", v)) return;
     const e = etat();
     v.insertAdjacentHTML("beforeend", `<div class="card tuto-aide"><h2>Aide à la prise en main</h2>
-      <p class="small muted">Revoyez la visite guidée à tout moment, ou réaffichez la liste de vos premiers pas sur l'écran Aujourd'hui.</p>
-      <div class="actions"><button type="button" class="btn" data-tuto="revoir">Revoir la visite guidée</button>
+      <p class="small muted">Revoyez votre portrait d'épargnant ou la visite guidée à tout moment, ou réaffichez la liste de vos premiers pas sur l'écran Aujourd'hui.</p>
+      <div class="actions"><button type="button" class="btn" data-tuto="portrait">Mon portrait d'épargnant</button>
+      <button type="button" class="btn" data-tuto="revoir">Revoir la visite guidée</button>
       ${e.liste === "masquee" ? `<button type="button" class="btn" data-tuto="liste">Réafficher mes premiers pas</button>` : ""}</div></div>`);
   }
 
@@ -341,6 +342,7 @@
     const a = b.dataset.tuto, e = etat();
     if (a === "visite") lancerVisite(e.visite === "terminee" || e.visite === "passee");
     else if (a === "revoir") lancerVisite(true);
+    else if (a === "portrait") app.portrait();
     else if (a === "masquer") { e.liste = "masquee"; sauver(e); noter("liste_masquee"); app.toast("Liste masquée", { detail: "Vous pouvez la réafficher depuis le Profil." }); app.render(); }
     else if (a === "liste") { delete e.liste; sauver(e); app.toast("Vos premiers pas sont de retour sur l'écran Aujourd'hui."); }
   });
