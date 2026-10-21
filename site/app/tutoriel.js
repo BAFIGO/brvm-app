@@ -218,7 +218,7 @@
     const e = etat(); let change = false;
     for (const p of liste) if (p.fait && !e.pas[p.id]) { e.pas[p.id] = 1; change = true; if (["depot", "achat", "epargne"].includes(p.id)) noter("pas_termine", p.id); }
     if (liste.length && liste.every((p) => p.fait) && e.liste !== "terminee") {
-      e.liste = "terminee"; change = true; noter("liste_terminee");
+      e.liste = "terminee"; e.liste_le = Date.now(); change = true; noter("liste_terminee");
       app.toast("Bravo, vos premiers pas sont faits !", { detail: "Vous savez maintenant tout ce qu'il faut pour suivre votre épargne." });
     }
     if (change) sauver(e);

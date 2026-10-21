@@ -1,7 +1,12 @@
 /* BafiBourse – avis des utilisateurs : note de 1 à 5 étoiles et commentaire.
- * • Invitation discrète sur l'écran Aujourd'hui, une fois l'application vraiment utilisée
- *   (7 jours après l'inscription et 3 opérations notées) ; « Plus tard » la reporte de 60 jours.
+ * • La fenêtre de notation s'ouvre d'elle-même juste après un moment de réussite (jamais lié à un gain en bourse) :
+ *   trophée d'épargne, épargne envoyée à la SGI, dividende enregistré, premier achat suivi d'une proposition
+ *   (à la visite suivante), fidélité (5 jours de visite sur 14), premiers pas terminés depuis 7 jours.
+ * • Règles : 7 jours après l'inscription et 3 opérations notées ; aucune autre fenêtre ouverte, pas de visite guidée,
+ *   pas d'alerte rouge ; une demande tous les 30 jours au plus, 3 par an au plus ; plus jamais une fois l'avis donné
+ *   ou après « Ne plus me demander ».
  * • Dans le Profil : donner ou modifier son avis à tout moment, et voir s'il est publié.
+ * • Chaque demande est notée avec son déclencheur (table avis_demandes) pour mesurer ce qui fonctionne.
  * • Rien n'est publié sans l'accord de l'utilisateur ni sans relecture dans la console (avis.sql). */
 (() => {
   "use strict";
@@ -19,6 +24,7 @@
     <dialog id="dlg-avis" aria-labelledby="av-titre">
       <form method="dialog" novalidate>
         <h2 id="av-titre">Votre avis sur BafiBourse</h2>
+        <p class="av-intro" hidden></p>
         <fieldset class="av-etoiles">
           <legend>Votre note</legend>
           <div class="av-rangee">${[1, 2, 3, 4, 5].map((n) => `
@@ -38,6 +44,7 @@
         </div>
         <p class="small muted">N'indiquez ni montant, ni gain, ni information personnelle : ces avis ne sont pas publiés.</p>
         <p class="msg err" role="status" aria-live="polite"></p>
+        <p class="av-jamais-l" hidden><button type="button" class="btn link small av-jamais">Ne plus me demander</button></p>
         <div class="actions"><button type="button" class="btn av-annuler">Plus tard</button>
           <button type="submit" class="btn primary av-ok" value="ok">Envoyer mon avis</button></div>
       </form>
@@ -60,10 +67,29 @@
     if (ev.target.name === "publication") { $(".av-ville", dlg).hidden = !f.publication.checked; majTexte(); }
   });
   f.commentaire.addEventListener("input", majTexte);
-  $(".av-annuler", dlg).addEventListener("click", () => dlg.close());
+  let declencheur = null, repondu = false;              // déclencheur de la fenêtre en cours (null : ouverte depuis le Profil)
+  const journal = (reponse, note) => declencheur && app.noterDemandeAvis({ declencheur, reponse, note: note ?? null });
+  $(".av-annuler", dlg).addEventListener("click", () => { if (declencheur && !repondu) { repondu = true; journal("plus_tard"); } dlg.close(); });
+  $(".av-jamais", dlg).addEventListener("click", () => {
+    if (declencheur && !repondu) { repondu = true; journal("jamais"); }
+    app.sauverTutoriel({ ...(app.tutoriel() || {}), avis_jamais: true });
+    dlg.close();
+  });
+  dlg.addEventListener("close", () => { if (declencheur && !repondu) journal("fermee"); declencheur = null; });
 
-  function ouvrir(note) {
+  const INTROS = {
+    trophee: "Bravo pour ce trophée ! Vous avez un instant pour noter BafiBourse ?",
+    transfert: "Votre épargne est en route vers votre SGI. Que pensez-vous de BafiBourse ?",
+    dividende: "Un dividende de plus dans votre journal. Que pensez-vous de BafiBourse ?",
+    achat: "Vous avez suivi une proposition jusqu'à l'achat. Que pensez-vous de BafiBourse ?",
+    fidelite: "Vous suivez votre épargne régulièrement. Que pensez-vous de BafiBourse ?",
+    premiers_pas: "Vous utilisez BafiBourse depuis quelques jours. Qu'en pensez-vous ?",
+  };
+  function ouvrir(note, decl = null) {
     const a = avis || {};
+    declencheur = decl; repondu = false;
+    $(".av-intro", dlg).hidden = !decl; $(".av-intro", dlg).textContent = decl ? INTROS[decl] || "" : "";
+    $(".av-jamais-l", dlg).hidden = !decl;
     f.reset();
     const n = note || a.note;
     if (n) f.note.value = String(n);
@@ -81,6 +107,7 @@
     majEtoiles(); majTexte();
     dlg.showModal();
     (n ? f.commentaire : dlg.querySelector('[name="note"]')).focus();
+    if (decl) journal("proposee");
   }
 
   f.addEventListener("submit", async (ev) => {
@@ -93,6 +120,7 @@
     try {
       const r = await app.donnerAvis(envoi);
       avis = { ...envoi, statut: r?.statut || "prive" };
+      if (declencheur && !repondu) { repondu = true; journal("donnee", note); }
       dlg.close();
       app.toast("Merci pour votre avis !", { detail: avis.statut === "en_attente"
         ? "Il apparaîtra sur le site après relecture par l'équipe."
@@ -102,22 +130,57 @@
     finally { ok.disabled = false; ok.removeAttribute("aria-busy"); ok.textContent = avant; }
   });
 
-  // ---------------------------------------------------------------- invitation sur Aujourd'hui, carte dans le Profil
-  const etoilesFixes = (n) => `<span class="av-fixes" role="img" aria-label="${n} sur 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? "on" : ""}">${ETOILE}</i>`).join("")}</span>`;
-  function inviter() {
-    const v = $("#v-aujourdhui");
-    if (!v || v.hidden || $(".av-invite", v) || avis) return;
-    const e = app.tutoriel() || {};
-    if (e.avis_plus_tard && Date.now() - e.avis_plus_tard < 60 * 864e5) return;
-    if (!app.demo && (app.joursInscription() < 7 || app.nbOps() < 3)) return;
-    const html = `<div class="card av-invite"><h2>Que pensez-vous de BafiBourse ?</h2>
-      <p class="small muted">Votre note nous aide à améliorer l'application, et peut aider d'autres épargnants à se lancer.</p>
-      <div class="av-rangee" role="group" aria-label="Noter BafiBourse">${[1, 2, 3, 4, 5].map((n) =>
-        `<button type="button" class="av-etoile" data-av-note="${n}" aria-label="${n} étoile${n > 1 ? "s" : ""} : ${NOTES[n]}">${ETOILE}</button>`).join("")}</div>
-      <button type="button" class="btn link small" data-av="plus-tard">Plus tard</button></div>`;
-    const apres = $(".tuto-liste", v) || $(".synthese", v);
-    if (apres) apres.insertAdjacentHTML("afterend", html); else v.insertAdjacentHTML("beforeend", html);
+  // ---------------------------------------------------------------- déclencheurs automatiques
+  const JOUR = 864e5;
+  const etat = () => app.tutoriel() || {};
+  const sauver = (maj) => app.sauverTutoriel({ ...etat(), ...maj });
+  function peutDemander() {
+    if (!app || !charge || avis) return false;
+    const e = etat();
+    if (e.avis_jamais) return false;
+    if (document.querySelector("dialog[open]") || ($("#tuto") && !$("#tuto").hidden)) return false;
+    if (app.alerteRouge?.()) return false;
+    if (!app.demo && (app.joursInscription() < 7 || app.nbOps() < 3)) return false;
+    const d = (e.avis_demandes || []).filter((t) => Date.now() - t < 365 * JOUR);
+    if (d.some((t) => Date.now() - t < 30 * JOUR) || d.length >= 3) return false;
+    if (e.avis_plus_tard && Date.now() - e.avis_plus_tard < 30 * JOUR) return false;
+    return true;
   }
+  // Propose la notation après un court délai (le temps de lire la confirmation) ; « une fois » : déclencheur à usage unique
+  function proposer(decl, delai = 900, uneFois = false) {
+    setTimeout(() => {
+      if (!peutDemander()) return;
+      const e = etat();
+      if (uneFois && e.avis_vus?.[decl]) return;
+      sauver({ avis_demandes: [...(e.avis_demandes || []).filter((t) => Date.now() - t < 365 * JOUR), Date.now()],
+               avis_vus: { ...(e.avis_vus || {}), [decl]: 1 } });
+      ouvrir(null, decl);
+    }, delai);
+  }
+  // « Plus tard » : la prochaine demande attendra 30 jours
+  $(".av-annuler", dlg).addEventListener("click", () => { if (declencheur) sauver({ avis_plus_tard: Date.now() }); });
+
+  // 1. trophée d'épargne : après la fermeture de l'écran « Bravo »
+  document.addEventListener("close", (ev) => { if (ev.target?.id === "dlg-bravo") proposer("trophee", 700); }, true);
+  // 2. épargne envoyée à la SGI, 3. dividende, 4. premier achat suivi d'une proposition (proposé à la visite suivante)
+  window.addEventListener("brvm:coffre", (ev) => { if (ev.detail?.mode === "transfert") proposer("transfert", 2500); });
+  window.addEventListener("brvm:operation", (ev) => {
+    const d = ev.detail || {};
+    if (d.type === "DIVIDENDE") proposer("dividende", 3000);
+    if (d.type === "ACHAT" && d.depuisOrdre && !etat().avis_vus?.achat && app) sauver({ avis_attente: "achat" });
+  });
+  // À l'ouverture : achat en attente, 5. fidélité, 6. premiers pas terminés depuis 7 jours
+  function auDemarrage() {
+    const e = etat(), jour = new Date().toISOString().slice(0, 10);
+    const visites = [...new Set([...(e.visites || []), jour])].filter((d) => Date.now() - new Date(d) < 14 * JOUR);
+    if (visites.join() !== (e.visites || []).join()) sauver({ visites });
+    if (e.avis_attente) { sauver({ avis_attente: null }); return proposer(e.avis_attente, 2500, true); }
+    if (visites.length >= 5 && !e.avis_vus?.fidelite) return proposer("fidelite", 2500, true);
+    if (e.liste === "terminee" && (!e.liste_le || Date.now() - e.liste_le >= 7 * JOUR) && !e.avis_vus?.premiers_pas)
+      return proposer("premiers_pas", 2500, true);
+  }
+
+  // ---------------------------------------------------------------- carte dans le Profil
   function carteProfil() {
     const v = $("#v-profil");
     if (!v || v.hidden || $(".av-profil", v)) return;
@@ -132,19 +195,13 @@
   }
 
   document.addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-av-note], [data-av]");
+    const b = ev.target.closest("[data-av]");
     if (!b || !app) return;
-    if (b.dataset.avNote) return ouvrir(+b.dataset.avNote);
     if (b.dataset.av === "ouvrir") return ouvrir();
-    if (b.dataset.av === "plus-tard") {
-      const e = { ...(app.tutoriel() || {}), avis_plus_tard: Date.now() };
-      app.sauverTutoriel(e);
-      b.closest(".av-invite")?.remove();
-    }
   });
   window.addEventListener("brvm:maj", () => {
     if (!app || !charge) return;
-    setTimeout(() => { const t = app.tab(); if (t === "aujourdhui") inviter(); else if (t === "profil") carteProfil(); }, 0);
+    setTimeout(() => { if (app.tab() === "profil") carteProfil(); }, 0);
   });
   window.addEventListener("brvm:pret", async () => {
     app = window.BRVM_APP;
@@ -152,5 +209,6 @@
     try { avis = await app.monAvis(); charge = true; }
     catch (e) { return; }                                  // avis.sql pas encore installé : rien n'est affiché
     window.dispatchEvent(new Event("brvm:maj"));
+    auDemarrage();
   });
 })();

@@ -173,6 +173,13 @@
         const rep = [1, 2, 3, 4, 5].map((n) => AV.filter((a) => a.note === n).length);
         return { stats: { nombre: AV.length, moyenne: +(AV.reduce((x, a) => x + a.note, 0) / AV.length).toFixed(2),
                           en_attente: AV.filter((a) => a.statut === "en_attente").length, publies: AV.filter((a) => a.statut === "publie").length, repartition: rep },
+                 declencheurs: [
+                   { declencheur: "trophee", proposees: 18, donnees: 9, plus_tard: 6, jamais: 1, note: 4.6 },
+                   { declencheur: "transfert", proposees: 11, donnees: 5, plus_tard: 4, jamais: 0, note: 4.4 },
+                   { declencheur: "fidelite", proposees: 9, donnees: 3, plus_tard: 5, jamais: 1, note: 4.0 },
+                   { declencheur: "dividende", proposees: 4, donnees: 2, plus_tard: 2, jamais: 0, note: 4.5 },
+                   { declencheur: "premiers_pas", proposees: 7, donnees: 2, plus_tard: 3, jamais: 2, note: 3.5 },
+                   { declencheur: "achat", proposees: 3, donnees: 1, plus_tard: 1, jamais: 0, note: 5 }],
                  avis: AV.filter((a) => (st === "tous" ? a.statut !== "prive" : a.statut === st)) };
       },
       modererAvis: async (id, dec, motif) => {
@@ -360,6 +367,8 @@
   // ---------------------------------------------------------------- modération des avis (avis.sql)
   // Les 10 meilleurs avis publiés (notés 4 ou 5) défilent sur la vitrine ; « mettre en avant » leur donne un léger bonus.
   const ET = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  const DECL_AV = { trophee: "Trophée d'épargne gagné", transfert: "Épargne envoyée à la SGI", dividende: "Dividende enregistré",
+                    achat: "Premier achat suivi d'une proposition", fidelite: "Fidélité (5 jours de visite sur 14)", premiers_pas: "Premiers pas terminés depuis 7 jours" };
   const STATUT_AV = { en_attente: "En attente", publie: "Publié", refuse: "Refusé", prive: "Privé" };
   async function afficherAvis(st) {
     const c = $("#avis-adm");
@@ -390,6 +399,13 @@
       <div class="scroll-x"><table class="dtable"><thead><tr><th>Note</th><th class="num">Avis</th><th>Répartition</th></tr></thead><tbody>
         ${[5, 4, 3, 2, 1].map((n) => `<tr><td>${ET(n)}</td><td class="num">${N(rep[n - 1])}</td>
           <td><span style="display:inline-block;height:8px;border-radius:4px;background:hsl(35 92% 52%);width:${Math.round((rep[n - 1] / max) * 160)}px"></span></td></tr>`).join("")}</tbody></table></div>
+      ${(r.declencheurs || []).length ? `<h3>Quand la notation est proposée</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Moment</th><th class="num">Proposée</th><th class="num">Avis donnés</th>
+        <th class="num">Taux</th><th class="num">Note moyenne</th><th class="num">« Plus tard »</th><th class="num">« Ne plus demander »</th></tr></thead><tbody>
+        ${r.declencheurs.map((x) => `<tr><td>${esc(DECL_AV[x.declencheur] || x.declencheur)}</td><td class="num">${N(x.proposees)}</td><td class="num">${N(x.donnees)}</td>
+          <td class="num">${x.proposees ? Math.round((x.donnees / x.proposees) * 100) + " %" : "–"}</td><td class="num">${x.note ? String(x.note).replace(".", ",") : "–"}</td>
+          <td class="num">${N(x.plus_tard)}</td><td class="num">${N(x.jamais)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted">La fenêtre s'ouvre seule après un moment de réussite, au plus une fois par mois et trois fois par an par utilisateur. Un taux faible ou beaucoup de « Ne plus demander » : ce moment est à revoir.</p>` : ""}
       <p class="small muted">À ne pas publier : montants ou promesses de gain, recommandation d'un titre, informations personnelles, propos injurieux. Un avis refusé demande un motif, noté au journal d'audit.</p>
       <div class="actions" role="group" aria-label="Filtrer les avis">${onglets}</div>
       <ul class="list">${(r.avis || []).map(ligne).join("") || `<li class="muted">Aucun avis dans cette catégorie.</li>`}</ul>`;

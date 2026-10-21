@@ -145,6 +145,15 @@
       addOperation: async (op) => r(await sb.from("operations").insert(op)),
       deleteOperation: async (id) => r(await sb.from("operations").delete().eq("id", id)),
       table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
+      // Dernier cours connu d'un titre absent de l'analyse du jour : on cherche dans les trois tables
+      dernierCours: async (code, avant) => {
+        for (const [t, col] of [["actions_analyse", "cours"], ["obligations_analyse", "prix"], ["opcvm_analyse", "vl"]]) {
+          const { data } = await sb.from(t).select(`date,nom,${col}`).eq("code", code).lt("date", avant).not(col, "is", null)
+            .order("date", { ascending: false }).limit(1);
+          if (data?.length) return { date: data[0].date, cours: +data[0][col], nom: data[0].nom, classe: t.split("_")[0] };
+        }
+        return null;
+      },
       cibles: async (date, profil) => r(await sb.from("cibles_profil").select("*").eq("date", date).eq("profil", profil)),
       indices: async () => {
         const depuis = new Date(Date.now() - 5.2 * 365 * 864e5).toISOString().slice(0, 10), out = [];
@@ -174,6 +183,7 @@
       titresPays: async () => r(await sb.from("titres_pays").select("code,pays")),
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
       // Avis des utilisateurs (avis.sql) : lecture de son propre avis, envoi par la fonction donner_avis
+      noterDemandeAvis: async (d) => { await sb.from("avis_demandes").insert(d); },
       monAvis: async () => {
         const { data, error } = await sb.from("avis").select("note,commentaire,publication,ville,statut,motif_refus").maybeSingle();
         if (error) throw error;
@@ -227,6 +237,7 @@
       },
       deleteOperation: async (id) => { const d = await load(); d.operations = d.operations.filter((o) => o.id !== id); },
       table: async (name) => (await load())[names[name]],
+      dernierCours: async () => null,
       cibles: async (_d, profil) => (await load()).cibles.filter((c) => c.profil === profil),
       indices: async () => (await load()).indices || [],
       // Épargne mise de côté : en démonstration, un plan quotidien et quelques semaines de versements fictifs
@@ -262,6 +273,7 @@
       alertes: async () => alertesDemo(),
       evenementTutoriel: async () => {},
       monAvis: async () => avisDemo,
+      noterDemandeAvis: async () => {},
       donnerAvis: async (a) => {
         const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
         avisDemo = { ...a, statut: st }; return { statut: st };
@@ -306,15 +318,18 @@
       } else if (o.type === "DIVIDENDE") { const d = ok(o.montant) ? m : q * p; cash += d; dividendes += d; }
     }
     const positions = [...pos.entries()].map(([code, x]) => {
-      const cours = S.prices.get(code);
-      const valeur = ok(cours) ? x.q * cours : null;
-      return { code, quantite: x.q, pru: x.cost / x.q, cout: x.cost, cours, valeur,
-               pv: ok(valeur) ? valeur * (1 - FEES) - x.cost : null, classe: S.classes.get(code) };
+      const cours = S.prices.get(code), sansCours = !ok(cours);
+      const valeur = sansCours ? x.cost : x.q * cours;          // sans aucun cours : compté au prix d'achat, frais compris
+      return { code, quantite: x.q, pru: x.cost / x.q, cout: x.cost, cours, valeur, sansCours, coursDu: S.coursAnciens?.get(code) || null,
+               pv: sansCours ? 0 : valeur * (1 - FEES) - x.cost, classe: S.classes.get(code) };
     }).sort((a, b) => (b.valeur || 0) - (a.valeur || 0));
+    const cotes = positions.filter((p) => !p.sansCours);
     const investi = positions.reduce((s, p) => s + (p.valeur || 0), 0);
     const latent = positions.reduce((s, p) => s + (p.pv || 0), 0);
+    const fraisVente = cotes.reduce((s, p) => s + p.valeur * FEES, 0);
     return { positions, cash, apports, errors, valeur: cash + investi, investi, latent, realise, dividendes, fraisOps,
-             fraisVente: investi * FEES, gainTotal: cash + investi - apports };
+             fraisVente, gainTotal: cash + investi - apports,
+             sansCours: positions.filter((p) => p.sansCours), coursAnciens: positions.filter((p) => p.coursDu) };
   }
 
   // ---------------------------------------------------------------- proposition instantanée (budget × poids cibles)
@@ -840,20 +855,34 @@
     return h + `</div>`;
   }
   function aideGain() {
-    const L = replay(S.ops), ligne = (t, v, cl = "") => `<tr class="${cl}"><th scope="row">${t}</th><td class="num ${cls(v)}">${v > 0 ? "+" : ""}${F(v)}</td></tr>`;
-    showInfo("Comprendre mon gain", `<p>Deux chiffres répondent à deux questions différentes :</p>
-      <ul class="small"><li><b>Gain si je vendais aujourd'hui</b> : seulement les titres que vous avez encore, frais de vente déduits.</li>
-      <li><b>Gain total depuis le début</b> : tout ce que votre argent a rapporté, dividendes et titres déjà vendus compris.</li></ul>
+    // Deux tableaux qui partent du même chiffre : la plus ou moins-value des titres détenus, SANS les vendre.
+    // Les frais de vente n'apparaissent qu'en moins, et seulement dans le scénario « si je vendais tout ».
+    const L = replay(S.ops);
+    const ligne = (t, v, cl = "") => `<tr class="${cl}"><th scope="row">${t}</th><td class="num ${cls(v)}">${v > 0 ? "+" : ""}${F(v)}</td></tr>`;
+    const brut = L.latent + L.fraisVente;                         // valeur actuelle des titres − ce qu'ils ont coûté (frais d'achat compris)
+    const ecart = L.gainTotal - (brut + L.dividendes + L.realise - L.fraisOps);
+    showInfo("Comprendre mon gain", `<p>Le point de départ est le même : ce que valent vos titres aujourd'hui, comparé à ce qu'ils vous ont coûté (frais d'achat compris).</p>
+      <h3 class="decomp-t">Si je vendais tout aujourd'hui</h3>
       <table class="decomp"><tbody>
-        ${ligne("Gain si je vendais aujourd'hui", L.latent)}
-        ${L.investi > 0 ? ligne(`+ frais de vente estimés (${nf1.format(FEES * 100)} %), pas encore payés`, L.fraisVente) : ""}
+        ${ligne("Valeur actuelle de vos titres − ce qu'ils vous ont coûté", brut)}
+        ${L.fraisVente > 0 ? ligne(`− frais de vente estimés (${nf1.format(FEES * 100)} %), à payer lors de la vente`, -L.fraisVente) : ""}
+        ${ligne("= Gain si je vendais aujourd'hui", L.latent, "tot")}
+      </tbody></table>
+      <h3 class="decomp-t">Depuis le début, sans rien vendre</h3>
+      <table class="decomp"><tbody>
+        ${ligne("Valeur actuelle de vos titres − ce qu'ils vous ont coûté", brut)}
         ${ligne("+ dividendes reçus", L.dividendes)}
         ${ligne("+ résultat des titres déjà vendus", L.realise)}
-        ${L.fraisOps ? ligne("− autres frais", -L.fraisOps) : ""}
+        ${L.fraisOps ? ligne("− autres frais prélevés", -L.fraisOps) : ""}
+        ${Math.abs(ecart) >= 1 ? ligne("± écart à vérifier dans le journal", ecart) : ""}
         ${ligne("= Gain total depuis le début", L.gainTotal, "tot")}
       </tbody></table>
+      ${L.coursAnciens.length ? `<p class="small">Sans cours lors de la dernière séance, ${L.coursAnciens.map((p) => `<b>${esc(S.names.get(p.code) || p.code)}</b> (cours du ${D(p.coursDu)})`).join(", ")}
+        ${L.coursAnciens.length > 1 ? "sont valorisés" : "est valorisé"} à son dernier cours connu.</p>` : ""}
+      ${L.sansCours.length ? `<p class="small">Aucun cours connu pour ${L.sansCours.map((p) => `<b>${esc(S.names.get(p.code) || p.code)}</b>`).join(", ")} :
+        ${L.sansCours.length > 1 ? "ils sont comptés" : "il est compté"} à son prix d'achat, sans gain ni perte, en attendant un cours.</p>` : ""}
       <p class="small muted">Vérification : total chez ma SGI ${F(L.valeur)} − total envoyé à ma SGI ${F(L.apports)} = ${F(L.gainTotal)}.
-        Les frais d'achat sont déjà déduits dans les deux chiffres.</p>
+        Les frais de vente ne sont payés qu'au moment de vendre : c'est pourquoi le gain total ne les retire pas.</p>
       <p class="small">La page <b>Performance</b> montre ce même gain total, mais sur la période choisie (une séance, un mois…).</p>`);
   }
   function showInfo(title, html) {
@@ -1051,7 +1080,7 @@
         const al = S.alertesMap?.get(p.code);
         h += `<li${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
-          <div class="sub etats">${chip(d)}${pastille(al)}</div></div>
+          <div class="sub etats">${chip(d)}${pastille(al)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
@@ -1806,7 +1835,7 @@
   }
   function openOp(pre = {}) {
     fop.reset();
-    delete fop.dataset.dupOk; delete fop.dataset.prixAuto;
+    delete fop.dataset.dupOk; delete fop.dataset.prixAuto; delete fop.dataset.depuisOrdre;
     fop.date.value = today();
     $(".msg", fop).textContent = "";
     $("#op-q").value = "";
@@ -1874,6 +1903,7 @@
       render();
       const nouvelle = S.ops.find((o) => !ids.has(o.id));
       confirmerOperation(op, nouvelle, avant, !versEpargne);
+      window.dispatchEvent(new CustomEvent("brvm:operation", { detail: { type: op.type, depuisOrdre: !!fop.dataset.depuisOrdre } }));
       if (nouvelle && tab() === "portefeuille") montrerOperation(nouvelle.id);
     } catch (e) { fin(); libelleOp(); err("Enregistrement impossible : " + e.message); }
   });
@@ -1966,6 +1996,7 @@
       dcf.close();
       render();
       feter(cfMode === "verser" ? S.feteMontant : 0);
+      window.dispatchEvent(new CustomEvent("brvm:coffre", { detail: { mode: cfMode } }));
     } catch (e) { err("Enregistrement impossible : " + e.message); }
     finally { fin(); }
   });
@@ -1985,6 +2016,7 @@
     else if (b.dataset.ordre !== undefined) {
       const o = S.ordres[+b.dataset.ordre];
       openOp({ type: o.sens, ticker: o.code, quantite: String(o.quantite), prix: String(o.prix_limite) });
+      fop.dataset.depuisOrdre = "1";
     } else if (b.dataset.ligne !== undefined) {
       const l = S.lines[+b.dataset.ligne];
       openOp({ type: "ACHAT", ticker: l.code, quantite: String(l.quantite), prix: String(l.prix) });
@@ -2078,7 +2110,26 @@
       S.lignesMk = new Map([...S.mk.actions.map((r) => [r.code, ["actions", r]]), ...S.mk.obligations.map((r) => [r.code, ["obligations", r]]),
         ...S.mk.opcvm.map((r) => [r.code, ["opcvm", r]])]);
     }
+    await completerCours();
     await chargerAlertes();
+  }
+  // Un titre détenu peut manquer dans l'analyse du jour (fonds qui n'a pas publié sa valeur liquidative,
+  // obligation non cotée ce jour-là…). Sans cours, il compterait pour 0 F et fausserait le total et le gain :
+  // on prend son dernier cours connu, signalé comme tel. À défaut, il est compté à son prix d'achat.
+  S.coursAnciens = new Map();
+  async function completerCours() {
+    S.coursAnciens = new Map();
+    if (!S.seance) return;
+    const manquants = replay(S.ops).positions.filter((p) => !ok(S.prices.get(p.code))).map((p) => p.code);
+    await Promise.all(manquants.map(async (code) => {
+      try {
+        const d = await api.dernierCours(code, S.seance.date);
+        if (!d || !ok(d.cours)) return;
+        S.prices.set(code, d.cours); S.coursAnciens.set(code, d.date);
+        if (!S.names.has(code) && d.nom) S.names.set(code, nomLisible(d.nom));
+        if (!S.classes.has(code)) S.classes.set(code, d.classe === "actions" ? "actions" : d.classe === "obligations" ? "obligations" : "opcvm");
+      } catch (e) { /* pas de cours ancien : compté au prix d'achat */ }
+    }));
   }
 
   // Lit le mode (lisible sans connexion) et adapte les textes statiques marqués data-sim ; « proposition » par défaut
@@ -2130,6 +2181,8 @@
                         tutoriel: etatTutoriel, sauverTutoriel,
                         // avis (avis.js)
                         monAvis: () => api.monAvis(), donnerAvis: (a) => api.donnerAvis(a),
+                        noterDemandeAvis: (d) => api.noterDemandeAvis(d).catch(() => {}),
+                        alerteRouge: () => (S.alertes || []).some((a) => a.alerte === "ROUGE"),
                         nomAffiche: () => (S.profil?.prenom ? [S.profil.prenom, S.profil?.nom ? S.profil.nom.trim().charAt(0).toUpperCase() + "." : ""].filter(Boolean).join(" ") : DEMO ? "Utilisateur D." : ""),
                         joursInscription: () => {
                           const d = S.profil?.onboarding_fini_le || S.profil?.cree_le;

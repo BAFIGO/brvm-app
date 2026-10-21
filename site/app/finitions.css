@@ -196,3 +196,7 @@ textarea { font: inherit; line-height: 1.45; }
 .tend-kpi .val { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .tendance .chart { max-width: none; }
 .tendance details { margin-top: 8px; }
+.decomp-t { margin: 16px 0 4px; font-size: .95rem; }
+.av-intro { margin: 0 0 4px; font-weight: 600; color: var(--accent); }
+.av-jamais-l { margin: 8px 0 0; text-align: right; }
+#dlg-avis textarea, #dlg-avis input:not([type="checkbox"]):not([type="radio"]) { width: 100%; box-sizing: border-box; }
