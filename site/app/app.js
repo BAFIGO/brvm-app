@@ -684,9 +684,73 @@
     $("#bravo-msg").textContent = t.msg;
     $("#bravo-aussi").innerHTML = items.length > 1 ? "Et aussi : " + items.slice(1).map((x) => `<b>${esc(x.titre)}</b>`).join(", ") : "";
     $("#bravo-action").hidden = t.action !== "transfert";
+    S.bravoTrophee = t;
     d.showModal();
     confettis(d);
   }
+  // ---------------------------------------------------------------- partager un trophée (image, sans aucun montant)
+  const METAUX = { bronze: ["#d08a4a", "#7a4a1f"], argent: ["#eef1f5", "#8e96a3"], or: ["#ffd75e", "#b8860b"], platine: ["#f2f2f0", "#9aa3ad"],
+    diamant: ["#c8f4ff", "#3fa6cf"], legende: ["#d9a3ff", "#6a1b9a"], emeraude: ["#6be39a", "#1e7a4f"], saphir: ["#8fa2ff", "#1b2a8a"], rubis: ["#ff6f9b", "#8b0a3a"] };
+  const URL_SITE = "https://bafigo.github.io/brvm-app/";
+  const phraseTrophee = (t) => /^serie-/.test(t.id || "") ? `J'ai épargné ${String(t.titre).toLowerCase()} avec BafiBourse !`
+    : t.id === "premier" ? "J'ai mis de côté mes premiers francs avec BafiBourse !"
+    : t.id === "sgi" ? "J'ai investi mon épargne à la BRVM avec BafiBourse !"
+    : `J'ai décroché la médaille « ${t.titre} » sur BafiBourse !`;
+  async function imageTrophee(t) {
+    const W = 1080, H = 1350, c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d"), police = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+    const fond = g.createLinearGradient(0, 0, W, H);
+    fond.addColorStop(0, "#1b286a"); fond.addColorStop(1, "#0f1640");
+    g.fillStyle = fond; g.fillRect(0, 0, W, H);
+    // halo et rayons
+    const halo = g.createRadialGradient(W / 2, 560, 40, W / 2, 560, 460);
+    halo.addColorStop(0, "rgba(246,158,35,.45)"); halo.addColorStop(1, "rgba(246,158,35,0)");
+    g.fillStyle = halo; g.fillRect(0, 0, W, H);
+    // marque
+    g.textAlign = "center"; g.textBaseline = "alphabetic";
+    g.font = `800 64px ${police}`;
+    const wB = g.measureText("Bafi").width, wT = g.measureText("BafiBourse").width, x0 = W / 2 - wT / 2;
+    g.textAlign = "left"; g.fillStyle = "#F69E23"; g.fillText("Bafi", x0, 150); g.fillStyle = "#ffffff"; g.fillText("Bourse", x0 + wB, 150);
+    g.textAlign = "center";
+    // médaille : ruban, disque, chiffre
+    const [clair, fonce] = METAUX[t.metal] || METAUX.bronze, cx = W / 2, cy = 590, r = 190;
+    g.fillStyle = "#F69E23"; g.beginPath(); g.moveTo(cx - 150, 300); g.lineTo(cx - 40, 300); g.lineTo(cx + 20, cy - 120); g.lineTo(cx - 90, cy - 120); g.fill();
+    g.fillStyle = "#4f6ad9"; g.beginPath(); g.moveTo(cx + 150, 300); g.lineTo(cx + 40, 300); g.lineTo(cx - 20, cy - 120); g.lineTo(cx + 90, cy - 120); g.fill();
+    const disque = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    disque.addColorStop(0, clair); disque.addColorStop(1, fonce);
+    g.fillStyle = disque; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 14; g.strokeStyle = "rgba(255,255,255,.55)"; g.beginPath(); g.arc(cx, cy, r - 26, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = "rgba(20,23,41,.85)"; g.font = `800 ${String(t.marque || "★").length > 2 ? 120 : 170}px ${police}`;
+    g.textBaseline = "middle"; g.fillText(String(t.marque || "★"), cx, cy + 8); g.textBaseline = "alphabetic";
+    // textes
+    g.fillStyle = "#F69E23"; g.font = `700 44px ${police}`; g.fillText(`Médaille ${RANGS[t.metal] || ""}`.trim(), cx, 880);
+    g.fillStyle = "#ffffff"; g.font = `800 76px ${police}`;
+    const lignes = (txt, max) => { const m = txt.split(" "), out = []; let l = ""; for (const w of m) { const e = l ? l + " " + w : w; if (g.measureText(e).width > max && l) { out.push(l); l = w; } else l = e; } out.push(l); return out; };
+    let y = 980;
+    for (const l of lignes(t.titre, 940).slice(0, 2)) { g.fillText(l, cx, y); y += 88; }
+    g.font = `500 40px ${police}`; g.fillStyle = "rgba(255,255,255,.88)";
+    for (const l of lignes(phraseTrophee(t), 900).slice(0, 2)) { g.fillText(l, cx, y + 10); y += 54; }
+    g.font = `600 36px ${police}`; g.fillStyle = "rgba(255,255,255,.7)";
+    g.fillText("Épargner chaque jour, investir à la BRVM", cx, H - 120);
+    g.fillStyle = "#F69E23"; g.fillText(URL_SITE.replace("https://", "").replace(/\/$/, ""), cx, H - 66);
+    return new Promise((ok) => c.toBlob(ok, "image/png"));
+  }
+  async function partagerTrophee(t) {
+    if (!t) return;
+    const texte = `${phraseTrophee(t)} ${URL_SITE}`;
+    const blob = await imageTrophee(t), fichier = new File([blob], "trophee-bafibourse.png", { type: "image/png" });
+    try {
+      if (navigator.canShare?.({ files: [fichier] })) return await navigator.share({ files: [fichier], text: texte });
+    } catch (e) { if (e.name === "AbortError") return; }
+    // ordinateur ou navigateur sans partage de fichier : aperçu, image à enregistrer et lien WhatsApp
+    const url = URL.createObjectURL(blob);
+    showInfo("Partager mon trophée", `<img src="${url}" alt="Image du trophée ${esc(t.titre)}" class="tr-apercu">
+      <p class="small muted">Aucun montant n'apparaît sur l'image : seulement votre réussite.</p>
+      <div class="actions"><a class="btn" href="${url}" download="trophee-bafibourse.png">Enregistrer l'image</a>
+        <a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">Envoyer sur WhatsApp</a></div>`);
+  }
+
   function confettis(hote) {
     if (CALME || S.profil?.felicitations === false) return;
     const c = document.createElement("canvas");
@@ -922,7 +986,7 @@
     const tr = trophees(ep), gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
     h += `<div class="trophees-tete"><b>Mes trophées</b><span class="small muted">${gagnes.length} / ${tr.length}</span></div>
       <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
-        <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}</li>`).join("")}</ul>`;
+        <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}${t.ok ? `<button type="button" class="tr-partager" data-partager="${esc(t.id)}" aria-label="Partager le trophée ${esc(t.titre)}">Partager</button>` : ""}</li>`).join("")}</ul>`;
     const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
     if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
         <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
@@ -2380,6 +2444,8 @@
     const b = ev.target.closest("button");
     if (!b) return;
     if (b.hasAttribute("data-recap")) return ouvrirRecap();
+    if (b.id === "bravo-partager") return partagerTrophee(S.bravoTrophee);
+    if (b.dataset.partager) return partagerTrophee(trophees(epargne()).find((x) => x.id === b.dataset.partager));
     if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
     else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); if ($("#dlg-recap")?.open) $("#dlg-recap").close(); openCoffre(b.dataset.coffre); }
     else if (b.dataset.alerte !== undefined) {
