@@ -362,3 +362,25 @@ textarea { font: inherit; line-height: 1.45; }
   color: var(--accent); background: var(--accent-soft); }
 .tr-partager:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tr-apercu { display: block; width: min(100%, 320px); margin: 4px auto 10px; border-radius: 14px; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .4); }
+
+/* =====================================================================================
+ * Cercles d'épargne (cercles.js)
+ * ===================================================================================== */
+.cer { padding: 12px 0 14px; border-top: 1px solid var(--border); }
+.cer:first-of-type { border-top: 0; padding-top: 4px; }
+.cer-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cer-tete h3 { margin: 0; font-size: 1.02rem; }
+.cer-barre, .cer-mini { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.cer-barre i, .cer-mini i { display: block; height: 100%; border-radius: 5px; background: hsl(35 92% 52%); }
+.cer-membres { list-style: none; margin: 12px 0 8px; padding: 0; display: grid; gap: 8px; counter-reset: rang; }
+.cer-membres li { display: grid; grid-template-columns: 1.6em 1fr auto auto; grid-template-areas: "r n s j" ". m m m"; gap: 2px 10px; align-items: center; counter-increment: rang; }
+.cer-membres li::before { content: counter(rang); grid-area: r; font-weight: 800; color: var(--muted); font-size: .85rem; }
+.cer-membres li.moi { font-weight: 700; }
+.cer-nom { grid-area: n; }
+.cer-serie { grid-area: s; font-size: .85rem; }
+.cer-jours { grid-area: j; font-size: .88rem; font-variant-numeric: tabular-nums; }
+.cer-mini { grid-area: m; height: 6px; }
+.cer-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.cer-code { margin: 6px 0 12px; font-size: 1.8rem; font-weight: 800; letter-spacing: .14em; text-align: center; font-variant-numeric: tabular-nums;
+  padding: 10px; border-radius: 12px; background: var(--surface-2); }
+.cer-partage { display: grid; gap: 8px; }

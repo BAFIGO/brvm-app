@@ -198,6 +198,13 @@
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
       // Avis des utilisateurs (avis.sql) : lecture de son propre avis, envoi par la fonction donner_avis
       noterDemandeAvis: async (d) => { await sb.from("avis_demandes").insert(d); },
+      // Cercles d'épargne (cercles.sql)
+      cercles: async () => { const { data, error } = await sb.rpc("mes_cercles"); if (error) throw error; return data || []; },
+      creerCercle: async (nom, objectif) => { const { data, error } = await sb.rpc("creer_cercle", { p_nom: nom, p_objectif: objectif }); if (error) throw new Error(error.message); return data; },
+      apercuCercle: async (code) => { const { data, error } = await sb.rpc("apercu_cercle", { p_code: code }); if (error) throw new Error(error.message); return data; },
+      rejoindreCercle: async (code) => { const { data, error } = await sb.rpc("rejoindre_cercle", { p_code: code }); if (error) throw new Error(error.message); return data; },
+      quitterCercle: async (id) => { const { error } = await sb.rpc("quitter_cercle", { p_cercle: id }); if (error) throw new Error(error.message); },
+      publierRegularite: async (x) => { const { error } = await sb.from("epargne_publique").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }); if (error) throw error; },
       // Rappels du soir (rappels.sql)
       rappels: async () => r(await sb.from("rappels").select("push, whatsapp, heure, epargne").maybeSingle()),
       sauverRappels: async (x) => { r(await sb.from("rappels").upsert({ ...x, user_id: S.user.id, modifie_le: new Date().toISOString() })); },
@@ -325,6 +332,16 @@
       monAvis: async () => avisDemo,
       noterDemandeAvis: async () => {},
       rappels: async () => rappelsDemo, sauverRappels: async (x) => { rappelsDemo = { ...rappelsDemo, ...x }; },
+      cercles: async () => cerclesDemo,
+      creerCercle: async (nom, objectif) => {
+        const c = { id: "c" + Date.now(), nom, code: Math.random().toString(16).slice(2, 10).toUpperCase(), objectif_jours: objectif, createur: true,
+                    membres: [{ pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, regularite: 0.8 }] };
+        cerclesDemo = [...cerclesDemo, c]; return c;
+      },
+      apercuCercle: async (code) => ({ nom: "Les amis de la fac", objectif_jours: 15, membres: 4, deja: cerclesDemo.some((c) => c.code === code) }),
+      rejoindreCercle: async () => ({ nom: "Les amis de la fac", deja: false }),
+      quitterCercle: async (id) => { cerclesDemo = cerclesDemo.filter((c) => c.id !== id); },
+      publierRegularite: async () => {},
       abonnerPush: async () => {}, desabonnerPush: async () => {}, essaiRappel: async () => ({ demo: true }),
       donnerAvis: async (a) => {
         const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
@@ -1165,6 +1182,11 @@
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
   let tutoDemo = {}, avisDemo = null, rappelsDemo = null;
+  let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, createur: true, membres: [
+    { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, regularite: 0.92 },
+    { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, regularite: 0.8 },
+    { pseudo: "Koffi A.", moi: false, serie: 3, unite: "jour", record: 7, jours_mois: 9, regularite: 0.6 },
+    { pseudo: "Mariam S.", moi: false, serie: 0, unite: "semaine", record: 4, jours_mois: 3, regularite: 0.5 }] }];
   const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
   function etatTutoriel() {
     if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
@@ -2637,6 +2659,17 @@
                         rappels: () => api.rappels(), sauverRappels: (x) => api.sauverRappels(x), abonnerPush: (a) => api.abonnerPush(a),
                         desabonnerPush: (e) => api.desabonnerPush(e), essaiRappel: () => api.essaiRappel(),
                         telephone: () => S.profil?.telephone || "",
+                        // cercles d'épargne (cercles.js) : seulement des indicateurs de régularité, jamais de montant
+                        cercles: () => api.cercles(), creerCercle: (n, o) => api.creerCercle(n, o), apercuCercle: (c) => api.apercuCercle(c),
+                        rejoindreCercle: (c) => api.rejoindreCercle(c), quitterCercle: (id) => api.quitterCercle(id),
+                        publierRegularite: (x) => api.publierRegularite(x),
+                        regularite: () => {
+                          const ep = epargne(); if (!ep?.plan?.montant) return null;
+                          const mois = today().slice(0, 7);
+                          const jours = new Set((ep.mv || []).filter((m) => m.type === "VERSEMENT" && String(m.date).startsWith(mois)).map((m) => m.date)).size;
+                          return { serie: ep.serie || 0, record: ep.record || 0, unite: ep.unite || "jour", jours_mois: Math.min(31, jours), mois,
+                                   regularite: ep.total ? Math.round((ep.tenus / ep.total) * 1000) / 1000 : null };
+                        },
                         portrait: () => voirPortrait(),
                         // import des documents de la SGI (import.js)
                         lireDocument: (type, d) => api.lireDocument(type, d),
