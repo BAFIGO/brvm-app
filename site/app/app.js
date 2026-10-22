@@ -140,6 +140,9 @@
       seance: async () => r(await sb.from("seances").select("*").order("date", { ascending: false }).limit(1))[0] || null,
       proposition: async (uid) => r(await sb.from("propositions").select("date,contenu").eq("user_id", uid)
         .order("date", { ascending: false }).limit(1))[0] || null,
+      // Secours : dernier historique de performance non vide (si le calcul du soir n'en a pas produit)
+      historiqueSecours: async (uid) => (r(await sb.from("propositions").select("date,historique:contenu->historique,performance:contenu->performance")
+        .eq("user_id", uid).order("date", { ascending: false }).limit(15)) || []).find((x) => Array.isArray(x.historique) && x.historique.length) || null,
       operations: async () => r(await sb.from("operations").select("id,date,type,ticker,quantite,prix,frais,montant,note")
         .order("date").order("id")),
       addOperation: async (op) => r(await sb.from("operations").insert(op)),
@@ -195,6 +198,16 @@
       documents: async () => r(await sb.from("documents_legaux").select("type,version,titre,texte,publie_le").order("version", { ascending: false })),
       // Avis des utilisateurs (avis.sql) : lecture de son propre avis, envoi par la fonction donner_avis
       noterDemandeAvis: async (d) => { await sb.from("avis_demandes").insert(d); },
+      // Rappels du soir (rappels.sql)
+      rappels: async () => r(await sb.from("rappels").select("push, whatsapp, heure, epargne").maybeSingle()),
+      sauverRappels: async (x) => { r(await sb.from("rappels").upsert({ ...x, user_id: S.user.id, modifie_le: new Date().toISOString() })); },
+      abonnerPush: async (a) => { r(await sb.from("push_abonnements").upsert({ ...a, user_id: S.user.id, actif: true })); },
+      desabonnerPush: async (endpoint) => { r(await sb.from("push_abonnements").delete().eq("endpoint", endpoint)); },
+      essaiRappel: async () => {
+        const { data, error } = await sb.functions.invoke("rappels", { body: { essai: true } });
+        if (error) { let m = error.message; try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ } throw new Error(m); }
+        return data;
+      },
       monAvis: async () => {
         const { data, error } = await sb.from("avis").select("note,commentaire,publication,ville,statut,motif_refus").maybeSingle();
         if (error) throw error;
@@ -247,6 +260,7 @@
         d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
       },
       deleteOperation: async (id) => { const d = await load(); d.operations = d.operations.filter((o) => o.id !== id); },
+      historiqueSecours: async () => null,
       addOperations: async (ops) => {
         const d = await load(), ids = ops.map(() => nextId++);
         ops.forEach((op, k) => d.operations.push({ ...op, id: ids[k] }));
@@ -310,6 +324,8 @@
       evenementTutoriel: async () => {},
       monAvis: async () => avisDemo,
       noterDemandeAvis: async () => {},
+      rappels: async () => rappelsDemo, sauverRappels: async (x) => { rappelsDemo = { ...rappelsDemo, ...x }; },
+      abonnerPush: async () => {}, desabonnerPush: async () => {}, essaiRappel: async () => ({ demo: true }),
       donnerAvis: async (a) => {
         const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
         avisDemo = { ...a, statut: st }; return { statut: st };
@@ -448,6 +464,25 @@
   }
 
   // Le journal a-t-il changé depuis le calcul du soir ? (trésorerie ou positions différentes)
+  // Rejoue le journal dans l'ordre des dates (le même jour : achats avant ventes) et renvoie la première vente
+  // impossible, c'est-à-dire supérieure aux titres détenus à sa date. Le calcul du soir refuse un tel journal.
+  function venteImpossible(ops) {
+    const rang = (t) => (t === "ACHAT" ? 0 : t === "VENTE" ? 2 : 1);
+    const tri = ops.map((o, i) => ({ o, i })).sort((a, b) => String(a.o.date).localeCompare(String(b.o.date)) || rang(a.o.type) - rang(b.o.type) || a.i - b.i);
+    const stock = new Map();
+    for (const { o } of tri) {
+      if (o.type === "ACHAT") stock.set(o.ticker, (stock.get(o.ticker) || 0) + +o.quantite);
+      if (o.type === "VENTE") {
+        const q = stock.get(o.ticker) || 0;
+        if (+o.quantite > q + 1e-9) return { op: o, detenu: q };
+        stock.set(o.ticker, q - +o.quantite);
+      }
+    }
+    return null;
+  }
+  const texteVenteImpossible = (v) => `Vente de ${N(v.op.quantite)} ${S.names.get(v.op.ticker) || v.op.ticker} le ${D(v.op.date)} : `
+    + (v.detenu > 0 ? `vous n'en déteniez que ${N(v.detenu)} à cette date.` : "vous n'en déteniez aucun à cette date.");
+
   function journalChanged(L, c) {
     if (!c) return true;
     if (Math.abs((+c.tresorerie || 0) - L.cash) > 1) return true;
@@ -1065,7 +1100,7 @@
     return s.slice(0, 5);
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
-  let tutoDemo = {}, avisDemo = null;
+  let tutoDemo = {}, avisDemo = null, rappelsDemo = null;
   const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
   function etatTutoriel() {
     if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
@@ -1986,10 +2021,13 @@
 
   function vPerformance() {
     const v = $("#v-performance");
-    const hist = (S.prop?.contenu?.historique || []).filter((r) => r.date);
+    const secours = !(S.prop?.contenu?.historique || []).length && S.histSecours;
+    const hist = ((secours ? S.histSecours.historique : S.prop?.contenu?.historique) || []).filter((r) => r.date);
     const ix = {};
     for (const r of S.indices || []) (ix[r.code] ||= new Map()).set(r.date, r);
     let h = `<h1 id="h-perf">Performance</h1>`;
+    if (secours) h += `<div class="notice">Le calcul du ${D(S.prop.date)} n'a pas mis à jour l'historique de performance :
+      les chiffres ci-dessous s'arrêtent au ${D(hist[hist.length - 1]?.date)}. Ils se compléteront au prochain calcul réussi.</div>`;
     if (!hist.length) {
       v.innerHTML = h + `<div class="notice info">Le gain ou la perte de chaque séance est calculé chaque soir à partir de votre journal.
         Enregistrez vos opérations : les premiers chiffres apparaîtront après le prochain calcul.</div>`;
@@ -2188,8 +2226,11 @@
       if (!(op.quantite > 0) || !(op.prix > 0)) return err("Indiquez une quantité et un prix positifs.");
       if (t === "VENTE") {
         const held = replay(S.ops).positions.find((p) => p.code === op.ticker)?.quantite || 0;
-        if (op.quantite > held + 1e-9) return err(`Vous ne détenez que ${N(held)} ${op.ticker}.`);
+        if (op.quantite > held + 1e-9) return err(`Vous ne détenez que ${N(held)} ${S.names.get(op.ticker) || op.ticker}.`);
       }
+      // la vente (ou un achat daté après une vente déjà notée) doit rester possible à chaque date du journal
+      const v = venteImpossible([...S.ops, { ...op, date: op.date || today() }]);
+      if (v) return err(`${texteVenteImpossible(v)} Enregistrez d'abord l'achat correspondant, ou corrigez la date.`);
     } else {
       op.montant = num("montant");
       if (!(op.montant > 0)) return err("Indiquez un montant positif.");
@@ -2356,6 +2397,9 @@
       const l = S.lines[+b.dataset.ligne];
       openOp({ type: "ACHAT", ticker: l.code, quantite: String(l.quantite), prix: String(l.prix) });
     } else if (b.dataset.del !== undefined) {
+      const reste = S.ops.filter((o) => String(o.id) !== String(b.dataset.del));
+      const v = venteImpossible(reste);
+      if (v && !venteImpossible(S.ops)) return toast("Suppression impossible", { detail: `Sans cette opération : ${texteVenteImpossible(v)} Supprimez d'abord cette vente.` });
       if (!confirm("Supprimer définitivement cette opération du journal ?")) return;
       try {
         await api.deleteOperation(isNaN(+b.dataset.del) ? b.dataset.del : +b.dataset.del);
@@ -2447,6 +2491,11 @@
     }
     await completerCours();
     await chargerAlertes();
+    // Le dernier calcul n'a pas d'historique de performance : on garde le plus récent disponible, signalé comme tel
+    S.histSecours = null;
+    if (S.prop && !(S.prop.contenu?.historique || []).length) {
+      try { S.histSecours = await api.historiqueSecours(S.user.id); } catch (e) { S.histSecours = null; }
+    }
   }
   // Un titre détenu peut manquer dans l'analyse du jour (fonds qui n'a pas publié sa valeur liquidative,
   // obligation non cotée ce jour-là…). Sans cours, il compterait pour 0 F et fausserait le total et le gain :
@@ -2519,6 +2568,9 @@
                         noterDemandeAvis: (d) => api.noterDemandeAvis(d).catch(() => {}),
                         alerteRouge: () => (S.alertes || []).some((a) => a.alerte === "ROUGE"),
                         celebrer: (t) => bravo([t]),
+                        rappels: () => api.rappels(), sauverRappels: (x) => api.sauverRappels(x), abonnerPush: (a) => api.abonnerPush(a),
+                        desabonnerPush: (e) => api.desabonnerPush(e), essaiRappel: () => api.essaiRappel(),
+                        telephone: () => S.profil?.telephone || "",
                         portrait: () => voirPortrait(),
                         // import des documents de la SGI (import.js)
                         lireDocument: (type, d) => api.lireDocument(type, d),
@@ -2531,6 +2583,7 @@
                         ajouterOperations: async (ops) => { const ids = await api.addOperations(ops); S.ops = await api.operations(S.user.id); render(); return ids; },
                         supprimerOperations: async (ids) => { for (const id of ids) await api.deleteOperation(id); S.ops = await api.operations(S.user.id); render(); },
                         fermerOperation: () => $("#dlg-op").open && $("#dlg-op").close(),
+                        controleVentes: (nouvelles) => { const v = venteImpossible([...S.ops, ...nouvelles]); return v ? texteVenteImpossible(v) : ""; },
                         nomAffiche: () => (S.profil?.prenom ? [S.profil.prenom, S.profil?.nom ? S.profil.nom.trim().charAt(0).toUpperCase() + "." : ""].filter(Boolean).join(" ") : DEMO ? "Utilisateur D." : ""),
                         joursInscription: () => {
                           const d = S.profil?.onboarding_fini_le || S.profil?.cree_le;

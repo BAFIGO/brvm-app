@@ -242,21 +242,14 @@
     if (b.dataset.imp === "fermer") return dlg.close();
     if (b.dataset.imp !== "enregistrer") return;
     const choisies = lignes.filter((x) => x.sel && !x.bloquant);
-    // une vente ne peut dépasser ce qui est détenu (journal + achats du même import, dans l'ordre des dates)
-    const j = app.journal(), stock = new Map(j.positions.map((p) => [p.code, p.quantite]));
-    for (const x of [...choisies].sort((a, b) => a.date.localeCompare(b.date))) {
-      if (x.type === "ACHAT") stock.set(x.code, (stock.get(x.code) || 0) + x.quantite);
-      if (x.type === "VENTE") {
-        const q = stock.get(x.code) || 0;
-        if (x.quantite > q + 1e-9) { $(".msg", dlg).textContent = `Vente de ${nf.format(x.quantite)} ${app.nomTitre(x.code)} le ${D(x.date)} : vous n'en détenez que ${nf.format(q)}. Importez d'abord l'achat, ou décochez cette vente.`; return; }
-        stock.set(x.code, q - x.quantite);
-      }
-    }
     const ops = choisies.map((x) => {
       const trade = x.type === "ACHAT" || x.type === "VENTE";
       return { date: x.date, type: x.type, ticker: TITRE(x.type) ? x.code : null, quantite: trade ? x.quantite : null, prix: trade ? x.prix : null,
                frais: trade ? x.frais : null, montant: trade ? null : x.montant, note: ("Import · " + (x.note || "document de la SGI")).slice(0, 140) };
     });
+    // aucune vente ne doit dépasser les titres détenus À SA DATE (journal + opérations importées, dans l'ordre des dates)
+    const impossible = app.controleVentes(ops);
+    if (impossible) { $(".msg", dlg).textContent = `${impossible} Importez d'abord l'achat correspondant, ou décochez cette vente.`; return; }
     b.disabled = true; b.textContent = "Enregistrement…";
     try {
       const ids = await app.ajouterOperations(ops);

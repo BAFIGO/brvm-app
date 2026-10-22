@@ -346,3 +346,11 @@ textarea { font: inherit; line-height: 1.45; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rc-epargne .rc-grand { color: hsl(35 92% 60%); } }
 .rc-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
 .rc-nav .btn { min-width: 112px; }
+
+/* =====================================================================================
+ * Rappels du soir (rappels.js)
+ * ===================================================================================== */
+.rp-carte h3 { margin: 16px 0 6px; font-size: .95rem; }
+.rp-heure { display: grid; gap: 4px; margin-top: 8px; max-width: 220px; }
+.rp-ligne { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); }
+.rp-carte .switch { margin-top: 10px; }
