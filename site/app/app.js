@@ -698,7 +698,10 @@
       v.innerHTML = h + `<div class="notice info">Les analyses du marché n'ont pas encore été publiées. Revenez après la prochaine séance.</div>`;
       return;
     }
-    h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}</p>`;
+    const recapVu = (etatTutoriel() || {}).recap_vu === S.seance.date;
+    h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}${recapVu ? ` · <button type="button" class="btn link small" data-recap>Revoir le récap du soir</button>` : ""}</p>`;
+    if (!recapVu) h += `<button type="button" class="recap-inv" data-recap><span class="recap-lune" aria-hidden="true">🌙</span>
+      <span><b>Votre récap du soir est prêt</b><span class="small">Séance du ${D(S.seance.date).slice(0, 5)} · 30 secondes</span></span><span class="recap-voir" aria-hidden="true">Voir ›</span></button>`;
     if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
       h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
         <button class="btn small" type="button" data-completer>Compléter mon profil</button></div>`;
@@ -1237,6 +1240,121 @@
       svg.addEventListener("pointerleave", () => { hov.setAttribute("visibility", "hidden"); tip.hidden = true; });
     };
     return { html, lier };
+  }
+
+  // ---------------------------------------------------------------- récapitulatif du soir
+  // Quelques cartes à faire défiler, en 30 secondes : votre argent, vos titres, l'alerte du jour, le marché,
+  // le fait du soir (différent chaque soir), votre épargne ; la dernière carte finit sur une note positive.
+  function recapCartes() {
+    const c = S.prop?.contenu, fresh = S.prop && S.seance && S.prop.date === S.seance.date;
+    const L = replay(S.ops), hasPf = L.positions.length > 0 || S.ops.length > 0;
+    const hist = c?.historique || [], der = hist[hist.length - 1];
+    const jour = fresh && der && der.date === S.seance.date && ok(der.gain) ? der : null;
+    const vm = varMarche(S.seance.date), v30 = (S.indices || []).find((x) => x.code === "BRVM30" && x.date === S.seance.date)?.variation;
+    const actions = (S.mk.actions || []).filter((r) => ok(r.var_1j));
+    const cartes = [];
+    const carte = (ic, titre, corps, cl = "") => cartes.push({ ic, titre, corps, cl });
+    // Votre argent
+    if (hasPf) carte("💰", "Votre argent", `<p class="rc-grand num">${montantHtml(L.valeur)}</p>
+      ${jour ? `<p class="rc-ligne ${cls(jour.gain)}"><b>${jour.gain > 0 ? "+" : ""}${F(jour.gain)}</b> sur la séance${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</p>` : `<p class="rc-ligne muted">Total chez votre SGI ce soir.</p>`}
+      ${ok(vm) ? `<p class="small">Le marché a fait ${P(vm)} ${vm >= 0 ? "" : ""}sur la même séance.</p>` : ""}`);
+    // Vos titres : le meilleur et le plus en recul ce soir
+    const miens = L.positions.map((p) => ({ p, r: actions.find((x) => x.code === p.code) })).filter((x) => x.r).sort((a, b) => b.r.var_1j - a.r.var_1j);
+    if (miens.length && miens.every((x) => Math.abs(x.r.var_1j) < 0.0005)) {
+      carte("📈", "Vos titres ce soir", `<p class="rc-ligne"><b>Stables.</b></p><p>Aucune de vos ${miens.length} action${miens.length > 1 ? "s" : ""} n'a bougé de façon notable ce soir.</p>`);
+    } else if (miens.length) {
+      const haut = miens[0], bas = miens[miens.length - 1];
+      carte("📈", "Vos titres ce soir", `<ul class="rc-liste">
+        <li><span>${haut.r.var_1j > 0 ? "Le plus en forme" : "Le moins en recul"}</span><b>${esc(S.names.get(haut.r.code) || haut.r.code)}</b><span class="num ${cls(haut.r.var_1j)}">${P(haut.r.var_1j)}</span></li>
+        ${miens.length > 1 && bas.r.var_1j < haut.r.var_1j ? `<li><span>Le plus en recul</span><b>${esc(S.names.get(bas.r.code) || bas.r.code)}</b><span class="num ${cls(bas.r.var_1j)}">${P(bas.r.var_1j)}</span></li>` : ""}</ul>
+        <p class="small">Sur ${miens.length} action${miens.length > 1 ? "s" : ""} détenue${miens.length > 1 ? "s" : ""}.</p>`);
+    }
+    // L'alerte du jour
+    const urg = (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent);
+    if (hasPf) carte(urg.length ? "🔔" : "✅", "Vos alertes", urg.length
+      ? `<p class="rc-ligne"><b>${urg.length} titre${urg.length > 1 ? "s" : ""} à examiner</b></p>
+         <p>${esc(S.names.get(urg[0].ticker) || urg[0].ticker)} : ${esc(NIVEAUX[urg[0].alerte].t.toLowerCase())}. ${esc(motifAlerte(urg[0].motif))}</p>
+         <p class="small">Une alerte est un signal à examiner, jamais une vente automatique.</p>`
+      : `<p class="rc-ligne"><b>Rien d'urgent ce soir.</b></p><p>Aucun de vos titres ne demande d'attention particulière.</p>`, urg.length ? "rc-alerte" : "");
+    // Le marché
+    if (actions.length) {
+      const hausses = actions.filter((r) => r.var_1j > 0).length, baisses = actions.filter((r) => r.var_1j < 0).length;
+      const top = [...actions].sort((a, b) => b.var_1j - a.var_1j)[0], flop = [...actions].sort((a, b) => a.var_1j - b.var_1j)[0];
+      carte("🏛️", "Le marché", `${ok(vm) ? `<p class="rc-ligne">BRVM Composite <b class="num ${cls(vm)}">${P(vm)}</b>${ok(v30) ? ` · BRVM 30 <b class="num ${cls(v30)}">${P(v30)}</b>` : ""}</p>` : ""}
+        <p>${hausses} action${hausses > 1 ? "s" : ""} en hausse, ${baisses} en baisse.</p>
+        <ul class="rc-liste"><li><span>Plus forte hausse</span><b>${esc(top.nom || top.code)}</b><span class="num ${cls(top.var_1j)}">${P(top.var_1j)}</span></li>
+          <li><span>Plus forte baisse</span><b>${esc(flop.nom || flop.code)}</b><span class="num ${cls(flop.var_1j)}">${P(flop.var_1j)}</span></li></ul>`);
+    }
+    // Le fait du soir : change chaque soir (mot du glossaire, ou plus fort rendement de dividende)
+    const n = Math.floor(new Date(S.seance.date + "T00:00:00") / 864e5);
+    const mot = window.BafiGlossaire?.termeDuJour(n);
+    const divs = (S.mk.actions || []).filter((r) => ok(r.rendement_div) && r.rendement_div > 0).sort((a, b) => b.rendement_div - a.rendement_div);
+    if (n % 2 === 0 && mot) carte("💡", "Le mot du soir", `<p class="rc-ligne"><b>${esc(mot[0])}</b></p><p>${esc(mot[1])}</p>`);
+    else if (divs.length) carte("💡", "Le saviez-vous ?", `<p>Ce soir, le plus fort rendement de dividende de la BRVM est celui de <b>${esc(divs[0].nom || divs[0].code)}</b> : <b>${P(divs[0].rendement_div, false)}</b> par an au cours actuel.</p>
+      <p class="small">Un dividende passé ne garantit pas les suivants.</p>`);
+    else if (mot) carte("💡", "Le mot du soir", `<p class="rc-ligne"><b>${esc(mot[0])}</b></p><p>${esc(mot[1])}</p>`);
+    // Votre épargne : la série, le prochain palier ; la fin du récap sur une note positive
+    const ep = epargne();
+    if (ep?.plan?.montant) {
+      const paliers = PALIERS[ep.plan.rythme] || [], proch = paliers.find((x) => x > ep.serie);
+      carte("🔥", "Votre épargne", `<p class="rc-grand">${ep.serie > 0 ? pluriel(ep.serie, ep.unite) : "Nouvelle série"}</p>
+        <p class="rc-ligne">${ep.serie > 0 ? "d'affilée" : "à lancer dès aujourd'hui"} · ${F(ep.verse)} mis de côté</p>
+        ${proch && ep.serie > 0 ? `<p>Encore <b>${pluriel(proch - ep.serie, ep.unite)}</b> pour la médaille des ${pluriel(proch, ep.unite)}.</p>` : ""}
+        ${ep.aFaire ? `<p><button type="button" class="btn primary" data-coffre="verser">J'ai épargné aujourd'hui</button></p>` : `<p class="small">Votre épargne du jour est faite : bravo !</p>`}`, "rc-epargne");
+    }
+    carte("🌙", "À demain !", `<p class="rc-ligne">Vous êtes à jour pour ce soir.</p>
+      <p>${ep?.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} continue : c'est la régularité qui construit un patrimoine.` : "Chaque soir de séance, BafiBourse refait le point pour vous."}</p>
+      <p class="small muted">Aide à la décision, pas un conseil en investissement.</p>`, "rc-fin");
+    return cartes;
+  }
+  function ouvrirRecap() {
+    let d = $("#dlg-recap");
+    if (!d) {
+      document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-recap" aria-labelledby="rc-titre">
+        <div class="rc-tete"><div class="rc-barres" aria-hidden="true"></div>
+          <button type="button" class="rc-x" aria-label="Fermer le récap">×</button></div>
+        <h2 id="rc-titre" class="sr-only">Récap du soir</h2>
+        <div class="rc-piste" tabindex="0" aria-live="polite"></div>
+        <div class="rc-nav"><button type="button" class="btn" data-rc="prec">Précédent</button><span class="rc-pos small muted"></span>
+          <button type="button" class="btn primary" data-rc="suiv">Suivant</button></div></dialog>`);
+      d = $("#dlg-recap");
+      const piste = $(".rc-piste", d);
+      const pos = () => Math.round(piste.scrollLeft / piste.clientWidth);
+      const aller = (i) => piste.scrollTo({ left: i * piste.clientWidth, behavior: CALME ? "auto" : "smooth" });
+      const maj = () => {
+        const i = pos(), n = piste.children.length;
+        d.querySelectorAll(".rc-barres i").forEach((b, k) => b.classList.toggle("on", k <= i));
+        $(".rc-pos", d).textContent = `${i + 1} sur ${n}`;
+        $('[data-rc="prec"]', d).disabled = i === 0;
+        $('[data-rc="suiv"]', d).textContent = i === n - 1 ? "Terminer" : "Suivant";
+        piste.querySelectorAll(".rc-carte").forEach((c, k) => c.setAttribute("aria-hidden", String(k !== i)));
+      };
+      piste.addEventListener("scroll", () => requestAnimationFrame(maj), { passive: true });
+      d.addEventListener("click", (ev) => {
+        if (ev.target.closest(".rc-x")) return d.close();
+        const b = ev.target.closest("[data-rc]");
+        if (!b) return;
+        const i = pos(), n = piste.children.length;
+        if (b.dataset.rc === "prec") aller(i - 1);
+        else if (i >= n - 1) d.close(); else aller(i + 1);
+      });
+      d.addEventListener("keydown", (ev) => {
+        if (ev.key === "ArrowRight") { ev.preventDefault(); aller(Math.min(pos() + 1, piste.children.length - 1)); }
+        if (ev.key === "ArrowLeft") { ev.preventDefault(); aller(Math.max(pos() - 1, 0)); }
+      });
+      d.addEventListener("close", () => render());
+      d._maj = maj;
+    }
+    const cartes = recapCartes();
+    $(".rc-barres", d).innerHTML = cartes.map(() => "<i></i>").join("");
+    $(".rc-piste", d).innerHTML = cartes.map((c, k) => `<section class="rc-carte ${c.cl}" role="group" aria-roledescription="carte" aria-label="${k + 1} sur ${cartes.length} : ${esc(c.titre)}">
+        <p class="rc-ic" aria-hidden="true">${c.ic}</p><h3>${esc(c.titre)}</h3>${c.corps}</section>`).join("");
+    d.showModal();
+    $(".rc-piste", d).scrollLeft = 0;
+    d._maj();
+    $('[data-rc="suiv"]', d).focus();
+    const e = etatTutoriel() || {};
+    if (e.recap_vu !== S.seance.date) sauverTutoriel({ ...e, recap_vu: S.seance.date });
   }
 
   // ---------------------------------------------------------------- trois titres à regarder ce soir
@@ -2220,8 +2338,9 @@
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("button");
     if (!b) return;
+    if (b.hasAttribute("data-recap")) return ouvrirRecap();
     if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
-    else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); openCoffre(b.dataset.coffre); }
+    else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); if ($("#dlg-recap")?.open) $("#dlg-recap").close(); openCoffre(b.dataset.coffre); }
     else if (b.dataset.alerte !== undefined) {
       const a = S.alertesMap?.get(b.dataset.alerte);
       if (a) showInfo(`${S.names.get(a.ticker) || a.ticker} : ${NIVEAUX[a.alerte]?.t || a.alerte}`,

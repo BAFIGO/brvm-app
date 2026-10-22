@@ -41,6 +41,8 @@
     ["Score", ["score"], "La note sur 100 calculée chaque soir par BafiBourse (tendance, fondamentaux, dividende, valorisation, liquidité). Une aide à la décision, pas un conseil."],
   ];
   const DEF = new Map(TERMES.map(([t, , d]) => [t, d]));
+  // « Le mot du soir » du récapitulatif : un terme différent chaque soir de séance
+  window.BafiGlossaire = { termeDuJour: (n) => { const [t, , d] = TERMES[((n % TERMES.length) + TERMES.length) % TERMES.length]; return [t, d]; } };
   const VERS = new Map();
   // Un motif par expression ; les mots courants acceptent une majuscule initiale ; les plus longs d'abord
   const motifs = [];
