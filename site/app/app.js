@@ -45,6 +45,20 @@
   const Dc = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "–");
   const D = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR") : "–");
   const today = () => new Date().toISOString().slice(0, 10);
+  // Chef d'orchestre des sollicitations non demandées (notation, astuces…) : une seule par session,
+  // jamais par-dessus une fenêtre ou une bulle, jamais dans les 30 secondes qui suivent l'ouverture.
+  // La visite guidée et les alertes importantes passent toujours.
+  const OUVERTURE = Date.now();
+  window.BafiCalme = {
+    libre: () => !document.querySelector("dialog[open]") && !(document.getElementById("tuto") && !document.getElementById("tuto").hidden),
+    autorise(type) {
+      if (!this.libre()) return false;
+      if (type === "visite" || type === "alerte") return true;
+      if (Date.now() - OUVERTURE < 30000) return false;
+      try { return !sessionStorage.getItem("brvm-sollicitation"); } catch (e) { return true; }
+    },
+    consomme(type) { try { sessionStorage.setItem("brvm-sollicitation", type); } catch (e) { /* rien */ } },
+  };
   const cls = (v) => (ok(v) ? (+v > 0 ? "good" : +v < 0 ? "bad" : "") : "");
   const chip = (d) => {
     if (!d) return "";
@@ -817,8 +831,9 @@
       return;
     }
     const recapVu = (etatTutoriel() || {}).recap_vu === S.seance.date;
-    h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}${recapVu ? ` · <button type="button" class="btn link small" data-recap>Revoir le récap du soir</button>` : ""}</p>`;
-    if (!recapVu) h += `<button type="button" class="recap-inv" data-recap><span class="recap-lune" aria-hidden="true">🌙</span>
+    h += `<p class="muted small">Analyses de la séance du ${D(S.seance.date)}</p>`;
+    // sans portefeuille, pas de synthèse : le récap garde son bandeau
+    if (!recapVu && !(L.positions.length > 0 || L.cash > 0)) h += `<button type="button" class="recap-inv" data-recap><span class="recap-lune" aria-hidden="true">🌙</span>
       <span><b>Votre récap du soir est prêt</b><span class="small">Séance du ${D(S.seance.date).slice(0, 5)} · 30 secondes</span></span><span class="recap-voir" aria-hidden="true">Voir ›</span></button>`;
     if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
       h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
@@ -840,7 +855,8 @@
         <div class="sub">Envoyez-la à votre SGI : ${SIM() ? "la simulation sera recalculée" : "les ordres seront recalculés"}.</div></div>
         <button class="btn small" data-coffre="transfert">J'ai envoyé à ma SGI</button></li>`);
     const blocFaire = faire.length || aut.length ? `<div class="card a-faire"><h2>À faire</h2>
-      ${faire.length ? `<ul class="list">${faire.join("")}</ul>` : `<p class="small muted">Rien d'urgent ce soir.</p>`}
+      ${faire.length ? `<ul class="list">${faire.slice(0, 3).join("")}</ul>` : `<p class="small muted">Rien d'urgent ce soir.</p>`}
+      ${faire.length > 3 ? `<details class="aide"><summary>Voir les ${faire.length - 3} autres</summary><ul class="list">${faire.slice(3).join("")}</ul></details>` : ""}
       ${aut.length ? `<details class="aide"><summary>${aut.length} point${aut.length > 1 ? "s" : ""} de vigilance sur vos titres</summary><ul class="list">${aut.join("")}</ul></details>` : ""}
       ${(S.alertes || []).length ? `<p class="small muted">Alertes calculées après chaque séance : un signal à examiner, jamais une vente automatique (environ ${nf1.format(FEES * 100)} % de frais par vente).</p>` : ""}</div>` : "";
 
@@ -856,17 +872,24 @@
         <div class="syn-lbl">Total chez ma SGI</div>
         <div class="syn-val num" data-count="${L.valeur ?? ""}" data-unite="1">${montantHtml(L.valeur)}</div>
         ${jour ? `<div class="syn-jour ${cls(jour.gain)}"><b class="num">${jour.gain > 0 ? "+" : ""}${F(jour.gain)}${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</b> sur la séance du ${D(jour.date).slice(0, 5)}${ok(vm) ? `<span class="syn-mkt"> · marché ${P(vm)}</span>` : ""}</div>` : ""}
-        <div class="syn-grid">
-          <div><div class="syn-lbl">Disponible chez ma SGI</div><div class="syn-sec num">${montantHtml(L.cash)}</div></div>
-          <div><div class="syn-lbl">Performance</div><div class="syn-sec num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
-            <div class="small muted">${changed ? "recalculée ce soir" : "marché " + P(perf.bench_total)}</div></div>
-        </div>${ctx ? `<p class="syn-ctx">${ctx}</p>` : ""}</div>`;
+        <button type="button" class="syn-recap${recapVu ? " vu" : ""}" data-recap><span aria-hidden="true">🌙</span>
+          <span>${recapVu ? "Revoir le récap du soir" : `<b>Votre récap du soir est prêt</b> · 30 secondes`}</span><span class="syn-recap-f" aria-hidden="true">›</span></button>
+        <details class="syn-detail"><summary>Voir le détail</summary>
+          <div class="syn-grid">
+            <div><div class="syn-lbl">Disponible chez ma SGI</div><div class="syn-sec num">${montantHtml(L.cash)}</div></div>
+            <div><div class="syn-lbl">Performance</div><div class="syn-sec num ${cls(perf.twr_total)}">${P(perf.twr_total)}</div>
+              <div class="small muted">${changed ? "recalculée ce soir" : "marché " + P(perf.bench_total)}</div></div>
+          </div>${ctx ? `<p class="syn-ctx">${ctx}</p>` : ""}</details></div>`;
       h += blocFaire;
       const inst = changed ? instantOrders(L) : null;
       const ordres = changed ? inst.ordres : c?.ordres || [];
       S.ordres = ordres;
       const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
-      h += `<div class="card ordres"><h2>${SIM() ? "Ajustements simulés" : "Ordres proposés"}</h2>`;
+      const nV = ordres.filter((o) => o.sens === "VENTE").length, nA = ordres.length - nV;
+      const resume = !ordres.length ? "Rien à faire pour l'instant"
+        : [nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ") + (SIM() ? " simulés" : " proposés") + " ce soir";
+      h += `<details class="card ordres ordres-pli"${S.ui.ordresOuverts ? " open" : ""}><summary><span class="op-t">${SIM() ? "Ajustements simulés" : "Ordres proposés"}</span>
+        <span class="op-r">${resume}</span></summary>`;
       if (!ordres.length) {
         h += investi < 0.5 && L.cash > MIN_LINE
           ? `<p>Aucun ordre calculable pour l'instant avec votre disponible de ${F(L.cash)}. Vérifiez votre montant à investir et votre profil, ou revenez après le calcul du soir.</p>`
@@ -892,11 +915,8 @@
       h += changed
         ? `<p class="small muted">Recalculés à l'instant avec votre journal à jour (estimation). Le calcul détaillé, qui tient compte de la liquidité de chaque titre, est refait ce soir après la séance.</p>`
         : `<p class="small muted">Calculés avec votre journal au soir du ${D(S.prop.date)}.</p>`;
-      h += `</div>`;
-      const lignes = changed ? inst.cible : c?.proposition?.lignes || [];
-      if (lignes.length)
-        h += `<div class="card cible"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
-          <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}</p></div>`;
+      h += `</details>`;
+      // la cible du profil est un réglage, pas un suivi du soir : elle est affichée dans Portefeuille
     } else {
       const auto = S.coffre && S.profil?.budget_mode === "auto";
       const budget = budgetActuel();
@@ -932,6 +952,7 @@
     h += noticesUnivers(c);
     h += `<p class="small muted">${AVERT()} Données de marché : BRVM.</p>`;
     v.innerHTML = h;
+    $(".ordres-pli", v)?.addEventListener("toggle", (ev) => (S.ui.ordresOuverts = ev.target.open));
     const fb = $("#f-budget", v);
     if (fb) {
       const save = async () => {
@@ -1230,7 +1251,6 @@
           const c2 = S.prop?.contenu, b = S.prop?.date === S.seance?.date && !journalChanged(L, c2) ? c2?.performance?.bench_total : null;
           return ok(b) ? ` · marché ${P(b)} sur la période` : "";
         })()}</div></div>
-        <div class="kpi"><div class="lbl">Gain si je vendais aujourd'hui</div><div class="val num ${cls(L.latent)}">${L.latent > 0 ? "+" : ""}${F(L.latent)}</div><div class="small muted">titres détenus, frais de vente déduits</div></div>
         <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
       </div>`;
     if (ep) h += carteEpargne(ep);
@@ -1252,7 +1272,18 @@
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
     }
-    h += `</div><div class="card journal"><h2>Journal des opérations</h2>`;
+    h += `</div>`;
+    {
+      const c = S.prop?.contenu, fresh = S.prop && S.seance && S.prop.date === S.seance.date;
+      const changed = !fresh || journalChanged(L, c);
+      const lignes = changed ? (L.positions.length || L.cash > 0 ? instantOrders(L).cible : []) : c?.proposition?.lignes || [];
+      if (lignes?.length)
+        h += `<div class="card cible"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
+          <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}
+          Profil ${esc(PROFILS[S.profil?.profil]?.t || "")}.</p></div>`;
+    }
+    h += `<details class="card journal journal-pli"${S.ui.journalOuvert ? " open" : ""}><summary><h2>Journal des opérations${S.ops.length ? ` <span class="h-n">${S.ops.length}</span>` : ""}</h2>
+      <span class="op-r">${S.ops.length ? `Voir mes ${S.ops.length} opération${S.ops.length > 1 ? "s" : ""}` : "Aucune opération"}</span></summary>`;
     if (!S.ops.length) h += `<p class="muted">Aucune opération enregistrée.</p>`;
     else {
       h += `<ul class="list">`;
@@ -1264,8 +1295,9 @@
       }
       h += `</ul><p class="small muted">Une erreur de saisie se corrige en supprimant la ligne, jamais par une opération inverse.</p>`;
     }
-    v.innerHTML = h + `</div>`;
+    v.innerHTML = h + `</details>`;
     $("#gain-aide", v).addEventListener("click", aideGain);
+    $(".journal-pli", v)?.addEventListener("toggle", (ev) => (S.ui.journalOuvert = ev.target.open));
   }
 
   // ---------------------------------------------------------------- tendance du marché : BRVM Composite et BRVM 30
@@ -2787,6 +2819,15 @@
     $("#lire-cgu").addEventListener("click", (ev) => { ev.preventDefault(); if (cgu) showCgu(cgu, false); });
     api.documents().then((docs) => { cgu = (docs || []).find((d) => d.type === "cgu") || null; regler(); }).catch(() => {});
     regler();
+    try {
+      const retour = new URLSearchParams(location.hash.replace(/^#/, "") || location.search);
+      if (retour.get("error_code") || retour.get("error")) {
+        m.textContent = /expired|not_found|invalid/i.test(retour.get("error_code") + " " + retour.get("error_description"))
+          ? "Ce lien de connexion n'est plus valable : il a déjà servi, ou un e-mail plus récent l'a remplacé. Utilisez le dernier e-mail reçu, ou demandez-en un nouveau."
+          : "La connexion par le lien n'a pas abouti. Demandez un nouvel e-mail, puis saisissez son code.";
+        history.replaceState(null, "", location.pathname + location.search.replace(/[?&]error[^&]*/g, ""));
+      }
+    } catch (e) { /* adresse illisible : rien à signaler */ }
     const bouton = fl.querySelector("button[type=submit]"), label = bouton.textContent, renvoi = $("#code-renvoi");
     const attendre = (sec) => {
       wait = sec;
@@ -2815,6 +2856,7 @@
         fl.hidden = true; $(".auth-choix").hidden = true;          // une seule chose à faire : ouvrir l'e-mail
         fc.hidden = false;
         fc.code.value = "";
+        setTimeout(() => fc.code.focus(), 50);          // le code d'abord : il ne dépend pas du navigateur qui s'ouvre
         attendre(60);                                  // évite les demandes répétées (limite d'envoi)
       } catch (e) {
         const msg = String(e.message || e);
@@ -2825,7 +2867,9 @@
         } else if (/rate limit|too many|429|security purposes/i.test(msg)) {
           m.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un e-mail, touchez son lien ; sinon réessayez dans quelques minutes.";
           fc.hidden = false; attendre(60);
-        } else m.textContent = "Envoi impossible : " + msg;
+        } else if (/fetch|network|failed to fetch|load failed/i.test(msg)) {
+          m.textContent = "Pas de connexion internet pour le moment : vérifiez votre réseau, puis réessayez.";
+        } else m.textContent = "L'e-mail n'a pas pu être envoyé. Réessayez dans quelques minutes ; si cela continue, écrivez-nous. (" + msg + ")";
       }
     };
     fl.addEventListener("submit", (ev) => { ev.preventDefault(); envoyer(); });
@@ -2836,7 +2880,7 @@
       const mc = $(".msg", fc), code = fc.code.value.replace(/\s/g, "");
       if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = "Saisissez le code reçu par e-mail (6 chiffres), ou touchez simplement le lien de l'e-mail."; return; }
       try { await api.verify(fl.email.value.trim(), code); }
-      catch (e) { mc.textContent = /expired|invalid/i.test(String(e.message)) ? "Code incorrect ou expiré : touchez plutôt le lien de l'e-mail, ou demandez un nouvel e-mail." : "Code refusé : " + e.message; }
+      catch (e) { mc.textContent = /expired|invalid|not found/i.test(String(e.message)) ? "Code incorrect ou expiré : vérifiez qu'il vient du dernier e-mail reçu, ou demandez-en un nouveau." : "Code refusé : " + e.message; }
     });
   }
 

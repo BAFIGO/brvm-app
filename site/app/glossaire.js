@@ -143,8 +143,9 @@
   // Une seule fois : signaler que les mots marqués d'un « ? » s'expliquent d'un toucher
   function astuce() {
     try { if (localStorage.getItem("brvm-glossaire-astuce")) return; } catch (e) { return; }
-    if (!document.querySelector("main > .view:not([hidden]) .gl") || document.querySelector("dialog[open]") || ($("#tuto") && !$("#tuto").hidden)) return;
+    if (!document.querySelector("main > .view:not([hidden]) .gl") || (window.BafiCalme && !window.BafiCalme.autorise("astuce"))) return;
     try { localStorage.setItem("brvm-glossaire-astuce", "1"); } catch (e) { /* rien */ }
+    window.BafiCalme?.consomme("astuce");
     window.BRVM_APP?.toast?.("Astuce : les mots marqués d'un « ? » s'expliquent d'un toucher.", { detail: "Touchez par exemple « SGI » ou « séance »." });
   }
   window.addEventListener("brvm:maj", () => setTimeout(() => { cacher(false); annoter(vueActive()); setTimeout(astuce, 2500); }, 30));

@@ -158,6 +158,10 @@
     if (document.querySelector("dialog[open]") || ($("#tuto") && !$("#tuto").hidden)) return false;
     if (app.alerteRouge?.()) return false;
     if (!app.demo && (app.joursInscription() < 7 || app.nbOps() < 3)) return false;
+    // prise en main terminée (ou liste masquée) depuis au moins 7 jours
+    if (!app.demo && !(e.liste === "terminee" || e.liste === "masquee" || e.visite === "ancien")) return false;
+    if (!app.demo && e.liste_le && Date.now() - e.liste_le < 7 * JOUR) return false;
+    if (window.BafiCalme && !window.BafiCalme.autorise("avis")) return false;
     const d = (e.avis_demandes || []).filter((t) => Date.now() - t < 365 * JOUR);
     if (d.some((t) => Date.now() - t < 30 * JOUR) || d.length >= 3) return false;
     if (e.avis_plus_tard && Date.now() - e.avis_plus_tard < 30 * JOUR) return false;
@@ -171,6 +175,7 @@
       if (uneFois && e.avis_vus?.[decl]) return;
       sauver({ avis_demandes: [...(e.avis_demandes || []).filter((t) => Date.now() - t < 365 * JOUR), Date.now()],
                avis_vus: { ...(e.avis_vus || {}), [decl]: 1 } });
+      window.BafiCalme?.consomme("avis");
       ouvrir(null, decl);
     }, delai);
   }
@@ -191,10 +196,10 @@
     const e = etat(), jour = new Date().toISOString().slice(0, 10);
     const visites = [...new Set([...(e.visites || []), jour])].filter((d) => Date.now() - new Date(d) < 14 * JOUR);
     if (visites.join() !== (e.visites || []).join()) sauver({ visites });
-    if (e.avis_attente) { sauver({ avis_attente: null }); return proposer(e.avis_attente, 2500, true); }
-    if (visites.length >= 5 && !e.avis_vus?.fidelite) return proposer("fidelite", 2500, true);
+    if (e.avis_attente) { sauver({ avis_attente: null }); return proposer(e.avis_attente, 35000, true); }
+    if (visites.length >= 5 && !e.avis_vus?.fidelite) return proposer("fidelite", 35000, true);
     if (e.liste === "terminee" && (!e.liste_le || Date.now() - e.liste_le >= 7 * JOUR) && !e.avis_vus?.premiers_pas)
-      return proposer("premiers_pas", 2500, true);
+      return proposer("premiers_pas", 35000, true);
   }
 
   // ---------------------------------------------------------------- carte dans le Profil

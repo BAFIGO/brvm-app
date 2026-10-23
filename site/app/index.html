@@ -54,9 +54,9 @@
           <p class="small muted" id="auth-aide"></p>
         </form>
         <form id="f-code" novalidate hidden>
-          <div class="notice info"><b>C'est envoyé à <span id="code-email"></span>.</b> Ouvrez l'e-mail et touchez le lien
-            « me connecter » : vous êtes connecté automatiquement. Pensez aux courriers indésirables.</div>
-          <label for="code" class="small">Vous avez reçu un code à la place ? Saisissez-le ici</label>
+          <div class="notice info"><b>C'est envoyé à <span id="code-email"></span>.</b> Saisissez ci-dessous le code à 6 chiffres
+            de l'e-mail, ou touchez son lien « me connecter ». Pas reçu ? Regardez dans les courriers indésirables.</div>
+          <label for="code">Code reçu par e-mail</label>
           <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" pattern="[0-9 ]{6,12}" class="code">
           <button class="btn primary" type="submit">Me connecter</button>
           <p class="msg" role="status" aria-live="polite"></p>

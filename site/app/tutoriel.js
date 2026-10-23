@@ -316,6 +316,10 @@
   async function astuce(t) {
     const e = etat();
     if (enCours || !ASTUCES[t] || e.astuces[t] || e.visite === undefined) return;
+    // la visite a déjà montré les écrans : plus d'astuce ensuite ; sinon, une seule sollicitation par session
+    if (e.visite === "terminee") { e.astuces[t] = 1; sauver(e); return; }
+    if (window.BafiCalme && !window.BafiCalme.autorise("astuce")) return;
+    window.BafiCalme?.consomme("astuce");
     e.astuces[t] = 1; sauver(e); noter("astuce_vue", t);
     await attendre(400);
     if (app.tab() !== t) return;
