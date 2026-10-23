@@ -6,6 +6,8 @@
 
   const CFG = window.BRVM_CONFIG;
   const DEMO = new URLSearchParams(location.search).has("demo");
+  // Arrivée par le lien de l'e-mail (lu avant que Supabase ne nettoie l'adresse)
+  const VIENT_DU_LIEN = /access_token=|[?&]code=|type=(magiclink|signup|email)/.test(location.hash + location.search);
   const DEMO_DEBUT = DEMO && new URLSearchParams(location.search).get("demo") === "debut";   // démo « mes premiers jours »
   // Mode des portefeuilles réglé dans la console (Moteur) : « simulation » = calcul selon les réglages de l'utilisateur,
   // jamais présenté comme une recommandation. Démo : ?demo=1&mode=simulation
@@ -2972,6 +2974,41 @@
     d.showModal();
   }
 
+  // ---------------------------------------------------------------- un seul onglet après le lien de l'e-mail
+  // Le lien de l'e-mail s'ouvre toujours dans un nouvel onglet. L'onglet resté sur l'écran de connexion se connecte
+  // alors tout seul ; le nouvel onglet propose de se fermer, pour ne pas garder deux pages BafiBourse ouvertes.
+  const canal = "BroadcastChannel" in window ? new BroadcastChannel("bafibourse-connexion") : null;
+  function attendreConnexionAilleurs() {
+    if (DEMO) return;
+    const reprendre = () => { location.hash = "aujourdhui"; location.reload(); };
+    if (canal) canal.onmessage = (ev) => { if (ev.data === "connecte") { canal.postMessage("attendait"); reprendre(); } };
+    addEventListener("storage", (ev) => { if (/^sb-.+-auth-token$/.test(ev.key || "") && ev.newValue) reprendre(); });   // navigateurs sans canal
+  }
+  async function signalerConnexion() {
+    if (!canal || !VIENT_DU_LIEN) return;
+    let autre = false;
+    canal.onmessage = (ev) => { if (ev.data === "attendait") autre = true; };
+    canal.postMessage("connecte");
+    await new Promise((ok) => setTimeout(ok, 700));
+    if (!autre) return;                                   // pas d'autre onglet : on continue ici normalement
+    document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-un-onglet" aria-labelledby="uo-t"><div class="portes">
+      <h2 id="uo-t">Vous êtes connecté ✓</h2>
+      <p>Votre page BafiBourse précédente vient de se connecter, elle aussi. Vous pouvez fermer celle-ci et y revenir.</p>
+      <button type="button" class="btn primary" data-uo="fermer">Fermer cette page</button>
+      <button type="button" class="btn" data-uo="rester">Continuer ici</button>
+      <p class="small muted uo-aide" hidden>Votre navigateur ne permet pas de fermer la page automatiquement : fermez cet onglet, puis revenez à la page BafiBourse précédente.</p>
+    </div></dialog>`);
+    const d = $("#dlg-un-onglet");
+    d.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-uo]");
+      if (!b) return;
+      if (b.dataset.uo === "rester") return d.close();
+      window.close();
+      setTimeout(() => { $(".uo-aide", d).hidden = false; }, 300);
+    });
+    d.showModal();
+  }
+
   async function init() {
     $("#badge-demo").hidden = !DEMO;
     demoAccueil();
@@ -2981,7 +3018,7 @@
     try {
       api.onAuth((s) => { if (s?.user) start(s.user); });
       const s = await api.session();
-      if (s?.user) start(s.user); else showLogin();
+      if (s?.user) { start(s.user); signalerConnexion(); } else { showLogin(); attendreConnexionAilleurs(); }
     } catch (e) {
       $("#loading").textContent = "Impossible de joindre le service : " + e.message;
     }
