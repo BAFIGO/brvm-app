@@ -1230,7 +1230,20 @@
     const ep = epargne(), cote = ep ? Math.max(0, ep.solde) : 0;
     const total = cote + Math.max(0, L.cash) + L.investi;
     const seg = (v, col) => (total > 0 && v > 0 ? `<i style="width:${(100 * v / total).toFixed(2)}%;background:${col}"></i>` : "");
-    let h = `<h1 id="h-pf">Portefeuille</h1>
+    const onglet = S.coffre ? (S.ui.pfOnglet || "placements") : "placements";
+    let h = `<h1 id="h-pf">Portefeuille</h1>`;
+    if (S.coffre) h += `<div class="seg pf-onglets" role="tablist" aria-label="Rubriques du portefeuille">
+        <button type="button" role="tab" data-pfo="placements" aria-selected="${onglet === "placements"}" aria-pressed="${onglet === "placements"}">Mes placements</button>
+        <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Mon épargne${ep?.serie > 0 ? ` · 🔥 ${ep.serie}` : ""}</button></div>`;
+    if (onglet === "epargne") {
+      // l'épargne au quotidien : coffre, série, trophées, cercles (cercles.js s'insère avant l'ancre)
+      h += ep ? carteEpargne(ep) : `<div class="card"><h2>Mon épargne</h2><p>Fixez un rythme d'épargne pour suivre votre régularité et gagner vos premiers trophées.</p>
+        <div class="actions"><button type="button" class="btn primary" data-coffre="plan">Choisir mon rythme d'épargne</button></div></div>`;
+      v.innerHTML = h + `<div class="pf-ancre-cercles"></div>`;
+      v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
+      return;
+    }
+    h += `
       <div class="card argent">
         <div class="lbl">Mon argent pour la bourse</div><div class="val num big" data-count="${total}">${F(total)}</div>
         <div class="bar3" aria-hidden="true">${seg(cote, "var(--s2)")}${seg(Math.max(0, L.cash), "var(--s3)")}${seg(L.investi, "var(--s1)")}</div>
@@ -1253,7 +1266,6 @@
         })()}</div></div>
         <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
       </div>`;
-    if (ep) h += carteEpargne(ep);
     h += `
       <div class="actions"><button class="btn" data-import="">Importer un avis ou un relevé</button><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
@@ -1298,6 +1310,7 @@
     v.innerHTML = h + `</details>`;
     $("#gain-aide", v).addEventListener("click", aideGain);
     $(".journal-pli", v)?.addEventListener("toggle", (ev) => (S.ui.journalOuvert = ev.target.open));
+    v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
   }
 
   // ---------------------------------------------------------------- tendance du marché : BRVM Composite et BRVM 30
@@ -1394,7 +1407,9 @@
       svg.addEventListener("pointermove", show); svg.addEventListener("pointerdown", show);
       svg.addEventListener("pointerleave", () => { hov.setAttribute("visibility", "hidden"); tip.hidden = true; });
     };
-    return { html, lier };
+    const rC = res.BRVMC || res.BRVM30;
+    const resume = rC ? `${res.BRVMC ? "BRVM Composite" : "BRVM 30"} ${P(rC.var)} sur ${per[1]}` : "Voir la tendance";
+    return { html: html.replace('<div class="card tendance"', '<div class="tendance"'), lier, resume };
   }
 
   // ---------------------------------------------------------------- récapitulatif du soir
@@ -1563,7 +1578,7 @@
     const list = rows.filter((r) => (u.mkFilter === "all" || BUY.includes(r.decision))
       && (!q || (r.code + " " + (r.nom || "")).toLowerCase().includes(q))).sort((a, b) => (b.score || 0) - (a.score || 0));
     const tend = tendance();
-    let h = `<h1 id="h-mk">Marché</h1>${!q ? blocARegarder() : ""}${tend ? tend.html : ""}
+    let h = `<h1 id="h-mk">Marché</h1>${!q ? blocARegarder() : ""}
       <div class="toolbar">
         <div class="seg" role="group" aria-label="Classe d'actifs">
           ${[["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]].map(([k, t]) =>
@@ -1594,12 +1609,16 @@
       }
       const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Note financière">${esc(r.analyse.note)}</span>` : "";
       if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
-      h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}${note}</div>
-          <div class="sub">${esc(r.code)} · score ${N(r.score)} ${chip(r.decision)}</div></div>
-          <div class="right num">${px}</div></summary>
-          <div class="why">${det}</div></details></li>`;
+      const pxCourt = u.mkTab === "actions" ? `${F(r.cours)}<div class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</div>` : px;
+      h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}</div>
+          <div class="sub">${chip(r.decision)}</div></div>
+          <div class="right num">${pxCourt}</div></summary>
+          <div class="why"><p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100${note ? ` · note financière ${note}` : ""}</p>
+            ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}</div>` : ""}${det}</div></details></li>`;
     }
     h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
+      ${tend ? `<details class="card tend-pli"${u.tendOuverte ? " open" : ""}><summary><span class="op-t">Tendance du marché</span>
+        <span class="op-r">${esc(tend.resume)}</span></summary>${tend.html}</details>` : ""}
       <p class="small muted">Score de 0 à 100 calculé par l'outil (technique, fondamentaux, dividende, valorisation, liquidité).
       Aide à la décision, pas un conseil en investissement. Données de marché : BRVM.</p>`;
     v.innerHTML = h;
@@ -1613,6 +1632,7 @@
       if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: CALME ? "auto" : "smooth" }); d.querySelector("summary")?.focus({ preventScroll: true }); }
     }));
     tend?.lier(v);
+    $(".tend-pli", v)?.addEventListener("toggle", (ev) => (u.tendOuverte = ev.target.open));
     const qi = $("#mk-q", v);
     qi.addEventListener("input", () => { u.mkQuery = qi.value; u.mkShow = 30; vMarche(); $("#mk-q").focus(); const n = $("#mk-q"); n.setSelectionRange(n.value.length, n.value.length); });
     $("#mk-f", v).addEventListener("change", (e) => { u.mkFilter = e.target.value; vMarche(); });
@@ -2313,7 +2333,9 @@
     const titre = ["ACHAT", "VENTE", "DIVIDENDE"].includes(t);
     fop.querySelectorAll('[data-for="titre"]').forEach((e) => (e.hidden = !titre));
     $('[data-for="cat"]', fop).hidden = t !== "ACHAT";
-    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !["ACHAT", "VENTE"].includes(t)));
+    // les champs se déplient au fil des réponses : quantité et prix seulement une fois le titre choisi
+    const trade = ["ACHAT", "VENTE"].includes(t);
+    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !trade || !fop.ticker.value));
     $('[data-for="montant"]', fop).hidden = ["ACHAT", "VENTE"].includes(t);
     $('[data-for="vers-epargne"]', fop).hidden = !(t === "RETRAIT" && S.coffre);
     if (titre) remplirTitres(fop.ticker.value || null);
@@ -2334,13 +2356,20 @@
     syncOpForm();
     if (pre.ticker) remplirTitres(pre.ticker);
     for (const k of ["quantite", "prix", "montant"]) if (pre[k] !== undefined && pre[k] !== null) fop[k].value = pre[k];
+    $(".op-plus", fop).open = false;
+    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !["ACHAT", "VENTE"].includes(opType()) || !fop.ticker.value));
     infoTitre(!pre.prix);
     dlg.showModal();
   }
   fop.querySelectorAll('[name="type"]').forEach((r) => r.addEventListener("change", () => { fop.ticker.value = ""; fop.quantite.value = ""; fop.prix.value = ""; syncOpForm(); }));
   fop.querySelectorAll('[name="cat"]').forEach((r) => r.addEventListener("change", () => { S.ui.opCat = opCat(); $("#op-q").value = ""; remplirTitres(null); }));
   $("#op-q").addEventListener("input", () => remplirTitres(fop.ticker.value || null));
-  fop.ticker.addEventListener("change", () => { fop.quantite.value = opType() === "VENTE" ? "" : fop.quantite.value; infoTitre(true); });
+  fop.ticker.addEventListener("change", () => {
+    fop.quantite.value = opType() === "VENTE" ? "" : fop.quantite.value;
+    const trade = ["ACHAT", "VENTE"].includes(opType());
+    fop.querySelectorAll('[data-for="qp"]').forEach((e) => (e.hidden = !trade || !fop.ticker.value));
+    infoTitre(true);
+  });
   fop.prix.addEventListener("input", () => { delete fop.dataset.prixAuto; total(); });
   fop.quantite.addEventListener("input", total);
   fop.frais.addEventListener("input", total);
@@ -2526,7 +2555,7 @@
     if (b.hasAttribute("data-recap")) return ouvrirRecap();
     if (b.id === "bravo-partager") return partagerTrophee(S.bravoTrophee);
     if (b.dataset.partager) return partagerTrophee(trophees(epargne()).find((x) => x.id === b.dataset.partager));
-    if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => $("#f-plan")?.scrollIntoView({ block: "start" }), 50); }
+    if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => { const f = $("#f-plan"); f?.closest("details")?.setAttribute("open", ""); f?.scrollIntoView({ block: "start" }); }, 120); }
     else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); if ($("#dlg-recap")?.open) $("#dlg-recap").close(); openCoffre(b.dataset.coffre); }
     else if (b.dataset.alerte !== undefined) {
       const a = S.alertesMap?.get(b.dataset.alerte);
@@ -2734,6 +2763,15 @@
                                    regularite: ep.total ? Math.round((ep.tenus / ep.total) * 1000) / 1000 : null };
                         },
                         portrait: () => voirPortrait(),
+                        // état d'une rubrique du Profil, en une phrase (sommaire.js)
+                        etatRubrique: (k) => {
+                          const p = S.profil || {}, pl = S.coffre?.plan || {};
+                          if (k === "plan") return +pl.montant > 0 ? `${F(pl.montant)} ${RYTHMES[pl.rythme]?.[0] || ""}${+pl.objectif > 0 ? ` · objectif ${F(pl.objectif)}` : ""}` : "Pas encore de rythme choisi";
+                          if (k === "invest") return `Profil ${PROFILS[p.profil]?.t || "équilibré"} · montant ${p.budget_mode === "auto" ? "automatique" : p.budget ? F(p.budget) : "à saisir"}`;
+                          if (k === "coord") return [p.prenom, p.nom].filter(Boolean).join(" ") || "Prénom, nom, téléphone";
+                          if (k === "comptes") return (p.mes_sgi || []).length ? `${p.mes_sgi.length} SGI · comptes et placements` : "Vos SGI et vos placements";
+                          return "";
+                        },
                         // import des documents de la SGI (import.js)
                         lireDocument: (type, d) => api.lireDocument(type, d),
                         titres: () => [...S.mk.actions.map((r) => ({ code: r.code, nom: r.nom, classe: "actions" })),

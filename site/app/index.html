@@ -127,13 +127,15 @@
         <label>Quantité <input name="quantite" type="number" min="0" step="any" inputmode="decimal"></label>
         <label>Prix unitaire (F) <input name="prix" type="number" min="0" step="any" inputmode="decimal"></label>
       </div>
-      <label data-for="qp">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
-        <input name="frais" type="number" min="0" step="any" inputmode="decimal">
-      </label>
       <label data-for="montant">Montant (F) <input name="montant" type="number" min="0" step="any" inputmode="decimal"></label>
       <label class="switch" data-for="vers-epargne" hidden><input type="checkbox" name="vers_epargne"> Je le remets dans mon épargne mise de côté</label>
       <label>Date <input name="date" type="date" required></label>
-      <label>Note <input name="note" maxlength="200"></label>
+      <details class="op-plus"><summary>Frais réels et note <span class="muted">(facultatif)</span></summary>
+        <label data-for="qp">Frais réels (F) <span class="muted small">— vide : 1,3 % estimés</span>
+          <input name="frais" type="number" min="0" step="any" inputmode="decimal">
+        </label>
+        <label>Note <input name="note" maxlength="200"></label>
+      </details>
       <p class="op-total" id="op-total" aria-live="polite"></p>
       <p class="msg err" role="alert"></p>
       <div class="actions">
@@ -221,5 +223,6 @@
   <script src="glossaire.js"></script>
   <script src="rappels.js"></script>
   <script src="cercles.js"></script>
+  <script src="sommaire.js"></script>
 </body>
 </html>

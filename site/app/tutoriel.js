@@ -91,7 +91,12 @@
   async function trouver(etape) {
     if (etape.tab && app.tab() !== etape.tab) { app.aller(etape.tab); await attendre(300); }
     for (let i = 0; i < 15; i++) {
-      for (const s of [].concat(etape.cible || [])) { const el = $(s); if (visible(el)) return el; }
+      for (const s of [].concat(etape.cible || [])) {
+        const el = $(s);
+        // cible dans une rubrique ou un bloc replié (Profil, ordres, journal) : on l'ouvre d'abord
+        if (el && !visible(el)) { const d = el.closest("details:not([open])"); if (d) { d.open = true; await attendre(60); } }
+        if (visible(el)) return el;
+      }
       if (!etape.cible) return null;
       await attendre(100);
     }

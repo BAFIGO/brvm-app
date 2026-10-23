@@ -146,8 +146,8 @@
     const v = $("#v-portefeuille");
     if (!v || v.hidden || !charge) return;
     $(".cer-carte", v)?.remove();
-    const ep = $(".trophees", v)?.closest(".card");
-    if (ep) ep.insertAdjacentHTML("afterend", carteHtml()); else v.insertAdjacentHTML("beforeend", carteHtml());
+    const ancre = $(".pf-ancre-cercles", v);            // seulement dans l'onglet « Mon épargne »
+    if (ancre) ancre.insertAdjacentHTML("beforebegin", carteHtml());
   }
 
   document.addEventListener("click", async (ev) => {
