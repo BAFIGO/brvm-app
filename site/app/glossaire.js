@@ -94,7 +94,7 @@
   // ---------------------------------------------------------------- bulle d'explication
   document.body.insertAdjacentHTML("beforeend", `<div id="gl-bulle" role="dialog" aria-labelledby="gl-t" hidden>
       <div class="gl-tete"><h3 id="gl-t"></h3><button type="button" class="gl-x" aria-label="Fermer l'explication">×</button></div>
-      <p id="gl-d"></p><button type="button" class="btn link small gl-robot">Demander au robot</button></div>`);
+      <p id="gl-d"></p><button type="button" class="btn link small gl-robot">Demander à BafiBot</button></div>`);
   const bulle = $("#gl-bulle");
   let source = null;
   function montrer(b) {

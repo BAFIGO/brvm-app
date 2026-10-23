@@ -244,3 +244,71 @@ body.vitrine main { max-width: none; padding: 0; }
 .car-point[aria-current="true"]::before { width: 20px; border-radius: 4px; background: var(--accent); }
 .avis-note { margin-top: 18px; max-width: 70ch; }
 @media (prefers-reduced-motion: no-preference) { .car-point::before { transition: width .2s ease, background .2s ease; } }
+
+/* =====================================================================================
+ * Vague 3 : vitrine centrée sur le bénéfice, la confiance et l'import
+ * ===================================================================================== */
+.stats.benefices { display: grid; gap: 12px; list-style: none; margin: 26px 0 8px; padding: 0; grid-template-columns: 1fr; }
+@media (min-width: 600px) { .stats.benefices { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.stats.benefices li { display: flex; align-items: flex-start; gap: 10px; padding: 0; border: 0; }
+.stats.benefices li::before { content: none; }
+.bf-ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); font-size: 1.2rem; }
+.stats.benefices b { display: block; font-size: 1rem; color: var(--text); }
+.stats.benefices li > span:last-child { font-size: .88rem; color: var(--muted); line-height: 1.4; }
+
+.import-v .imp-etapes { list-style: none; margin: 26px 0; padding: 0; display: grid; gap: 14px; }
+@media (min-width: 760px) { .import-v .imp-etapes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.imp-etapes li { display: grid; gap: 6px; padding: 18px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); }
+.imp-etapes b { font-size: 1.05rem; }
+.imp-etapes li > span:last-child { color: var(--muted); font-size: .92rem; line-height: 1.45; }
+.ie-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+.ie-ic svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.imp-demo { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; margin: 8px 0 18px; }
+.imp-papier { width: min(260px, 100%); padding: 16px; border-radius: 6px; background: #fbfaf6; color: #1d2340; font-size: .82rem; line-height: 1.55;
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, .45); transform: rotate(-2deg); font-family: Georgia, "Times New Roman", serif; }
+.imp-papier p { margin: 0; }
+.ip-t { font-weight: 700; color: #26357f; border-bottom: 1px solid #d7d9e6; padding-bottom: 6px; margin-bottom: 6px !important; }
+.imp-fleche { font-size: 2rem; color: hsl(35 92% 52%); font-weight: 800; }
+.imp-resultat { width: min(280px, 100%); padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); font-size: .88rem; }
+.imp-resultat p { margin: 0; }
+.ir-t { font-weight: 700; margin-bottom: 10px !important; }
+.ir-l { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 12px; background: var(--surface-2); }
+.ir-l b { display: block; }
+.ir-ok { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--accent); color: var(--accent-text, #fff); font-weight: 800; font-size: .8rem; flex: none; }
+.ir-b { margin-top: 10px !important; text-align: center; padding: 10px; border-radius: 10px; background: var(--accent); color: var(--accent-text, #fff); font-weight: 700; }
+.curieux-t { max-width: var(--wrap); margin: 40px auto 0; padding: 0 var(--gut); font-weight: 700; color: var(--muted); text-transform: none; }
+.commencer { text-align: center; }
+.commencer .cta { justify-content: center; }
+details.curieux { max-width: var(--wrap); margin: 24px auto 0; padding: 0 var(--gut); }
+details.curieux > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 18px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); }
+details.curieux > summary::-webkit-details-marker { display: none; }
+details.curieux > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.curieux-f { font-size: 1.4rem; color: var(--muted); transition: transform .15s; }
+details.curieux[open] .curieux-f { transform: rotate(90deg); }
+details.curieux > section { padding-left: 0; padding-right: 0; }
+/* quatre bénéfices : 1 colonne sur téléphone, 2 au-delà */
+@media (min-width: 600px) { .stats.benefices { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* sur grand écran, la colonne de texte est étroite : on garde deux colonnes de bénéfices */
+.marque-bot { font-weight: 800; color: var(--brand, var(--accent)); }
+.marque-bot .mb-bafi { color: hsl(35 92% 55%); }
+
+/* téléphone d'aperçu : cadre fin et clair, sans bas sombre */
+.ha-tel, :root[data-charte] .ha-tel { width: 290px; padding: 6px; border-radius: 38px;
+  background: linear-gradient(160deg, hsl(230 22% 82%), hsl(230 18% 66%));
+  box-shadow: 0 0 0 1px hsl(230 20% 60% / .35), 0 24px 50px -24px rgba(17, 22, 50, .45); }
+.ha-ecran { border-radius: 32px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ha-tel, :root[data-charte]:not([data-theme="light"]) .ha-tel {
+    background: linear-gradient(160deg, hsl(230 18% 34%), hsl(230 20% 22%));
+    box-shadow: 0 0 0 1px hsl(230 30% 93% / .12), 0 24px 50px -24px rgba(0, 0, 0, .6); }
+}
+:root[data-theme="dark"] .ha-tel { background: linear-gradient(160deg, hsl(230 18% 34%), hsl(230 20% 22%)); }
+/* téléphone et tablette : le téléphone est coupé en bas et se fond dans la page, sans bande sombre */
+@media (max-width: 959px) {
+  .hero-apercu { position: relative; }
+  .ha-tel { padding-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .ha-ecran { -webkit-mask-image: none !important; mask-image: none !important; border-bottom-left-radius: 0; border-bottom-right-radius: 0; height: 430px !important; }
+  .hero-apercu::after { content: ""; position: absolute; left: -12px; right: -12px; bottom: -1px; height: 140px; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--bg)); }
+}

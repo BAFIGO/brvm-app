@@ -26,9 +26,9 @@
     <dialog id="dlg-ia" class="ia" aria-labelledby="ia-titre">
       <div class="ia-tete">
         <span class="ia-avatar">${VISAGE}</span>
-        <div class="ia-titres"><h2 id="ia-titre">Assistant</h2>
-          <p class="small muted">Répond avec vos données et l'actualité publiée</p></div>
-        <button type="button" class="ia-fermer" aria-label="Fermer l'assistant">
+        <div class="ia-titres"><h2 id="ia-titre"><span class="marque-bot"><b class="mb-bafi">Bafi</b>Bot</span></h2>
+          <p class="small muted">Votre assistant : il répond avec vos chiffres et l'actualité publiée</p></div>
+        <button type="button" class="ia-fermer" aria-label="Fermer BafiBot">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="ia-fil" role="log" aria-live="polite" aria-label="Conversation" tabindex="0"></div>
@@ -62,7 +62,7 @@
   function bulle(qui, html) {
     const d = document.createElement("div");
     d.className = "ia-msg " + qui;
-    d.innerHTML = qui === "moi" ? `<span class="sr-only">Vous : </span>${html}` : `<span class="sr-only">Assistant : </span>${html}`;
+    d.innerHTML = qui === "moi" ? `<span class="sr-only">Vous : </span>${html}` : `<span class="sr-only">BafiBot : </span>${html}`;
     fil.append(d);
     fil.scrollTop = fil.scrollHeight;
     return d;
@@ -92,7 +92,7 @@
     enCours = true; envoyer.disabled = true;
     champ.value = ""; ajusterChamp();
     bulle("moi", esc(question));
-    const attente = bulle("ia attente", `<span class="ia-points" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">L'assistant prépare sa réponse…</span>`);
+    const attente = bulle("ia attente", `<span class="ia-points" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">BafiBot prépare sa réponse…</span>`);
     try {
       const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte(question) });
       attente.remove();
@@ -177,7 +177,7 @@
     document.body.classList.add("has-ia");
     const n = app.urgentes(), badge = $(".ia-badge", fab);
     badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n);
-    fab.setAttribute("aria-label", n ? `Ouvrir l'assistant (${n} alerte${n > 1 ? "s" : ""} à regarder)` : "Ouvrir l'assistant");
+    fab.setAttribute("aria-label", n ? `Ouvrir BafiBot (${n} alerte${n > 1 ? "s" : ""} à regarder)` : "Ouvrir BafiBot");
     if (n > dernierCompte) cligner();          // une seule animation, seulement quand il y a du nouveau
     dernierCompte = n;
   }
@@ -217,7 +217,8 @@
     if (Math.abs(dy) < 8) return;
     const enBas = innerHeight + y >= document.documentElement.scrollHeight - 40;
     const focus = document.activeElement?.closest?.(".fab, .fab-ia");
-    document.body.classList.toggle("fabs-caches", dy > 0 && y > 160 && !enBas && !focus);
+    const tuto = document.getElementById("tuto"), guide = tuto && !tuto.hidden;
+    document.body.classList.toggle("fabs-caches", !guide && dy > 0 && y > 160 && !enBas && !focus);
     dernierY = y;
   }, { passive: true });
   window.addEventListener("brvm:maj", majBouton);

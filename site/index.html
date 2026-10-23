@@ -26,7 +26,7 @@
   <header class="v-top">
     <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
     <nav class="v-nav" aria-label="Sections">
-      <a href="#methode">Méthode</a><a href="#epargne">Épargne</a><a href="#apercu">Aperçu</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a>
+      <a href="#import">Import</a><a href="#epargne">Épargne</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a><a href="#curieux">Méthode</a>
     </nav>
     <a class="btn primary small" href="app/#connexion" data-espace>Se connecter</a>
   </header>
@@ -37,19 +37,20 @@
     <!-- 1. Hero -->
     <section class="hero" aria-labelledby="hero-title">
       <p class="eyebrow">Épargne et suivi de portefeuille · zone UEMOA</p>
-      <h1 id="hero-title" class="hero-title">Votre portefeuille BRVM, recalculé chaque soir de séance.</h1>
-      <p class="lead" data-sim="Mettez de côté à votre rythme, même 1 000 F par jour. Chaque soir de séance, l'outil analyse le marché et calcule une simulation de portefeuille selon vos propres réglages. Vous décidez, vous passez les ordres chez votre SGI.">Mettez de côté à votre rythme, même 1 000 F par jour. Chaque soir de séance, l'outil analyse le marché, construit
-        un portefeuille adapté à votre profil et vous dit quand et quoi acheter. Vous décidez, vous passez les ordres chez votre SGI.</p>
+      <h1 id="hero-title" class="hero-title">Épargnez chaque jour, investissez à la BRVM sans vous perdre.</h1>
+      <p class="lead">Dès 1 000 F par jour. BafiBourse vous aide à épargner avec régularité, à suivre vos placements chez votre SGI
+        et à comprendre le marché, chaque soir. Votre argent ne passe jamais par nous.</p>
       <div class="cta">
         <a class="btn primary" href="app/#inscription" data-espace-cta>Créer mon compte</a>
         <a class="btn" href="app/?demo=1">Essayer la démo</a>
       </div>
-      <dl class="stats" aria-describedby="stats-src">
-        <div><dt>actions analysées</dt><dd><span class="odo" data-k="nb_actions">49</span></dd></div>
-        <div><dt>obligations suivies</dt><dd><span class="odo" data-k="nb_obligations">18</span></dd></div>
-        <div><dt>OPCVM comparés</dt><dd><span class="odo" data-k="nb_opcvm">24</span></dd></div>
-      </dl>
-      <p id="stats-src" class="small muted stats-src">Exemple tiré des données de démonstration.</p>
+      <ul class="stats benefices" aria-label="Ce que BafiBourse vous apporte">
+        <li><span class="bf-ic" aria-hidden="true">🔥</span><span><b>Une habitude d'épargne</b>Séries, trophées et cercles entre proches</span></li>
+        <li><span class="bf-ic" aria-hidden="true">🌙</span><span><b>Votre point chaque soir</b>Votre argent, vos alertes, le marché, en 30 secondes</span></li>
+        <li><span class="bf-ic" aria-hidden="true">📸</span><span><b>Vos avis importés en photo</b>Plus de saisie : la photo de l'avis de votre SGI suffit</span></li>
+        <li><span class="bf-ic" aria-hidden="true">🤖</span><span><b><span class="marque-bot"><span class="mb-bafi">Bafi</span>Bot</span>, votre assistant</b>Il répond à vos questions avec vos propres chiffres</span></li>
+      </ul>
+      <p id="stats-src" class="small muted stats-src">Gratuit · votre argent reste chez votre SGI · vos données restent privées.</p>
       <!-- Aperçu de l'application (illustration, données de démonstration), visible sur grand écran -->
       <div class="hero-apercu" aria-hidden="true">
         <div class="ha-tel"><div class="ha-ecran">
@@ -74,6 +75,90 @@
         </div></div>
       </div>
     </section>
+
+    <section id="confiance" class="confiance" aria-labelledby="confiance-title">
+      <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
+      <ul class="points">
+        <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
+        <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
+        <li data-reveal><h3>Pas de mot de passe</h3><p>Un code à 6 chiffres envoyé par e-mail suffit pour vous connecter, sur téléphone comme sur ordinateur.</p></li>
+        <li data-reveal><h3>L'argent reste chez vous</h3><p>Le coffre d'épargne suit vos sommes mises de côté ; l'application ne détient ni ne déplace aucun argent.</p></li>
+        <li data-reveal><h3>Vous gardez la main</h3><p data-sim="Vous fixez les règles, l'outil calcule, vous décidez : les ordres sont passés par vous, chez votre SGI.">L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
+      </ul>
+    </section>
+
+    <!-- Import des documents de la SGI : la fonction qui supprime la saisie -->
+    <section id="import" class="import-v" aria-labelledby="import-title">
+      <p class="eyebrow" data-reveal>Plus de saisie</p>
+      <h2 id="import-title" class="display" data-reveal>Photographiez l'avis de votre SGI : vos opérations se remplissent toutes seules.</h2>
+      <p class="lead" data-reveal>Avis d'exécution, relevé trimestriel, avis de dividende : BafiBourse lit le document, en photo ou en PDF,
+        et prépare vos achats, ventes, versements, frais et dividendes. Vous vérifiez, vous validez.</p>
+      <ol class="imp-etapes">
+        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><b>Une photo ou un PDF</b><span>L'avis reçu de votre SGI, pris en photo ou choisi dans vos fichiers.</span></li>
+        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><b>Lu en quelques secondes</b><span>Titre, quantité, cours, frais, dividendes et frais de tenue de compte sont reconnus.</span></li>
+        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg></span><b>Vous validez</b><span>Doublons écartés, montants vérifiés : rien n'est enregistré sans votre accord.</span></li>
+      </ol>
+      <div class="imp-demo" aria-hidden="true" data-reveal>
+        <div class="imp-papier"><p class="ip-t">Avis d'exécution en bourse</p><p>Vente · SONATEL SENEGAL</p><p>Quantité 10 · Cours 29 000</p><p>Total des frais 4 602</p><p>Montant à créditer 285 398</p></div>
+        <span class="imp-fleche">→</span>
+        <div class="imp-resultat"><p class="ir-t">1 opération trouvée</p>
+          <p class="ir-l"><span class="ir-ok">✓</span><span><b>Vente · Sonatel Sénégal</b>10 titres à 29 000 F · frais 4 602 F</span></p>
+          <p class="ir-b">Enregistrer l'opération</p></div>
+      </div>
+      <p class="small muted" data-reveal>Le document est lu puis oublié : seules les opérations que vous validez sont enregistrées. Vos numéros de compte ne sont jamais repris.</p>
+    </section>
+
+    <!-- 3. Épargne mise de côté -->
+    <section id="epargne" class="epargne-v" aria-labelledby="epargne-title">
+      <div data-reveal>
+        <p class="eyebrow">Votre coffre d'épargne</p>
+        <h2 id="epargne-title" class="display">La discipline d'abord, la bourse ensuite.</h2>
+        <p class="lead">Le coffre suit l'argent que vous gardez pour la bourse, où qu'il soit : espèces, banque ou mobile money.
+          L'application ne garde rien : elle vous aide à tenir votre rythme et vous dit quand passer à l'action.</p>
+      </div>
+      <div class="ev-grid">
+        <figure class="card ev-demo" data-reveal aria-labelledby="ev-cap">
+          <div class="ev-head"><b>Mon épargne</b><span class="chip">5 000 F par jour</span></div>
+          <div class="ev-jauge" aria-hidden="true"><i data-fill="25"></i></div>
+          <p class="small">125 000 F épargnés sur un objectif de 500 000 F</p>
+          <div class="ev-stats">
+            <div><span class="small muted">Régularité</span><b>18 / 20 jours</b></div>
+            <div><span class="small muted">Série en cours</span><b>8 jours</b></div>
+          </div>
+          <p class="small ev-pret">Prêt à investir : envoyez votre épargne à votre SGI.</p>
+          <span class="ev-fab" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/></svg></span>
+          <figcaption id="ev-cap" class="small muted">Exemple : un plan de 5 000 F par jour, du lundi au vendredi.</figcaption>
+        </figure>
+        <ol class="ev-chemin" data-reveal>
+          <li><span class="ev-pt c3" aria-hidden="true"></span><div><b>Mis de côté</b><p>« J'ai épargné » : un bouton toujours à portée de pouce.</p></div></li>
+          <li><span class="ev-pt c2" aria-hidden="true"></span><div><b>Chez ma SGI</b><p>Dès 100 000 F, l'application vous invite à envoyer votre épargne à votre SGI ; le dépôt s'inscrit tout seul dans votre journal.</p></div></li>
+          <li><span class="ev-pt c1" aria-hidden="true"></span><div><b>Placé en bourse</b><p>Les ordres sont recalculés pour ce nouvel apport, selon votre profil.</p></div></li>
+        </ol>
+        <div class="ev-barre" data-reveal aria-hidden="true"><i class="c3" data-fill="20"></i><i class="c2" data-fill="35"></i><i class="c1" data-fill="45"></i></div>
+      </div>
+    </section>
+
+    <!-- Avis des utilisateurs : les 10 meilleurs avis publiés (fonction avis_publics, avis.sql). Section masquée tant qu'il y en a moins de 3. -->
+    <section id="avis" class="avis" aria-labelledby="avis-title" hidden>
+      <p class="eyebrow">Ils en parlent</p>
+      <h2 id="avis-title" class="display">Ils épargnent avec BafiBourse.</h2>
+      <p class="avis-moy"></p>
+      <div class="car" role="region" aria-roledescription="carrousel" aria-label="Avis des utilisateurs">
+        <div class="car-piste" tabindex="0" aria-label="Avis, faites défiler de côté"></div>
+        <div class="car-ctrl">
+          <button type="button" class="car-btn" data-car="prec" aria-label="Avis précédent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <div class="car-points" role="group" aria-label="Aller à un avis"></div>
+          <button type="button" class="car-btn" data-car="pause" aria-pressed="false" aria-label="Mettre en pause le défilement automatique">
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="i-lecture" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
+          <button type="button" class="car-btn" data-car="suiv" aria-label="Avis suivant"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+      <p class="small muted avis-note">Avis d'utilisateurs, publiés avec leur accord après relecture par l'équipe. Ils ne préjugent pas des résultats futurs : investir en bourse comporte un risque de perte en capital.</p>
+    </section>
+
+    <!-- Pour les curieux : la méthode et le marché, repliés pour ne pas allonger la page -->
+    <details class="curieux" id="curieux">
+      <summary><span><b>Pour les curieux</b> · la méthode de calcul et l'aperçu du marché</span><span class="curieux-f" aria-hidden="true">›</span></summary>
 
     <!-- 2. Méthode -->
     <section id="methode" class="methode" aria-labelledby="methode-title">
@@ -146,36 +231,6 @@
       </div>
     </section>
 
-    <!-- 3. Épargne mise de côté -->
-    <section id="epargne" class="epargne-v" aria-labelledby="epargne-title">
-      <div data-reveal>
-        <p class="eyebrow">Votre coffre d'épargne</p>
-        <h2 id="epargne-title" class="display">La discipline d'abord, la bourse ensuite.</h2>
-        <p class="lead">Le coffre suit l'argent que vous gardez pour la bourse, où qu'il soit : espèces, banque ou mobile money.
-          L'application ne garde rien : elle vous aide à tenir votre rythme et vous dit quand passer à l'action.</p>
-      </div>
-      <div class="ev-grid">
-        <figure class="card ev-demo" data-reveal aria-labelledby="ev-cap">
-          <div class="ev-head"><b>Mon épargne</b><span class="chip">5 000 F par jour</span></div>
-          <div class="ev-jauge" aria-hidden="true"><i data-fill="25"></i></div>
-          <p class="small">125 000 F épargnés sur un objectif de 500 000 F</p>
-          <div class="ev-stats">
-            <div><span class="small muted">Régularité</span><b>18 / 20 jours</b></div>
-            <div><span class="small muted">Série en cours</span><b>8 jours</b></div>
-          </div>
-          <p class="small ev-pret">Prêt à investir : envoyez votre épargne à votre SGI.</p>
-          <span class="ev-fab" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/></svg></span>
-          <figcaption id="ev-cap" class="small muted">Exemple : un plan de 5 000 F par jour, du lundi au vendredi.</figcaption>
-        </figure>
-        <ol class="ev-chemin" data-reveal>
-          <li><span class="ev-pt c3" aria-hidden="true"></span><div><b>Mis de côté</b><p>« J'ai épargné » : un bouton toujours à portée de pouce.</p></div></li>
-          <li><span class="ev-pt c2" aria-hidden="true"></span><div><b>Chez ma SGI</b><p>Dès 100 000 F, l'application vous invite à envoyer votre épargne à votre SGI ; le dépôt s'inscrit tout seul dans votre journal.</p></div></li>
-          <li><span class="ev-pt c1" aria-hidden="true"></span><div><b>Placé en bourse</b><p>Les ordres sont recalculés pour ce nouvel apport, selon votre profil.</p></div></li>
-        </ol>
-        <div class="ev-barre" data-reveal aria-hidden="true"><i class="c3" data-fill="20"></i><i class="c2" data-fill="35"></i><i class="c1" data-fill="45"></i></div>
-      </div>
-    </section>
-
     <!-- 4. Aperçu des données -->
     <section id="apercu" class="apercu" aria-labelledby="apercu-title">
       <div data-reveal>
@@ -198,39 +253,26 @@
       </div>
     </section>
 
-    <!-- 4. Confiance -->
-    <!-- Avis des utilisateurs : les 10 meilleurs avis publiés (fonction avis_publics, avis.sql). Section masquée tant qu'il y en a moins de 3. -->
-    <section id="avis" class="avis" aria-labelledby="avis-title" hidden>
-      <p class="eyebrow">Ils en parlent</p>
-      <h2 id="avis-title" class="display">Ils épargnent avec BafiBourse.</h2>
-      <p class="avis-moy"></p>
-      <div class="car" role="region" aria-roledescription="carrousel" aria-label="Avis des utilisateurs">
-        <div class="car-piste" tabindex="0" aria-label="Avis, faites défiler de côté"></div>
-        <div class="car-ctrl">
-          <button type="button" class="car-btn" data-car="prec" aria-label="Avis précédent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-          <div class="car-points" role="group" aria-label="Aller à un avis"></div>
-          <button type="button" class="car-btn" data-car="pause" aria-pressed="false" aria-label="Mettre en pause le défilement automatique">
-            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="i-lecture" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
-          <button type="button" class="car-btn" data-car="suiv" aria-label="Avis suivant"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
-        </div>
-      </div>
-      <p class="small muted avis-note">Avis d'utilisateurs, publiés avec leur accord après relecture par l'équipe. Ils ne préjugent pas des résultats futurs : investir en bourse comporte un risque de perte en capital.</p>
+    </details>
+
+    <!-- Dernier appel -->
+    <section id="commencer" class="commencer" aria-labelledby="commencer-title">
+      <h2 id="commencer-title" class="display" data-reveal>Prêt à commencer ?</h2>
+      <p class="lead" data-reveal>Une minute pour créer votre compte, et votre portrait d'épargnant vous attend.</p>
+      <div class="cta" data-reveal><a class="btn primary" href="app/#inscription">Créer mon compte</a><a class="btn" href="app/?demo=1">Essayer la démo</a></div>
     </section>
 
-    <section id="confiance" class="confiance" aria-labelledby="confiance-title">
-      <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
-      <ul class="points">
-        <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
-        <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
-        <li data-reveal><h3>Pas de mot de passe</h3><p>Connexion par lien envoyé à votre adresse e-mail, sur téléphone comme sur ordinateur.</p></li>
-        <li data-reveal><h3>L'argent reste chez vous</h3><p>Le coffre d'épargne suit vos sommes mises de côté ; l'application ne détient ni ne déplace aucun argent.</p></li>
-        <li data-reveal><h3>Vous gardez la main</h3><p data-sim="Vous fixez les règles, l'outil calcule, vous décidez : les ordres sont passés par vous, chez votre SGI.">L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
-      </ul>
-      <div class="cta cta-end" data-reveal>
-        <a class="btn primary" href="app/#inscription">Créer mon compte</a>
-        <a class="btn" href="app/?demo=1">Essayer la démo</a>
-      </div>
-    </section>
+
+
+
+
+
+
+
+    <!-- 4. Confiance -->
+
+
+
   </main>
 
   <footer class="v-foot">

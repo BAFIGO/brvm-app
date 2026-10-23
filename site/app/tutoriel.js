@@ -90,6 +90,9 @@
   // Trouve l'élément à montrer (après changement d'onglet si besoin), en attendant qu'il s'affiche
   async function trouver(etape) {
     if (etape.tab && app.tab() !== etape.tab) { app.aller(etape.tab); await attendre(300); }
+    if ([].concat(etape.cible || []).some((c) => /fab/.test(c)) && document.body.classList.contains("fabs-caches")) {
+      document.body.classList.remove("fabs-caches"); await attendre(260);              // le temps de son retour à l'écran
+    }
     for (let i = 0; i < 15; i++) {
       for (const s of [].concat(etape.cible || [])) {
         const el = $(s);
@@ -155,14 +158,14 @@
       texte: (c) => c?.matches(".a-faire")
         ? "Chaque soir après la séance, vos alertes et ce qu'il y a à faire apparaissent ici. Une alerte est un signal à examiner, jamais une vente automatique."
         : `Chaque soir après la séance : le point sur votre argent, puis vos alertes et ${app.sim() ? "la simulation" : "la proposition"} du jour juste en dessous.` },
-    { tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Noter vos opérations",
-      texte: "Après chaque achat, vente ou versement chez votre SGI, notez-le ici : tous les calculs partent de ce journal." },
+    { tab: "portefeuille", cible: ['#v-portefeuille .ajout-op', '#v-portefeuille [data-op=""]'], titre: "Ajouter vos opérations",
+      texte: "Le plus simple : photographiez l'avis ou le relevé de votre SGI, les opérations se remplissent toutes seules. Vous pouvez aussi les saisir à la main." },
     { cible: "#fab-coffre", optionnel: true, titre: "Votre coffre",
       texte: "Mettez de l'argent de côté avant de l'envoyer à votre SGI, et suivez votre régularité." },
     { tab: "marche", cible: ["#v-marche .list > li:first-child", "#v-marche h1"], titre: "Le marché",
       texte: "Chaque soir, l'analyse de chaque action, obligation et OPCVM de la BRVM. Touchez un titre, comme celui-ci, pour voir le détail et les raisons." },
-    { cible: "#fab-ia", optionnel: true, titre: "Votre assistant",
-      texte: "Une question ? Demandez-lui : il répond avec vos chiffres et l'actualité publiée." },
+    { cible: "#fab-ia", optionnel: true, titre: "BafiBot, votre assistant",
+      texte: "Une question ? Demandez à BafiBot : il répond avec vos chiffres et l'actualité publiée." },
   ];
   async function lancerVisite(relance = false) {
     if (enCours) return;
@@ -194,6 +197,7 @@
     }
   }
   async function proposerVisite() {
+    for (let k = 0; k < 600 && document.querySelector("dialog[open]"); k++) await attendre(200);   // ex. choix de la démo
     const p = app.prenom();
     noter("visite_proposee");
     const r = await derouler([{ titre: `Bienvenue${p ? " " + p : ""} !`, texte: "Découvrez l'essentiel de l'application en une minute, en cinq étapes." }],
@@ -212,16 +216,16 @@
                   texte: "Chaque fois que vous envoyez de l'argent à votre SGI, notez-le ici : c'est le point de départ de tous les calculs.",
                   action: { label: "Noter un versement", fn: () => app.ouvrirOperation("DEPOT") } }] },
       { id: "achat", t: "Enregistrer mon premier achat", duree: "1 min", fait: f.achat,
-        guide: [{ tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Enregistrer un achat",
-                  texte: "Quand votre SGI confirme un achat (avis d'opéré), notez-le ici avec la quantité, le prix et les frais.",
-                  action: { label: "Noter un achat", fn: () => app.ouvrirOperation("ACHAT") } }] },
+        guide: [{ tab: "portefeuille", cible: ['#v-portefeuille .ajout-import', '#v-portefeuille [data-op=""]'], titre: "Enregistrer un achat",
+                  texte: "Quand votre SGI vous envoie l'avis d'opéré, importez-le en photo ou en PDF : quantité, prix et frais se remplissent tout seuls.",
+                  action: { label: "Importer mon avis d'opéré", fn: () => document.querySelector("#v-portefeuille .ajout-import")?.click() } }] },
       { id: "alertes", t: "Découvrir mes alertes", duree: "20 s", fait: !!e.pas.alertes,
         guide: [{ tab: "aujourdhui", cible: ["#v-aujourdhui .card.a-faire", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "Vos alertes",
                   texte: (c) => c?.matches(".a-faire")
                     ? "Ce bloc « À faire » réunit après chaque séance les titres qui demandent votre attention, avec l'explication. Une alerte est un signal à examiner, jamais une vente automatique."
                     : "Dès que vous détiendrez des titres, leurs alertes apparaîtront dans un bloc « À faire » sur cet écran. Une alerte est un signal à examiner, jamais une vente automatique." }] },
-      ...(robot ? [{ id: "robot", t: "Poser une question au robot", duree: "30 s", fait: !!e.pas.robot,
-        guide: [{ cible: "#fab-ia", titre: "Votre assistant", texte: "Il répond avec vos propres chiffres. Essayez avec une question toute prête : vous pourrez ensuite poser les vôtres.",
+      ...(robot ? [{ id: "robot", t: "Poser une question à BafiBot", duree: "30 s", fait: !!e.pas.robot,
+        guide: [{ cible: "#fab-ia", titre: "BafiBot, votre assistant", texte: "Il répond avec vos propres chiffres. Essayez avec une question toute prête : vous pourrez ensuite poser les vôtres.",
                   action: { label: "Essayer : « Combien ai-je gagné ce mois-ci ? »", fn: () => ouvrirAssistant("Combien ai-je gagné ce mois-ci ?") } }] }] : []),
       ...(f.plan !== null ? [{ id: "epargne", t: "Choisir mon rythme d'épargne", duree: "30 s", fait: f.plan,
         guide: [{ tab: "profil", cible: ["#f-plan", "#v-profil h1"], titre: "Votre rythme d'épargne",

@@ -36,6 +36,7 @@
   }
   async function stats() {
     const els = $$(".odo");
+    if (!els.length) return;                       // plus de compteurs sur la vitrine : rien à mettre à jour
     try {
       const s = await rest("rpc/stats_publiques", { method: "POST", body: "{}" });
       if (!s || !s.date) throw new Error("aucune séance");
@@ -249,6 +250,13 @@
   } catch (e) { /* stockage indisponible : affichage par défaut */ }
 
   if (ANIM) animate(); else draw();
+  // « Pour les curieux » : à l'ouverture, les blocs repliés s'affichent et les animations se recalent
+  document.getElementById("curieux")?.addEventListener("toggle", (ev) => {
+    if (!ev.target.open) return;
+    ev.target.querySelectorAll("[data-reveal]").forEach((e) => { e.style.opacity = 1; e.style.transform = "none"; });
+    if (window.ScrollTrigger) ScrollTrigger.refresh();
+  });
+  if (location.hash === "#curieux" || location.hash === "#methode" || location.hash === "#apercu") { const d = document.getElementById("curieux"); if (d) d.open = true; }
   stats();
   mode();
   avis();

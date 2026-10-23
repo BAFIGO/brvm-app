@@ -58,7 +58,6 @@
 }
 
 /* ---------------------------------------------------------------- éléments codés en dur dans l'ancienne charte */
-[data-charte="indigo"] .ha-tel { background: hsl(232 34% 12%); }   /* cadre du téléphone d'aperçu (vitrine) */
 [data-charte="indigo"] .syn-grid { border-top-color: hsl(230 55% 32% / .18); }
 
 /* ---------------------------------------------------------------- nom de marque : « Bafi » en ambre doré, « Bourse » en indigo
@@ -66,5 +65,3 @@
 [data-charte="indigo"] .brand .marque { color: var(--brand); font-weight: 800; letter-spacing: -.01em; }
 [data-charte="indigo"] .brand .m-bafi { color: hsl(35 92% 55%); font-weight: inherit; }
 /* en mode sombre, un liseré clair détache le cadre du téléphone d'aperçu du fond */
-@media (prefers-color-scheme: dark) { [data-charte="indigo"]:not([data-theme="light"]) .ha-tel { box-shadow: 0 0 0 1px hsl(230 30% 93% / .14), 0 30px 60px -20px rgba(0, 0, 0, .6); } }
-[data-charte="indigo"][data-theme="dark"] .ha-tel { box-shadow: 0 0 0 1px hsl(230 30% 93% / .14), 0 30px 60px -20px rgba(0, 0, 0, .6); }

@@ -6,6 +6,7 @@
 
   const CFG = window.BRVM_CONFIG;
   const DEMO = new URLSearchParams(location.search).has("demo");
+  const DEMO_DEBUT = DEMO && new URLSearchParams(location.search).get("demo") === "debut";   // démo « mes premiers jours »
   // Mode des portefeuilles réglé dans la console (Moteur) : « simulation » = calcul selon les réglages de l'utilisateur,
   // jamais présenté comme une recommandation. Démo : ?demo=1&mode=simulation
   let MODE = DEMO && new URLSearchParams(location.search).get("mode") === "simulation" ? "simulation" : "proposition";
@@ -259,7 +260,18 @@
 
   function demoApi() {
     let data = null, nextId = 10000;
-    const load = async () => (data ??= await (await fetch("demo.json")).json());
+    const load = async () => (data ??= debutDemo(await (await fetch("demo.json")).json()));
+    // Démo « mes premiers jours » : le même marché, mais un compte qui démarre (un versement, un premier achat)
+    const debutDemo = (d) => {
+      if (!DEMO_DEBUT) return d;
+      const jour = (n) => { const x = new Date(); x.setDate(x.getDate() - n); while ([0, 6].includes(x.getDay())) x.setDate(x.getDate() - 1); return x.toISOString().slice(0, 10); };
+      const snts = (d.actions || []).find((r) => r.code === "SNTS");
+      d.operations = [
+        { id: 1, date: jour(8), type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant: 250000, note: null },
+        { id: 2, date: jour(6), type: "ACHAT", ticker: "SNTS", quantite: 5, prix: +(snts?.cours || 25000), frais: null, montant: null, note: null }];
+      if (d.proposition?.contenu?.historique) d.proposition.contenu.historique = d.proposition.contenu.historique.slice(-5);
+      return d;
+    };
     const names = { actions_analyse: "actions", obligations_analyse: "obligations", opcvm_analyse: "opcvm" };
     return {
       session: async () => { await load(); return { user: { id: "demo", email: data.profil.email } }; },
@@ -321,13 +333,13 @@
           let id = 1;
           const ouvres = [];                                                    // jours ouvrés, du plus récent au plus ancien
           for (let j = 1; j <= 40; j++) { const dt = new Date(); dt.setDate(dt.getDate() - j); if (![0, 6].includes(dt.getDay())) ouvres.push(j); }
-          const manques = new Set([6, 7, 11, 16, 21].map((i) => ouvres[i]));   // série de 6 jours en cours ; avant, des séries plus courtes
-          for (let j = 34; j >= 1; j--) {
+          const manques = DEMO_DEBUT ? new Set() : new Set([6, 7, 11, 16, 21].map((i) => ouvres[i]));   // série de 6 jours en cours ; avant, des séries plus courtes
+          for (let j = DEMO_DEBUT ? 7 : 34; j >= 1; j--) {
             const dt = new Date(); dt.setDate(dt.getDate() - j);
             if ([0, 6].includes(dt.getDay()) || manques.has(j)) continue;
             mv.push({ id: id++, date: iso(dt), type: "VERSEMENT", montant: j % 6 === 0 ? 10000 : 5000, source: src[j % 4] });
           }
-          const debut = new Date(); debut.setDate(debut.getDate() - 34);
+          const debut = new Date(); debut.setDate(debut.getDate() - (DEMO_DEBUT ? 8 : 34));
           d.coffre = { plan: { montant: 5000, rythme: "quotidien", jours_ouvres: true, objectif: 500000, debut: iso(debut) }, mouvements: mv, nextId: id };
         }
         return { plan: d.coffre.plan && { ...d.coffre.plan }, mouvements: d.coffre.mouvements.slice(), seuil: 100000 };
@@ -845,6 +857,10 @@
     for (const a of alertes) faire.push(`<li class="af af-journal"><span class="af-ic" aria-hidden="true">!</span><div class="main"><div class="sub">${esc(a)}</div></div></li>`);
     const { urg, aut } = lignesAlertes();
     faire.push(...urg);
+    if (!DEMO && S.profil?.onboarding_fini_le && !S.profil?.questionnaire?.horizon)
+      faire.push(`<li class="af af-epargne"><span class="af-ic" aria-hidden="true">?</span><div class="main"><div class="name">Affinez votre profil d'investisseur</div>
+        <div class="sub">Trois questions, une minute : pour des propositions adaptées à votre horizon et à votre tempérament.</div></div>
+        <button class="btn small" type="button" data-completer>Répondre</button></li>`);
     const ep = epargne();
     if (ep?.aFaire && ep.plan?.montant)
       faire.push(`<li class="af af-epargne"><span class="af-ic" aria-hidden="true">+</span><div class="main"><div class="name">Vos ${F(ep.plan.montant)} ${RYTHMES[ep.plan.rythme][1] === "aujourd'hui" ? "d'aujourd'hui" : RYTHMES[ep.plan.rythme][1]} ?</div>
@@ -1266,8 +1282,12 @@
         })()}</div></div>
         <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
       </div>`;
-    h += `
-      <div class="actions"><button class="btn" data-import="">Importer un avis ou un relevé</button><button class="btn primary" data-op="">Opération chez ma SGI</button></div>`;
+    // Ajouter une opération : l'import d'un avis ou d'un relevé est l'action principale, la saisie l'alternative
+    h += `<div class="card ajout-op" aria-labelledby="h-ajout"><h2 id="h-ajout">Ajouter une opération</h2>
+        <button type="button" class="ajout-import" data-import=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg></span>
+          <span class="ai-txt"><b>Importer un avis ou un relevé</b><span>Photo ou PDF de votre SGI : les opérations se remplissent toutes seules</span></span>
+          <span class="ai-badge">Le plus rapide</span></button>
+        <button type="button" class="ajout-main" data-op=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span><span>Saisir à la main</span><span aria-hidden="true">›</span></button></div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
     h += `<div class="card positions"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
     if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
@@ -1786,12 +1806,15 @@
     v.hidden = false;
     v.innerHTML = `<p class="center muted">Chargement…</p>`;
     const lib = await chargerTel();
-    const etapes = [
+    const toutes = [
       { n: 1, titre: "Vous", oblig: true },
-      { n: 2, titre: "Votre objectif", oblig: true },
+      { n: 2, titre: "Votre profil d'investisseur", oblig: true },
       { n: 3, titre: "Votre épargne" },
       ...(S.univ ? [{ n: 4, titre: "Vos comptes" }] : []),
       { n: 5, titre: "Vos préférences", oblig: true }];
+    const etapes = completer
+      ? toutes.filter((e) => (e.n === 1 && !p.prenom) || e.n === 2 || e.n === 4)
+      : toutes.filter((e) => [1, 3, 5].includes(e.n));
     let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.n > (+p.onboarding_etape || 0)));
     const rep = { ...(p.questionnaire || {}) };
     return new Promise((fini) => {
@@ -1822,7 +1845,7 @@
           ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:12px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}> Animations de félicitations (confettis)</label>` : ""}
           <h3 style="margin-top:18px">Récapitulatif</h3><ul class="recap small">
             <li><b>${esc(p.prenom || "")}${p.nom ? " " + esc(p.nom) : ""}</b>${p.pays ? ` · ${drapeau(p.pays)} ${esc(nomPays(p.pays))}` : ""}</li>
-            <li>Profil de risque : <b>${esc(PROFILS[p.profil]?.t || p.profil || "–")}</b></li>
+            <li>Profil d'investisseur : <b>${esc(PROFILS[p.profil]?.t || "Équilibré")}</b>${p.questionnaire?.horizon ? "" : " (par défaut : vous l'affinerez en 1 minute)"}</li>
             ${S.coffre?.plan?.montant ? `<li>Épargne : <b>${F(S.coffre.plan.montant)}</b> ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[S.coffre.plan.rythme] || ""}</li>` : ""}
             ${+p.budget ? `<li>Montant à investir : <b>${F(p.budget)}</b></li>` : ""}
             ${(p.mes_sgi || []).length ? `<li>SGI : <b>${esc(p.mes_sgi.join(", "))}</b></li>` : ""}</ul>
@@ -1847,13 +1870,15 @@
         }
         if (e.n === 4) return lireUnivers(f);
         const upd = { recevoir_email: f.recevoir_email.checked };
+        if (!p.profil) upd.profil = "equilibre";                // profil par défaut, en attendant les 3 questions
         if (f.felicitations) upd.felicitations = f.felicitations.checked;
         if (!p.onboarding_fini_le) upd.onboarding_fini_le = new Date().toISOString();
         return upd;
       };
       const afficher = () => {
         const e = etapes[i], dernier = i === etapes.length - 1;
-        v.innerHTML = `<h1 id="h-ob">${completer ? "Compléter mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
+        v.innerHTML = `<h1 id="h-ob">${completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
+          ${!completer && i === 0 ? `<p class="small">Trois petites étapes, une minute, puis votre portrait d'épargnant.</p>` : ""}
           <div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
             <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
           <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
@@ -2923,8 +2948,33 @@
   }
 
 
+  // Démo : une barre permanente pour passer à l'inscription, et, à la première visite, deux portes
+  function demoAccueil() {
+    if (!DEMO) return;
+    $("main")?.insertAdjacentHTML("afterbegin", `<div class="demo-barre" role="note"><span>Démonstration · données fictives${DEMO_DEBUT ? " · premiers jours" : ""}</span>
+      <a class="btn small primary" href="./#inscription">Créer mon compte</a></div>`);
+    let vu = false;
+    try { vu = !!sessionStorage.getItem("brvm-demo-porte"); sessionStorage.setItem("brvm-demo-porte", "1"); } catch (e) { vu = true; }
+    if (vu || new URLSearchParams(location.search).get("demo") !== "1") return;
+    document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-portes" aria-labelledby="portes-t"><div class="portes">
+      <h2 id="portes-t">Que voulez-vous découvrir ?</h2>
+      <p class="small muted">Une démonstration avec des données fictives : rien n'est enregistré.</p>
+      <button type="button" class="porte" data-porte="debut"><b>Mes premiers jours</b><span>Un compte qui démarre : un premier versement, un premier achat, une semaine d'épargne.</span></button>
+      <button type="button" class="porte" data-porte="avance"><b>Un portefeuille suivi depuis deux ans</b><span>Positions, dividendes, trophées, cercle d'épargne : tout ce que l'outil apporte avec le temps.</span></button>
+    </div></dialog>`);
+    const d = $("#dlg-portes");
+    d.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-porte]");
+      if (!b) return;
+      if (b.dataset.porte === "debut") location.href = "?demo=debut" + location.hash;
+      else d.close();
+    });
+    d.showModal();
+  }
+
   async function init() {
     $("#badge-demo").hidden = !DEMO;
+    demoAccueil();
     if (DEMO) document.title = "Démo – BafiBourse";
     showAnnonce();
     chargerMode();
