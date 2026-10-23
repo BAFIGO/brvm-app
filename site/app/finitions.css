@@ -271,9 +271,13 @@ textarea { font: inherit; line-height: 1.45; }
 /* =====================================================================================
  * Glossaire au toucher (glossaire.js)
  * ===================================================================================== */
-.gl { all: unset; display: inline; cursor: help; color: inherit; font: inherit;
-  text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 3px;
-  text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent); border-radius: 3px; }
+.gl { all: unset; display: inline; cursor: help; color: var(--accent); font: inherit; font-weight: 600;
+  text-decoration: underline; text-decoration-style: dashed; text-decoration-thickness: 1.5px; text-underline-offset: 3px;
+  text-decoration-color: hsl(35 92% 52%); border-radius: 3px; }
+/* petit « ? » après le mot : on comprend tout de suite qu'il s'explique d'un toucher */
+.gl::after { content: "?"; display: inline-grid; place-items: center; width: 1.15em; height: 1.15em; margin-left: .18em; border-radius: 50%;
+  font-size: .68em; font-weight: 800; line-height: 1; vertical-align: .32em; text-decoration: none;
+  background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
 .gl:hover { text-decoration-style: solid; }
 .gl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gl[aria-expanded="true"] { background: var(--accent-soft); }
@@ -384,3 +388,26 @@ textarea { font: inherit; line-height: 1.45; }
 .cer-code { margin: 6px 0 12px; font-size: 1.8rem; font-weight: 800; letter-spacing: .14em; text-align: center; font-variant-numeric: tabular-nums;
   padding: 10px; border-radius: 12px; background: var(--surface-2); }
 .cer-partage { display: grid; gap: 8px; }
+
+/* Question de recommandation (0 à 10) dans la fenêtre de notation */
+.av-reco { border: 0; padding: 0; margin: 14px 0 0; }
+.av-reco legend { font-weight: 600; margin-bottom: 6px; }
+.av-echelle { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; }
+.av-echelle label { position: relative; margin: 0; }
+.av-echelle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.av-echelle span { display: grid; place-items: center; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  font-weight: 700; font-size: .9rem; cursor: pointer; font-variant-numeric: tabular-nums; }
+.av-echelle input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.av-echelle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.av-bornes { display: flex; justify-content: space-between; margin-top: 4px; }
+
+/* séance en barres (Performance, période « Séance ») */
+.seance-barres { list-style: none; margin: 8px 0 10px; padding: 0; display: grid; gap: 12px; }
+.seance-barres li { display: grid; grid-template-columns: 8.5em 1fr 4.6em; align-items: center; gap: 10px; }
+.sb-lbl { font-size: .88rem; font-weight: 600; }
+.sb-piste { position: relative; height: 16px; border-radius: 8px; background: var(--surface-2); }
+.sb-piste::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--border); }
+.sb-piste i { position: absolute; top: 0; bottom: 0; border-radius: 8px; }
+.sb-piste i.pos { left: 50%; }
+.sb-piste i.neg { right: 50%; }
+.seance-barres b { text-align: right; font-variant-numeric: tabular-nums; }

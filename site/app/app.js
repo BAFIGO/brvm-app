@@ -216,12 +216,13 @@
         return data;
       },
       monAvis: async () => {
-        const { data, error } = await sb.from("avis").select("note,commentaire,publication,ville,statut,motif_refus").maybeSingle();
+        const { data, error } = await sb.from("avis").select("note,commentaire,publication,ville,statut,motif_refus,recommandation").maybeSingle();
         if (error) throw error;
         return data;
       },
       donnerAvis: async (a) => {
-        const { data, error } = await sb.rpc("donner_avis", { p_note: a.note, p_commentaire: a.commentaire, p_publication: a.publication, p_ville: a.ville });
+        const { data, error } = await sb.rpc("donner_avis", { p_note: a.note, p_commentaire: a.commentaire, p_publication: a.publication, p_ville: a.ville,
+                                                             p_recommandation: a.recommandation ?? null });
         if (error) throw new Error(error.message);
         return data;
       },
@@ -317,9 +318,10 @@
         }
         return { plan: d.coffre.plan && { ...d.coffre.plan }, mouvements: d.coffre.mouvements.slice(), seuil: 100000 };
       },
-      addMouvement: async (m) => { const d = await load(); d.coffre.mouvements.push({ ...m, id: d.coffre.nextId++ }); },
+      addMouvement: async (m) => { const d = await load(); if (!d.coffre) await api.coffre(); d.coffre.mouvements.push({ ...m, id: d.coffre.nextId++ }); },
       envoyerSgi: async (date, montant) => {
         const d = await load();
+        if (!d.coffre) await api.coffre();
         d.coffre.mouvements.push({ id: d.coffre.nextId++, date, type: "TRANSFERT", montant });
         d.operations.push({ id: nextId++, date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant, note: "Depuis mon épargne" });
         d.operations.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
@@ -2138,11 +2140,25 @@
         ${!ok(b30) || !ok(bc) ? `<p class="small muted">« – » : indice pas encore disponible pour ces séances.</p>` : ""}
         <p class="small muted">Gain sur la période choisie, hors dépôts et retraits : évolution des cours, dividendes et frais.
           À ne pas confondre avec le « gain si je vendais aujourd'hui » de Portefeuille.</p></div>`;
-    const chartRows = rows.length >= 5 ? rows : hist.slice(-21);
-    const ch = perfChart(chartRows, ix);
-    h += `<div class="card"><h2>Évolution comparée</h2>
-      <div class="legend">${SERIES.map(([, n2, col]) => `<span><i class="s" style="background:${col}"></i>${n2}</span>`).join("")}</div>${ch.html}
-      <p class="small muted">Performance cumulée${chartRows === rows ? "" : " sur le dernier mois"}, en partant de 0 %. Touchez le graphique pour le détail d'un jour.</p></div>`;
+    let ch = null;
+    if (n === 1) {
+      // Une seule séance : la BRVM ne publie qu'un cours de clôture par jour, il n'y a donc pas de courbe à tracer
+      // à l'intérieur de la journée. On compare la séance en barres : portefeuille, BRVM 30, BRVM Composite.
+      const barres = [["Portefeuille", pf, "var(--s1)"], ["BRVM 30", b30, "var(--s2)"], ["BRVM Composite", bc, "var(--s3)"]];
+      const max = Math.max(0.001, ...barres.map(([, v2]) => (ok(v2) ? Math.abs(v2) : 0)));
+      h += `<div class="card"><h2>La séance du ${D(last.date)} en un coup d'œil</h2>
+        <ul class="seance-barres" aria-label="Variation de la séance">${barres.map(([t, v2, col]) => `<li><span class="sb-lbl">${t}</span>
+          <span class="sb-piste">${ok(v2) ? `<i class="${v2 >= 0 ? "pos" : "neg"}" style="width:${(Math.abs(v2) / max) * 50}%;background:${col}"></i>` : ""}</span>
+          <b class="num ${cls(v2)}">${P2(v2)}</b></li>`).join("")}</ul>
+        <p class="small muted">La BRVM publie un cours de clôture par séance : il n'y a pas de courbe à l'intérieur d'une journée.
+          Choisissez « 5 séances » ou plus pour voir l'évolution dans le temps.</p></div>`;
+    } else {
+      const chartRows = rows.length >= 5 ? rows : hist.slice(-21);
+      ch = perfChart(chartRows, ix);
+      h += `<div class="card"><h2>Évolution comparée</h2>
+        <div class="legend">${SERIES.map(([, n2, col]) => `<span><i class="s" style="background:${col}"></i>${n2}</span>`).join("")}</div>${ch.html}
+        <p class="small muted">Performance cumulée${chartRows === rows ? "" : " sur le dernier mois"}, en partant de 0 %. Touchez le graphique pour le détail d'un jour.</p></div>`;
+    }
     const nTab = S.ui.perfRows || 10, tab = hist.slice(-nTab).reverse();
     h += `<div class="card"><h2>Jour par jour</h2><div class="tbl" role="region" aria-label="Gain par séance" tabindex="0"><table>
       <thead><tr><th scope="col">Séance</th><th scope="col">Gain (F)</th><th scope="col">Portef.</th><th scope="col">BRVM 30</th><th scope="col">Compos.</th></tr></thead>
@@ -2154,7 +2170,9 @@
     v.querySelectorAll("[data-perf]").forEach((b) => b.addEventListener("click", () => { S.ui.perf = +b.dataset.perf; vPerformance(); }));
     $("#perf-more", v)?.addEventListener("click", () => { S.ui.perfRows = (S.ui.perfRows || 10) + 20; vPerformance(); });
     // info-bulle : le jour le plus proche du doigt ou de la souris
-    const svg = $(".chart svg", v), tip = $(".chart .tip", v), hov = $(".hover", svg);
+    const svg = $(".chart svg", v);
+    if (!svg || !ch) return;                                 // vue « séance » : pas de courbe, pas d'info-bulle
+    const tip = $(".chart .tip", v), hov = $(".hover", svg);
     const show = (ev) => {
       const bb = svg.getBoundingClientRect(), sx = ((ev.clientX - bb.left) / bb.width) * ch.Wd;
       let i = 1, best = Infinity;
@@ -2439,26 +2457,34 @@
     if (montant <= 0) return err("Indiquez un montant.");
     if (date > today()) return err("La date ne peut pas être dans le futur.");
     const fin = occupe($("#cf-ok"));
+    let enregistre = false;
     try {
       if (cfMode === "verser") {
         await api.addMouvement({ date, type: "VERSEMENT", montant, source: fcf.source.value });
+        enregistre = true;
         S.feteMontant = montant;
       } else if (cfMode === "reprendre") {
         if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté.`);
         await api.addMouvement({ date, type: "RETRAIT", montant });
+        enregistre = true;
         toast(`${F(montant)} repris de votre épargne.`);
       } else {
         if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour de l'argent venant d'ailleurs, utilisez « Opération chez ma SGI » → Argent versé à ma SGI.`);
         await api.envoyerSgi(date, montant);                     // une seule transaction : épargne et journal ensemble
-        S.ops = await api.operations(S.user.id);
+        enregistre = true;
+        S.ops = await api.operations(S.user?.id);
         toast(`${F(montant)} envoyés à votre SGI : vos ordres sont recalculés.`);
       }
-      S.coffre = await api.coffre(S.user.id);
+      S.coffre = await api.coffre(S.user?.id);
       dcf.close();
       render();
       feter(cfMode === "verser" ? S.feteMontant : 0);
       window.dispatchEvent(new CustomEvent("brvm:coffre", { detail: { mode: cfMode } }));
-    } catch (e) { err("Enregistrement impossible : " + e.message); }
+    } catch (e) {
+      console.error("Coffre", e);
+      if (!enregistre) err("Enregistrement impossible : " + e.message);
+      else { if (dcf.open) dcf.close(); toast("Mouvement enregistré.", { detail: "L'affichage se mettra à jour au prochain chargement de la page." }); }
+    }
     finally { fin(); }
   });
 
@@ -2517,7 +2543,12 @@
     const t = tab();
     for (const k of TABS) $("#v-" + k).hidden = k !== t;
     document.querySelectorAll("[data-tab]").forEach((a) => (a.dataset.tab === t ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-    VIEWS[t]();
+    try { VIEWS[t](); }
+    catch (e) {
+      console.error("Écran", t, e);
+      $("#v-" + t).insertAdjacentHTML("afterbegin", `<div class="notice">Une partie de cet écran n'a pas pu s'afficher. Rechargez la page ;
+        si le problème continue, signalez-le avec l'heure et l'écran concerné.</div>`);
+    }
     const fab = $("#fab-coffre"), showFab = !!S.coffre && ["aujourdhui", "portefeuille"].includes(t);
     fab.hidden = !showFab;
     document.body.classList.toggle("has-fab", showFab);

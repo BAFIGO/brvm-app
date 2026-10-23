@@ -172,6 +172,7 @@
         need("avis.moderate");
         const rep = [1, 2, 3, 4, 5].map((n) => AV.filter((a) => a.note === n).length);
         return { stats: { nombre: AV.length, moyenne: +(AV.reduce((x, a) => x + a.note, 0) / AV.length).toFixed(2),
+                          reco_reponses: 5, reco_promoteurs: 3, reco_passifs: 1, reco_detracteurs: 1, reco_indice: 40,
                           en_attente: AV.filter((a) => a.statut === "en_attente").length, publies: AV.filter((a) => a.statut === "publie").length, repartition: rep },
                  declencheurs: [
                    { declencheur: "trophee", proposees: 18, donnees: 9, plus_tard: 6, jamais: 1, note: 4.6 },
@@ -383,7 +384,7 @@
     const ligne = (a) => `<li><div class="main">
         <div class="name"><span aria-label="${a.note} sur 5" style="color:hsl(35 92% 45%)">${ET(a.note)}</span> ${esc(a.nom || "Sans nom")}${a.ville ? ` · ${esc(a.ville)}` : ""}
           ${a.mis_en_avant ? `<span class="status ok">mis en avant</span>` : ""} <span class="status ${a.statut === "publie" ? "ok" : a.statut === "refuse" ? "ko" : "att"}">${STATUT_AV[a.statut] || a.statut}</span></div>
-        <div class="sub">${a.commentaire ? "« " + esc(a.commentaire) + " »" : "<i>Sans commentaire</i>"}</div>
+        <div class="sub">${a.commentaire ? "« " + esc(a.commentaire) + " »" : "<i>Sans commentaire</i>"}${a.recommandation != null ? ` · recommandation ${a.recommandation}/10` : ""}</div>
         <div class="sub muted">${D(a.modifie_le)}${a.motif_refus ? ` · motif du refus : ${esc(a.motif_refus)}` : ""}</div></div>
       <div class="right">${a.statut === "en_attente" ? `<button type="button" class="btn small primary" data-avd="publier" data-id="${esc(a.id)}">Publier</button>
           <button type="button" class="btn small" data-avd="refuser" data-id="${esc(a.id)}">Refuser</button>` : ""}
@@ -395,7 +396,10 @@
         <div class="tile"><div class="lbl">Note moyenne</div><div class="val">${s.moyenne ? String(s.moyenne).replace(".", ",") : "–"} / 5</div><div class="sub">${N(s.nombre)} avis, publiés ou non</div></div>
         <div class="tile"><div class="lbl">À relire</div><div class="val">${N(s.en_attente)}</div><div class="sub">avis en attente de publication</div></div>
         <div class="tile"><div class="lbl">Publiés</div><div class="val">${N(s.publies)}</div><div class="sub">les 10 meilleurs (4 et 5 étoiles) défilent sur la vitrine</div></div>
+        <div class="tile"><div class="lbl">Indice de recommandation</div><div class="val">${s.reco_reponses ? (s.reco_indice > 0 ? "+" : "") + N(s.reco_indice) : "–"}</div>
+          <div class="sub">${s.reco_reponses ? `${N(s.reco_promoteurs)} promoteurs (9-10), ${N(s.reco_passifs)} passifs (7-8), ${N(s.reco_detracteurs)} détracteurs (0-6) sur ${N(s.reco_reponses)} réponses` : "pas encore de réponse"}</div></div>
       </div>
+      <p class="small muted">Indice de recommandation : part des promoteurs moins part des détracteurs, de −100 à +100. Au-dessus de 0, plus de fans que de déçus ; au-dessus de +30, très bon.</p>
       <div class="scroll-x"><table class="dtable"><thead><tr><th>Note</th><th class="num">Avis</th><th>Répartition</th></tr></thead><tbody>
         ${[5, 4, 3, 2, 1].map((n) => `<tr><td>${ET(n)}</td><td class="num">${N(rep[n - 1])}</td>
           <td><span style="display:inline-block;height:8px;border-radius:4px;background:hsl(35 92% 52%);width:${Math.round((rep[n - 1] / max) * 160)}px"></span></td></tr>`).join("")}</tbody></table></div>

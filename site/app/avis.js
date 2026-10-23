@@ -32,6 +32,11 @@
               <span class="sr-only">${n} étoile${n > 1 ? "s" : ""} : ${NOTES[n]}</span>${ETOILE}</label>`).join("")}</div>
           <p class="av-libelle" aria-live="polite"></p>
         </fieldset>
+        <fieldset class="av-reco">
+          <legend>Recommanderiez-vous BafiBourse à un proche ? <span class="muted">(facultatif)</span></legend>
+          <div class="av-echelle">${Array.from({ length: 11 }, (_, n) => `<label><input type="radio" name="reco" value="${n}"><span>${n}</span></label>`).join("")}</div>
+          <div class="av-bornes small muted" aria-hidden="true"><span>Pas du tout</span><span>Certainement</span></div>
+        </fieldset>
         <label for="av-texte">Votre commentaire <span class="muted">(facultatif)</span></label>
         <textarea id="av-texte" name="commentaire" rows="4" maxlength="400" placeholder="Ce qui vous aide, ce qui vous manque…"></textarea>
         <p class="small muted av-compte" aria-live="polite"></p>
@@ -94,6 +99,7 @@
     const n = note || a.note;
     if (n) f.note.value = String(n);
     f.commentaire.value = a.commentaire || "";
+    if (a.recommandation != null) f.reco.value = String(a.recommandation);
     f.publication.checked = !!a.publication;
     f.ville.value = a.ville || "";
     $(".av-ville", dlg).hidden = !f.publication.checked;
@@ -114,7 +120,8 @@
     ev.preventDefault();
     const note = +(f.note.value || 0), msg = $(".msg", dlg);
     if (!note) { msg.textContent = "Choisissez une note de 1 à 5 étoiles."; return; }
-    const envoi = { note, commentaire: f.commentaire.value.trim() || null, publication: f.publication.checked, ville: f.ville.value.trim() || null };
+    const envoi = { note, commentaire: f.commentaire.value.trim() || null, publication: f.publication.checked, ville: f.ville.value.trim() || null,
+                    recommandation: f.reco.value === "" ? null : +f.reco.value };
     const avant = ok.textContent;
     ok.disabled = true; ok.setAttribute("aria-busy", "true"); ok.textContent = "Envoi…";
     try {
@@ -122,13 +129,23 @@
       avis = { ...envoi, statut: r?.statut || "prive" };
       if (declencheur && !repondu) { repondu = true; journal("donnee", note); }
       dlg.close();
-      app.toast("Merci pour votre avis !", { detail: avis.statut === "en_attente"
-        ? "Il apparaîtra sur le site après relecture par l'équipe."
-        : envoi.publication ? "Pour être publié, un commentaire doit compter au moins 20 caractères." : "Il aide l'équipe à améliorer BafiBourse." });
+      const fan = envoi.recommandation >= 9;
+      app.toast("Merci pour votre avis !", { detail: fan ? "Et merci de nous recommander : partagez BafiBourse avec un proche en une touche."
+        : avis.statut === "en_attente" ? "Il apparaîtra sur le site après relecture par l'équipe."
+        : envoi.publication ? "Pour être publié, un commentaire doit compter au moins 20 caractères." : "Il aide l'équipe à améliorer BafiBourse.",
+        actions: fan ? [{ label: "Recommander à un proche", fn: recommander }] : [] });
       app.render();
     } catch (e) { msg.textContent = "Envoi impossible : " + e.message; }
     finally { ok.disabled = false; ok.removeAttribute("aria-busy"); ok.textContent = avant; }
   });
+
+  // Partage de l'application (sans montant) : menu de partage du téléphone, sinon WhatsApp
+  async function recommander() {
+    const url = "https://bafigo.github.io/brvm-app/";
+    const texte = "J'utilise BafiBourse pour épargner chaque jour et suivre mes placements à la BRVM. Essaie, c'est gratuit : " + url;
+    try { if (navigator.share) return await navigator.share({ text: texte }); } catch (e) { if (e.name === "AbortError") return; }
+    window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener");
+  }
 
   // ---------------------------------------------------------------- déclencheurs automatiques
   const JOUR = 864e5;
@@ -181,6 +198,7 @@
   }
 
   // ---------------------------------------------------------------- carte dans le Profil
+  const etoilesFixes = (n) => `<span class="av-fixes" role="img" aria-label="${n} sur 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? "on" : ""}">${ETOILE}</i>`).join("")}</span>`;
   function carteProfil() {
     const v = $("#v-profil");
     if (!v || v.hidden || $(".av-profil", v)) return;
