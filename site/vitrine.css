@@ -321,3 +321,73 @@ details.curieux > section { padding-left: 0; padding-right: 0; }
 .bf-recap { background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); color: #fff; }
 .bf-bot { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent), 0 6px 14px -8px rgba(20, 26, 70, .45); }
 .bf-bot svg { width: 28px; height: 28px; stroke-width: 2; }
+
+/* =====================================================================================
+ * Vitrine : BafiBot, « Aujourd'hui », premier écran à deux colonnes, animations
+ * ===================================================================================== */
+/* premier écran sur grand écran : le texte à gauche, les quatre bénéfices à droite */
+@media (min-width: 960px) {
+  .hero { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); }
+  .hero > .benefices { grid-column: 2; grid-row: 1 / span 6; align-self: center; grid-template-columns: 1fr !important; gap: 14px;
+    padding: 22px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 20px 50px -30px rgba(20, 26, 70, .35); }
+}
+
+/* BafiBot */
+.bafibot-v, .aujourdhui-v { display: grid; gap: 28px; align-items: center; }
+@media (min-width: 960px) { .bafibot-v, .aujourdhui-v { grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); gap: 56px; } }
+.bb-questions { list-style: none; margin: 18px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.bb-questions li { padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: .9rem; }
+.bb-chat { width: min(380px, 100%); justify-self: center; border-radius: 24px; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: 0 30px 60px -30px rgba(20, 26, 70, .45); overflow: hidden; }
+.bb-tete { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.bb-tete b { display: block; font-size: 1.05rem; }
+.bb-etat { color: hsl(152 55% 38%); font-size: .78rem; font-weight: 600; }
+.bb-etat::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+.bb-avatar { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface); }
+.bb-visage { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.bb-visage .plein { fill: currentColor; stroke: none; }
+.bb-fil { display: flex; flex-direction: column; gap: 10px; padding: 16px; min-height: 300px; background: var(--bg); }
+.bb-b { margin: 0; max-width: 86%; padding: 10px 14px; border-radius: 18px; font-size: .92rem; line-height: 1.45; }
+.bb-b.moi { align-self: flex-end; background: var(--accent); color: var(--accent-text, #fff); border-bottom-right-radius: 6px; }
+.bb-b.bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 6px; }
+.bb-b.frappe { display: inline-flex; gap: 4px; padding: 14px; }
+.bb-b.frappe i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bb-points 1s infinite ease-in-out; }
+.bb-b.frappe i:nth-child(2) { animation-delay: .15s; } .bb-b.frappe i:nth-child(3) { animation-delay: .3s; }
+@keyframes bb-points { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-4px); opacity: 1; } }
+.bb-saisie { display: flex; justify-content: space-between; align-items: center; margin: 12px; padding: 10px 14px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--muted); font-size: .9rem; }
+.bb-envoi { color: var(--accent); }
+/* le robot vit : il cligne des yeux, son antenne oscille, il salue quand la conversation commence */
+@media (prefers-reduced-motion: no-preference) {
+  .bb-yeux { transform-origin: 16px 15.6px; animation: bb-cligne 4.2s infinite; }
+  .bb-antenne { transform-origin: 16px 7px; animation: bb-antenne 3s infinite ease-in-out; }
+  .bb-avatar.salue .bb-bras-d { transform-origin: 29.5px 19.5px; animation: bb-salut .9s ease-in-out 2; }
+  .bb-avatar.salue { animation: bb-saut .6s ease-out; }
+}
+@keyframes bb-cligne { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes bb-antenne { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@keyframes bb-salut { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-35deg); } 75% { transform: rotate(-10deg); } }
+@keyframes bb-saut { 0% { transform: translateY(0); } 40% { transform: translateY(-6px) scale(1.06); } 100% { transform: translateY(0); } }
+
+/* Aujourd'hui */
+.aj-points { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+.aj-points li { display: flex; gap: 12px; align-items: flex-start; font-size: 1rem; line-height: 1.45; }
+.aj-ok { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: hsl(35 92% 55%); color: hsl(232 34% 12%); font-weight: 800; font-size: .85rem; }
+.aujourdhui-v .hero-apercu { display: block; justify-self: center; margin: 0; }
+
+/* import : l'avis « scanné » puis l'opération qui apparaît */
+.imp-papier { position: relative; overflow: hidden; }
+.imp-papier .scan { position: absolute; left: 0; right: 0; top: -20%; height: 18%; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, hsl(35 92% 55% / .45), transparent); }
+
+/* bouquet final */
+.commencer { position: relative; overflow: hidden; }
+.commencer canvas.fete { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .commencer .cta .btn.primary.pulse { animation: cta-pulse 1.6s ease-out 2; }
+}
+@keyframes cta-pulse { 0% { box-shadow: 0 0 0 0 hsl(35 92% 55% / .6); } 100% { box-shadow: 0 0 0 18px hsl(35 92% 55% / 0); } }
+/* conversation : bulles qui arrivent une à une (seulement quand l'animation joue) */
+.bb-fil.anime .bb-b { opacity: 0; transform: translateY(10px) scale(.97); transition: opacity .35s ease, transform .35s ease; }
+.bb-fil.anime .bb-b.vu { opacity: 1; transform: none; }

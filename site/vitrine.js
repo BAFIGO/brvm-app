@@ -182,6 +182,42 @@
   }
 
   // ------------------------------------------------------------ animations
+  // ------------------------------------------------------------ BafiBot : une conversation qui se joue quand on la regarde
+  // Les bulles arrivent une à une, avec « BafiBot écrit… » ; rejouée à chaque retour ; figée si l'on réduit les animations.
+  function conversationBafiBot() {
+    const fil = $(".bb-fil"), av = $(".bb-avatar"), etat = $(".bb-etat");
+    if (!fil || CALME) return;
+    const bulles = [...fil.querySelectorAll(".bb-b")];
+    let jeton = 0;
+    const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+    async function jouer() {
+      const moi = ++jeton;
+      fil.classList.add("anime");
+      bulles.forEach((b) => b.classList.remove("vu"));
+      av?.classList.remove("salue"); void av?.offsetWidth; av?.classList.add("salue");
+      await pause(500);
+      for (const b of bulles) {
+        if (moi !== jeton) return;
+        if (b.classList.contains("bot")) {
+          const f = document.createElement("p"); f.className = "bb-b bot frappe vu"; f.innerHTML = "<i></i><i></i><i></i>";
+          b.before(f); if (etat) etat.textContent = "écrit…";
+          await pause(1300); f.remove(); if (etat) etat.textContent = "en ligne";
+          if (moi !== jeton) return;
+        }
+        b.classList.add("vu");
+        await pause(b.classList.contains("bot") ? 1700 : 700);
+      }
+    }
+    new IntersectionObserver(([e]) => { if (e.isIntersecting) jouer(); else { jeton++; fil.querySelectorAll(".frappe").forEach((f) => f.remove()); } },
+      { threshold: 0.45 }).observe(fil);
+  }
+  // Final : le bouton « Créer mon compte » appelle l'action (deux pulsations)
+  function fete() {
+    const b = $(".commencer .cta .btn.primary");
+    if (!b || CALME) return;
+    b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse");
+  }
+
   function animate() {
     gsap.registerPlugin(ScrollTrigger);
     // Téléphone : la barre d'adresse qui apparaît ou disparaît ne doit pas recalculer les animations (petits sauts)
@@ -196,7 +232,7 @@
       .fromTo(words, { yPercent: 105 }, { yPercent: 0, duration: 0.8, stagger: 0.055 }, 0.05)
       .fromTo([$(".lead", hero), $(".cta", hero), $(".stats", hero), $(".stats-src", hero)], { y: 18, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.6, stagger: 0.08 }, "-=0.45");
-    if ($(".hero-apercu", hero)) tl.fromTo($(".hero-apercu", hero), { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8 }, 0.35);
+    tl.fromTo($$(".bf-ic", hero), { scale: 0.4, rotate: -12 }, { scale: 1, rotate: 0, duration: 0.6, stagger: 0.12, ease: "back.out(2.2)" }, "-=0.4");
     $$(".odo").forEach((el, i) => { el.textContent = "0"; tl.add(() => { el.dataset.started = 1; odometer(el, 0.1 * i); }, 0.5); });
 
     // Titres de section : mot par mot, rejoué dans les deux sens (en descendant comme en remontant)
@@ -204,13 +240,50 @@
       const ws = split(h);
       const tw = gsap.fromTo(ws, { yPercent: 105 }, { yPercent: 0, duration: 0.7, stagger: 0.04, ease: "power3.out", paused: true });
       ScrollTrigger.create({ trigger: h, start: "top 88%", end: "bottom 8%",
-        once: true, onEnter: () => tw.restart() });
+        onEnter: () => tw.restart(), onEnterBack: () => tw.restart(), onLeaveBack: () => tw.pause(0) });
     });
 
-    // Apparitions au défilement : une seule fois, en douceur ; un bloc déjà vu reste affiché
-    gsap.set("[data-reveal]", { opacity: 0, y: 20 });
-    ScrollTrigger.batch("[data-reveal]", { start: "top 94%", once: true,
-      onEnter: (els) => gsap.to(els, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: "power2.out", overwrite: true }) });
+    // Apparitions au défilement : depuis le bas en descendant, depuis le haut en remontant, rejouées à chaque passage
+    gsap.set("[data-reveal]", { opacity: 0, y: 28, scale: 0.985 });
+    const montre = (els, dy) => gsap.fromTo(els, { opacity: 0, y: dy, scale: 0.985 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.7, stagger: 0.09, ease: "power3.out", overwrite: true });
+    const cache = (els, dy) => gsap.to(els, { opacity: 0, y: dy, duration: 0.25, overwrite: true });
+    ScrollTrigger.batch("[data-reveal]", { start: "top 92%", end: "bottom 6%",
+      onEnter: (els) => montre(els, 28), onEnterBack: (els) => montre(els, -28),
+      onLeave: (els) => cache(els, -20), onLeaveBack: (els) => cache(els, 20) });
+
+    // Les téléphones et la conversation flottent légèrement au défilement (grand écran)
+    mm.add("(min-width: 900px)", () => {
+      $$(".ha-tel, .bb-chat").forEach((el) => gsap.fromTo(el, { y: 40 }, { y: -40, ease: "none",
+        scrollTrigger: { trigger: el, start: "top bottom", end: "bottom top", scrub: 0.8 } }));
+    });
+
+    // « Aujourd'hui » : le total du téléphone défile jusqu'à sa valeur, à chaque passage
+    const val = $(".aujourdhui-v .ha-val"), cible = 2661821;
+    if (val?.firstChild) {
+      const o = { v: 0 };
+      const compte = () => gsap.fromTo(o, { v: cible * 0.82 }, { v: cible, duration: 1.4, ease: "power2.out",
+        onUpdate: () => (val.firstChild.nodeValue = new Intl.NumberFormat("fr-FR").format(Math.round(o.v)).replace(/\u202f/g, " ")) });
+      ScrollTrigger.create({ trigger: val, start: "top 85%", end: "bottom 10%", onEnter: compte, onEnterBack: compte });
+    }
+
+    // Import : l'avis glisse, il est « lu » (balayage), puis l'opération reconnue apparaît
+    const pap = $(".imp-papier"), res = $(".imp-resultat"), fl = $(".imp-fleche");
+    if (pap && res) {
+      const scan = document.createElement("span"); scan.className = "scan"; pap.append(scan);
+      const tli = gsap.timeline({ paused: true })
+        .fromTo(pap, { x: -40, rotate: -9, opacity: 0 }, { x: 0, rotate: -2, opacity: 1, duration: 0.6, ease: "power3.out" })
+        .fromTo(scan, { top: "-20%" }, { top: "105%", duration: 1, ease: "sine.inOut" })
+        .fromTo(fl, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(3)" }, "-=0.2")
+        .fromTo(res, { x: 40, opacity: 0, scale: 0.94 }, { x: 0, opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.6)" })
+        .fromTo(".ir-ok", { scale: 0 }, { scale: 1, duration: 0.4, ease: "back.out(3)" }, "-=0.2")
+        .fromTo(".ir-b", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.4 });
+      ScrollTrigger.create({ trigger: ".imp-demo", start: "top 80%", end: "bottom 10%",
+        onEnter: () => tli.restart(), onEnterBack: () => tli.restart(), onLeaveBack: () => tli.pause(0) });
+    }
+
+    // Prêt à commencer : le bouton qui appelle
+    ScrollTrigger.create({ trigger: ".commencer", start: "top 70%", onEnter: fete, onEnterBack: () => {} });
 
     // Épargne : jauge et barre qui se remplissent (dans les deux sens)
     const fills = $$(".epargne-v .ev-jauge i, .epargne-v .ev-barre i");
@@ -250,6 +323,7 @@
   } catch (e) { /* stockage indisponible : affichage par défaut */ }
 
   if (ANIM) animate(); else draw();
+  conversationBafiBot();
   // « Pour les curieux » : à l'ouverture, les blocs repliés s'affichent et les animations se recalent
   document.getElementById("curieux")?.addEventListener("toggle", (ev) => {
     if (!ev.target.open) return;

@@ -10,15 +10,15 @@
   <meta name="theme-color" content="#0f5c4d">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
-  <script src="charte.js?v=20261023d"></script>
-  <link rel="stylesheet" href="styles.css?v=20261023d">
-  <link rel="stylesheet" href="vitrine.css?v=20261023d">
-  <link rel="stylesheet" href="charte-indigo.css?v=20261023d">
-  <script src="boot.js?v=20261023d"></script>
-  <script src="config.js?v=20261023d" defer></script>
-  <script src="vendor/gsap.min.js?v=20261023d" defer></script>
-  <script src="vendor/ScrollTrigger.min.js?v=20261023d" defer></script>
-  <script src="vitrine.js?v=20261023d" defer></script>
+  <script src="charte.js?v=20261023f"></script>
+  <link rel="stylesheet" href="styles.css?v=20261023f">
+  <link rel="stylesheet" href="vitrine.css?v=20261023f">
+  <link rel="stylesheet" href="charte-indigo.css?v=20261023f">
+  <script src="boot.js?v=20261023f"></script>
+  <script src="config.js?v=20261023f" defer></script>
+  <script src="vendor/gsap.min.js?v=20261023f" defer></script>
+  <script src="vendor/ScrollTrigger.min.js?v=20261023f" defer></script>
+  <script src="vitrine.js?v=20261023f" defer></script>
 </head>
 <body class="vitrine">
   <a class="skip" href="#main">Aller au contenu</a>
@@ -26,7 +26,7 @@
   <header class="v-top">
     <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
     <nav class="v-nav" aria-label="Sections">
-      <a href="#import">Import</a><a href="#epargne">Épargne</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a><a href="#curieux">Méthode</a>
+      <a href="#epargne">Épargne</a><a href="#bafibot">BafiBot</a><a href="#import">Import</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a>
     </nav>
     <a class="btn primary small" href="app/#connexion" data-espace>Se connecter</a>
   </header>
@@ -51,62 +51,7 @@
         <li><span class="bf-ic bf-bot" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 3.5v3.2"/><circle cx="16" cy="3" r="1.4" class="plein"/><rect x="5" y="7.5" width="22" height="18" rx="7"/><ellipse cx="11.8" cy="15.6" rx="1.7" ry="2.1" class="plein"/><ellipse cx="20.2" cy="15.6" rx="1.7" ry="2.1" class="plein"/><path d="M12.5 20.6c1.9 1.5 5.1 1.5 7 0"/><path d="M2.5 14.5v5M29.5 14.5v5"/></svg></span><span><b><span class="marque-bot"><span class="mb-bafi">Bafi</span>Bot</span>, votre assistant</b>Il répond à vos questions avec vos propres chiffres</span></li>
       </ul>
       <p id="stats-src" class="small muted stats-src">Gratuit · votre argent reste chez votre SGI · vos données restent privées.</p>
-      <!-- Aperçu de l'application (illustration, données de démonstration), visible sur grand écran -->
-      <div class="hero-apercu" aria-hidden="true">
-        <div class="ha-tel"><div class="ha-ecran">
-          <p class="ha-titre">Aujourd'hui</p>
-          <div class="ha-syn">
-            <span class="ha-lbl">Total chez ma SGI</span>
-            <b class="ha-val">2 661 821<small> F</small></b>
-            <span class="ha-up">+60 F sur la séance</span>
-            <div class="ha-g"><span><i>Disponible</i><b>1 877 765 F</b></span><span><i>Performance</i><b class="ha-up">+2,8 %</b></span></div>
-          </div>
-          <div class="ha-carte">
-            <p class="ha-h">À faire</p>
-            <div class="ha-li"><i class="ha-pt o"></i><span><b>Sonatel Sénégal</b><small>Clôture sous le plancher : à confirmer</small></span></div>
-            <div class="ha-li"><i class="ha-pt v"></i><span><b>Vos 5 000 F d'aujourd'hui ?</b><small>Votre série de 6 jours vous attend</small></span></div>
-          </div>
-          <div class="ha-carte">
-            <p class="ha-h">Achats simulés <small>14 ordres</small></p>
-            <div class="ha-li"><span><b>Société Générale CI</b><small>SGBC · renforcer</small></span><em>6 titres</em></div>
-            <div class="ha-li"><span><b>Orange CI</b><small>ORAC · renforcer</small></span><em>30 titres</em></div>
-            <div class="ha-li"><span><b>État du Niger 6,50 %</b><small>D08.O8 · renforcer</small></span><em>46 titres</em></div>
-          </div>
-        </div></div>
-      </div>
-    </section>
-
-    <section id="confiance" class="confiance" aria-labelledby="confiance-title">
-      <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
-      <ul class="points">
-        <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
-        <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
-        <li data-reveal><h3>Pas de mot de passe</h3><p>Un code à 6 chiffres envoyé par e-mail suffit pour vous connecter, sur téléphone comme sur ordinateur.</p></li>
-        <li data-reveal><h3>L'argent reste chez vous</h3><p>Le coffre d'épargne suit vos sommes mises de côté ; l'application ne détient ni ne déplace aucun argent.</p></li>
-        <li data-reveal><h3>Vous gardez la main</h3><p data-sim="Vous fixez les règles, l'outil calcule, vous décidez : les ordres sont passés par vous, chez votre SGI.">L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
-      </ul>
-    </section>
-
-    <!-- Import des documents de la SGI : la fonction qui supprime la saisie -->
-    <section id="import" class="import-v" aria-labelledby="import-title">
-      <p class="eyebrow" data-reveal>Plus de saisie</p>
-      <h2 id="import-title" class="display" data-reveal>Photographiez l'avis de votre SGI : vos opérations se remplissent toutes seules.</h2>
-      <p class="lead" data-reveal>Avis d'exécution, relevé trimestriel, avis de dividende : BafiBourse lit le document, en photo ou en PDF,
-        et prépare vos achats, ventes, versements, frais et dividendes. Vous vérifiez, vous validez.</p>
-      <ol class="imp-etapes">
-        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><b>Une photo ou un PDF</b><span>L'avis reçu de votre SGI, pris en photo ou choisi dans vos fichiers.</span></li>
-        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><b>Lu en quelques secondes</b><span>Titre, quantité, cours, frais, dividendes et frais de tenue de compte sont reconnus.</span></li>
-        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg></span><b>Vous validez</b><span>Doublons écartés, montants vérifiés : rien n'est enregistré sans votre accord.</span></li>
-      </ol>
-      <div class="imp-demo" aria-hidden="true" data-reveal>
-        <div class="imp-papier"><p class="ip-t">Avis d'exécution en bourse</p><p>Vente · SONATEL SENEGAL</p><p>Quantité 10 · Cours 29 000</p><p>Total des frais 4 602</p><p>Montant à créditer 285 398</p></div>
-        <span class="imp-fleche">→</span>
-        <div class="imp-resultat"><p class="ir-t">1 opération trouvée</p>
-          <p class="ir-l"><span class="ir-ok">✓</span><span><b>Vente · Sonatel Sénégal</b>10 titres à 29 000 F · frais 4 602 F</span></p>
-          <p class="ir-b">Enregistrer l'opération</p></div>
-      </div>
-      <p class="small muted" data-reveal>Le document est lu puis oublié : seules les opérations que vous validez sont enregistrées. Vos numéros de compte ne sont jamais repris.</p>
-    </section>
+</section>
 
     <!-- 3. Épargne mise de côté -->
     <section id="epargne" class="epargne-v" aria-labelledby="epargne-title">
@@ -136,6 +81,103 @@
         </ol>
         <div class="ev-barre" data-reveal aria-hidden="true"><i class="c3" data-fill="20"></i><i class="c2" data-fill="35"></i><i class="c1" data-fill="45"></i></div>
       </div>
+    </section>
+
+    <!-- BafiBot : l'assistant, avec une conversation animée -->
+    <section id="bafibot" class="bafibot-v" aria-labelledby="bafibot-title">
+      <div class="bb-texte">
+        <p class="eyebrow" data-reveal>Votre assistant</p>
+        <h2 id="bafibot-title" class="display">Une question ? Demandez à BafiBot.</h2>
+        <p class="lead" data-reveal><span class="marque-bot"><span class="mb-bafi">Bafi</span>Bot</span> répond avec vos propres chiffres :
+          votre gain du mois, vos alertes, un titre de la BRVM, un mot que vous ne comprenez pas. Simplement, en français, à toute heure.</p>
+        <ul class="bb-questions" aria-label="Exemples de questions">
+          <li data-reveal>Combien ai-je gagné ce mois-ci ?</li>
+          <li data-reveal>Pourquoi Sonatel est en alerte ?</li>
+          <li data-reveal>C'est quoi une obligation ?</li>
+          <li data-reveal>Où en est mon épargne ?</li>
+        </ul>
+        <p class="small muted" data-reveal>BafiBot explique et éclaire vos décisions : il ne donne pas de conseil en investissement.</p>
+      </div>
+      <div class="bb-chat" aria-hidden="true">
+        <div class="bb-tete"><span class="bb-avatar"><svg viewBox="0 0 32 32" class="bb-visage"><g class="bb-antenne"><path d="M16 3.5v3.2"/><circle cx="16" cy="3" r="1.4" class="plein"/></g><rect x="5" y="7.5" width="22" height="18" rx="7"/><g class="bb-yeux"><ellipse cx="11.8" cy="15.6" rx="1.7" ry="2.1" class="plein"/><ellipse cx="20.2" cy="15.6" rx="1.7" ry="2.1" class="plein"/></g><path d="M12.5 20.6c1.9 1.5 5.1 1.5 7 0"/><path class="bb-bras-g" d="M2.5 14.5v5"/><path class="bb-bras-d" d="M29.5 14.5v5"/></svg></span>
+          <span><b class="marque-bot"><span class="mb-bafi">Bafi</span>Bot</b><small class="bb-etat">en ligne</small></span></div>
+        <div class="bb-fil">
+          <p class="bb-b moi">Combien ai-je gagné ce mois-ci ?</p>
+          <p class="bb-b bot">Ce mois-ci, votre portefeuille a progressé de <b>+18 400 F</b> (+1,2 %). Le marché a fait +0,8 % : vous faites un peu mieux 👏</p>
+          <p class="bb-b moi">Et Sonatel ?</p>
+          <p class="bb-b bot">Sonatel a clôturé sous votre plancher hier. C'est un signal à examiner, pas une vente automatique. Je vous montre son analyse ?</p>
+        </div>
+        <div class="bb-saisie"><span>Posez votre question…</span><span class="bb-envoi">➤</span></div>
+      </div>
+    </section>
+
+    <!-- Aujourd'hui : le point du soir -->
+    <section id="aujourdhui" class="aujourdhui-v" aria-labelledby="aujourdhui-title">
+      <div class="aj-texte">
+        <p class="eyebrow" data-reveal>Chaque soir de séance</p>
+        <h2 id="aujourdhui-title" class="display">Votre point du soir, en 30 secondes.</h2>
+        <p class="lead" data-reveal>Après chaque séance de la BRVM, BafiBourse refait tous vos calculs et vous dit l'essentiel, sans jargon.</p>
+        <ul class="aj-points">
+          <li data-reveal><span class="aj-ok">✓</span>Votre argent et le résultat de la séance, comparé au marché</li>
+          <li data-reveal><span class="aj-ok">✓</span>Vos alertes et ce qu'il y a à faire, rien de plus</li>
+          <li data-reveal><span class="aj-ok">✓</span>Le récap du soir, avec le mot du jour</li>
+          <li data-reveal><span class="aj-ok">✓</span>Un rappel sur votre téléphone, à l'heure que vous choisissez</li>
+        </ul>
+      </div>
+      <div class="hero-apercu" aria-hidden="true">
+        <div class="ha-tel"><div class="ha-ecran">
+          <p class="ha-titre">Aujourd'hui</p>
+          <div class="ha-syn">
+            <span class="ha-lbl">Total chez ma SGI</span>
+            <b class="ha-val">2 661 821<small> F</small></b>
+            <span class="ha-up">+60 F sur la séance</span>
+            <div class="ha-g"><span><i>Disponible</i><b>1 877 765 F</b></span><span><i>Performance</i><b class="ha-up">+2,8 %</b></span></div>
+          </div>
+          <div class="ha-carte">
+            <p class="ha-h">À faire</p>
+            <div class="ha-li"><i class="ha-pt o"></i><span><b>Sonatel Sénégal</b><small>Clôture sous le plancher : à confirmer</small></span></div>
+            <div class="ha-li"><i class="ha-pt v"></i><span><b>Vos 5 000 F d'aujourd'hui ?</b><small>Votre série de 6 jours vous attend</small></span></div>
+          </div>
+          <div class="ha-carte">
+            <p class="ha-h">Achats simulés <small>14 ordres</small></p>
+            <div class="ha-li"><span><b>Société Générale CI</b><small>SGBC · renforcer</small></span><em>6 titres</em></div>
+            <div class="ha-li"><span><b>Orange CI</b><small>ORAC · renforcer</small></span><em>30 titres</em></div>
+            <div class="ha-li"><span><b>État du Niger 6,50 %</b><small>D08.O8 · renforcer</small></span><em>46 titres</em></div>
+          </div>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- Import des documents de la SGI : la fonction qui supprime la saisie -->
+    <section id="import" class="import-v" aria-labelledby="import-title">
+      <p class="eyebrow" data-reveal>Plus de saisie</p>
+      <h2 id="import-title" class="display" data-reveal>Photographiez l'avis de votre SGI : vos opérations se remplissent toutes seules.</h2>
+      <p class="lead" data-reveal>Avis d'exécution, relevé trimestriel, avis de dividende : BafiBourse lit le document, en photo ou en PDF,
+        et prépare vos achats, ventes, versements, frais et dividendes. Vous vérifiez, vous validez.</p>
+      <ol class="imp-etapes">
+        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><b>Une photo ou un PDF</b><span>L'avis reçu de votre SGI, pris en photo ou choisi dans vos fichiers.</span></li>
+        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><b>Lu en quelques secondes</b><span>Titre, quantité, cours, frais, dividendes et frais de tenue de compte sont reconnus.</span></li>
+        <li data-reveal><span class="ie-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg></span><b>Vous validez</b><span>Doublons écartés, montants vérifiés : rien n'est enregistré sans votre accord.</span></li>
+      </ol>
+      <div class="imp-demo" aria-hidden="true" data-reveal>
+        <div class="imp-papier"><p class="ip-t">Avis d'exécution en bourse</p><p>Vente · SONATEL SENEGAL</p><p>Quantité 10 · Cours 29 000</p><p>Total des frais 4 602</p><p>Montant à créditer 285 398</p></div>
+        <span class="imp-fleche">→</span>
+        <div class="imp-resultat"><p class="ir-t">1 opération trouvée</p>
+          <p class="ir-l"><span class="ir-ok">✓</span><span><b>Vente · Sonatel Sénégal</b>10 titres à 29 000 F · frais 4 602 F</span></p>
+          <p class="ir-b">Enregistrer l'opération</p></div>
+      </div>
+      <p class="small muted" data-reveal>Le document est lu puis oublié : seules les opérations que vous validez sont enregistrées. Vos numéros de compte ne sont jamais repris.</p>
+    </section>
+
+    <section id="confiance" class="confiance" aria-labelledby="confiance-title">
+      <h2 id="confiance-title" class="display" data-reveal>Pensé pour l'épargnant de la zone UEMOA.</h2>
+      <ul class="points">
+        <li data-reveal><h3>Données de marché officielles</h3><p>Séances, cours et indices de la BRVM, analysés par notre propre outil.</p></li>
+        <li data-reveal><h3>Vos données restent à vous</h3><p>Profil et journal d'opérations ne sont visibles que par vous. Aucune publicité, aucun traceur.</p></li>
+        <li data-reveal><h3>Pas de mot de passe</h3><p>Un code à 6 chiffres envoyé par e-mail suffit pour vous connecter, sur téléphone comme sur ordinateur.</p></li>
+        <li data-reveal><h3>L'argent reste chez vous</h3><p>Le coffre d'épargne suit vos sommes mises de côté ; l'application ne détient ni ne déplace aucun argent.</p></li>
+        <li data-reveal><h3>Vous gardez la main</h3><p data-sim="Vous fixez les règles, l'outil calcule, vous décidez : les ordres sont passés par vous, chez votre SGI.">L'outil propose, vous décidez : les ordres sont passés par vous, chez votre SGI.</p></li>
+      </ul>
     </section>
 
     <!-- Avis des utilisateurs : les 10 meilleurs avis publiés (fonction avis_publics, avis.sql). Section masquée tant qu'il y en a moins de 3. -->
@@ -259,8 +301,21 @@
     <section id="commencer" class="commencer" aria-labelledby="commencer-title">
       <h2 id="commencer-title" class="display" data-reveal>Prêt à commencer ?</h2>
       <p class="lead" data-reveal>Une minute pour créer votre compte, et votre portrait d'épargnant vous attend.</p>
-      <div class="cta" data-reveal><a class="btn primary" href="app/#inscription">Créer mon compte</a><a class="btn" href="app/?demo=1">Essayer la démo</a></div>
+      <div class="cta" data-reveal><a class="btn primary" href="app/#inscription" data-espace-cta>Créer mon compte</a><a class="btn" href="app/?demo=1">Essayer la démo</a></div>
     </section>
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
