@@ -312,3 +312,12 @@ details.curieux > section { padding-left: 0; padding-right: 0; }
   .hero-apercu::after { content: ""; position: absolute; left: -12px; right: -12px; bottom: -1px; height: 140px; pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--bg)); }
 }
+
+/* icônes des quatre bénéfices : les mêmes que dans l'application (coffre, récap du soir, import, BafiBot) */
+.bf-ic { width: 46px; height: 46px; border-radius: 14px; font-size: 0; box-shadow: 0 6px 14px -8px rgba(20, 26, 70, .45); }
+.bf-ic svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bf-ic svg .plein { fill: currentColor; stroke: none; }
+.bf-coffre, .bf-import { background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+.bf-recap { background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); color: #fff; }
+.bf-bot { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent), 0 6px 14px -8px rgba(20, 26, 70, .45); }
+.bf-bot svg { width: 28px; height: 28px; stroke-width: 2; }
