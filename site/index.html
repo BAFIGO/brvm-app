@@ -10,15 +10,15 @@
   <meta name="theme-color" content="#0f5c4d">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
-  <script src="charte.js?v=20261024d"></script>
-  <link rel="stylesheet" href="styles.css?v=20261024d">
-  <link rel="stylesheet" href="vitrine.css?v=20261024d">
-  <link rel="stylesheet" href="charte-indigo.css?v=20261024d">
-  <script src="boot.js?v=20261024d"></script>
-  <script src="config.js?v=20261024d" defer></script>
-  <script src="vendor/gsap.min.js?v=20261024d" defer></script>
-  <script src="vendor/ScrollTrigger.min.js?v=20261024d" defer></script>
-  <script src="vitrine.js?v=20261024d" defer></script>
+  <script src="charte.js?v=20261024e"></script>
+  <link rel="stylesheet" href="styles.css?v=20261024e">
+  <link rel="stylesheet" href="vitrine.css?v=20261024e">
+  <link rel="stylesheet" href="charte-indigo.css?v=20261024e">
+  <script src="boot.js?v=20261024e"></script>
+  <script src="config.js?v=20261024e" defer></script>
+  <script src="vendor/gsap.min.js?v=20261024e" defer></script>
+  <script src="vendor/ScrollTrigger.min.js?v=20261024e" defer></script>
+  <script src="vitrine.js?v=20261024e" defer></script>
 </head>
 <body class="vitrine">
   <a class="skip" href="#main">Aller au contenu</a>
@@ -331,21 +331,22 @@
       <p class="lead" data-reveal>14 jours d'Essentiel offerts à l'inscription, sans carte ni engagement. Paiement par Wave ou Orange Money.</p>
       <div class="tf-grille">
         <div class="tf" data-reveal><b class="tf-nom">Découverte</b><span class="tf-prix">Gratuit</span><span class="tf-an">pour toujours</span>
-          <ul><li>Coffre, séries, trophées et point du soir</li><li>BafiBot : 20 questions la 1re semaine, puis 10 par mois</li>
-            <li>2 pages importées par mois</li><li>Score, santé financière et tendance de chaque action</li><li>1 cercle d'épargne</li></ul>
+          <ul><li>Coffre, séries, trophées et point du soir</li><li>BafiBot : <span data-q="decouverte.questions_debut">20</span> questions la 1re semaine, puis <span data-q="decouverte.questions">10</span> par mois</li>
+            <li><span data-q="decouverte.pages">2</span> pages importées par mois</li><li>Score, santé financière et tendance de chaque action</li><li>1 cercle d'épargne</li></ul>
           <a class="btn" href="app/#inscription">Commencer</a></div>
-        <div class="tf reco" data-reveal><span class="tf-badge">Le plus choisi</span><b class="tf-nom">Essentiel</b><span class="tf-prix">1 000 F<small> / mois</small></span>
-          <span class="tf-an">ou 10 000 F par an, 2 mois offerts</span>
-          <ul><li>BafiBot : 100 questions par mois</li><li>15 pages importées par mois</li><li>Le pourquoi des notes et des signaux</li>
+        <div class="tf reco" data-reveal><span class="tf-badge">Le plus choisi</span><b class="tf-nom">Essentiel</b><span class="tf-prix"><span data-prix="essentiel_mois">1 000 F</span><small> / mois</small></span>
+          <span class="tf-an" data-an="essentiel">ou 10 000 F par an, 2 mois offerts</span>
+          <ul><li>BafiBot : <span data-q="essentiel.questions">100</span> questions par mois</li><li><span data-q="essentiel.pages">15</span> pages importées par mois</li><li>Le pourquoi des notes et des signaux</li>
             <li>Performance complète, simulation, export</li><li>Cercles illimités, rappel WhatsApp</li></ul>
           <a class="btn primary" href="app/#inscription">Essayer 14 jours</a></div>
-        <div class="tf" data-reveal><b class="tf-nom">Investisseur</b><span class="tf-prix">3 000 F<small> / mois</small></span>
-          <span class="tf-an">ou 30 000 F par an, 2 mois offerts</span>
-          <ul><li>BafiBot : 300 questions, dont 20 approfondies</li><li>40 pages importées par mois</li><li>Analyses financières complètes</li>
+        <div class="tf" data-reveal><b class="tf-nom">Investisseur</b><span class="tf-prix"><span data-prix="investisseur_mois">3 000 F</span><small> / mois</small></span>
+          <span class="tf-an" data-an="investisseur">ou 30 000 F par an, 2 mois offerts</span>
+          <ul><li>BafiBot : <span data-q="investisseur.questions">300</span> questions, dont <span data-q="investisseur.approfondies">20</span> approfondies</li><li><span data-q="investisseur.pages">40</span> pages importées par mois</li><li>Analyses financières complètes</li>
             <li>Comparateurs obligations et OPCVM</li><li>Rapport mensuel, seuils d'alerte personnalisés</li></ul>
           <a class="btn" href="app/#inscription">Commencer</a></div>
       </div>
-      <p class="small muted" data-reveal>Packs à la demande : 50 questions à BafiBot ou 20 pages importées pour 500 F, valables 3 mois.
+      <p class="small muted" data-reveal>Packs à la demande : <span data-pack="pack_questions">50 questions à BafiBot pour 500 F</span>
+        ou <span data-pack="pack_pages">20 pages importées pour 500 F</span>, valables 3 mois.
         Les formules donnent accès à des outils et à de l'information, jamais à un conseil en investissement personnalisé.</p>
     </section>
 

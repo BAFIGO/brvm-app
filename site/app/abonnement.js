@@ -15,20 +15,38 @@
     if (c) { localStorage.setItem("brvm-parrain", c.toUpperCase().slice(0, 12)); const u = new URL(location.href); u.searchParams.delete("parrain"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
   } catch (e) { /* stockage indisponible */ }
 
-  const FORMULES = [
-    { k: "decouverte", nom: "Découverte", mois: 0, an: 0, pour: "Pour découvrir et prendre l'habitude",
-      points: ["Coffre, séries, trophées, point du soir", "BafiBot : 20 questions la 1re semaine, puis 10 par mois", "2 pages importées par mois",
-               "Score, santé financière et tendance de chaque action", "1 cercle d'épargne"] },
-    { k: "essentiel", nom: "Essentiel", mois: 1000, an: 10000, pour: "Pour épargner et investir sereinement", reco: true,
-      points: ["BafiBot : 100 questions par mois", "15 pages importées par mois", "Le pourquoi des notes et des signaux",
-               "Performance complète, simulation, export du journal", "Cercles illimités, rappel WhatsApp"] },
-    { k: "investisseur", nom: "Investisseur", mois: 3000, an: 30000, pour: "Pour suivre plusieurs lignes en détail",
-      points: ["BafiBot : 300 questions, dont 20 approfondies", "40 pages importées par mois", "Analyses financières complètes : ratios, états financiers",
-               "Comparateurs obligations et OPCVM", "Rapport mensuel, seuils d'alerte personnalisés"] },
-  ];
-  const OBJETS = { essentiel_mois: ["Essentiel · 1 mois", 1000], essentiel_3mois: ["Essentiel · 3 mois", 2700], essentiel_an: ["Essentiel · 1 an", 10000],
-    investisseur_mois: ["Investisseur · 1 mois", 3000], investisseur_an: ["Investisseur · 1 an", 30000],
-    pack_questions: ["Pack BafiBot · 50 questions", 500], pack_pages: ["Pack import · 20 pages", 500] };
+  const DEF_PRIX = { essentiel_mois: ["Essentiel · 1 mois", 1000, 1], essentiel_3mois: ["Essentiel · 3 mois", 2700, 3], essentiel_an: ["Essentiel · 1 an", 10000, 12],
+    investisseur_mois: ["Investisseur · 1 mois", 3000, 1], investisseur_an: ["Investisseur · 1 an", 30000, 12],
+    pack_questions: ["Pack BafiBot · 50 questions", 500, 0, 50, 0], pack_pages: ["Pack import · 20 pages", 500, 0, 0, 20] };
+  const DEF_Q = { decouverte: { questions: 10, questions_debut: 20, approfondies: 0, pages: 2 }, essentiel: { questions: 100, questions_debut: 0, approfondies: 0, pages: 15 },
+    investisseur: { questions: 300, questions_debut: 0, approfondies: 20, pages: 40 } };
+  // Offres actives : { objet: [libellé, prix, durée en mois, questions du pack, pages du pack] }
+  function offres() {
+    const t = app?.tarifs?.()?.tarifs;
+    if (!t?.length) return DEF_PRIX;
+    return Object.fromEntries(t.map((x) => [x.objet, [x.libelle, x.prix, x.duree_mois, x.credit_questions, x.credit_pages]]));
+  }
+  function quotas() {
+    const q = app?.tarifs?.()?.quotas;
+    return q?.length ? Object.fromEntries(q.map((x) => [x.formule, x])) : DEF_Q;
+  }
+  function formules() {
+    const o = offres(), q = quotas(), n = (v) => nf.format(v);
+    const d = q.decouverte, e = q.essentiel, i = q.investisseur;
+    return [
+      { k: "decouverte", nom: "Découverte", mois: 0, an: 0, pour: "Pour découvrir et prendre l'habitude",
+        points: ["Coffre, séries, trophées, point du soir",
+                 d.questions_debut > d.questions ? `BafiBot : ${n(d.questions_debut)} questions la 1re semaine, puis ${n(d.questions)} par mois` : `BafiBot : ${n(d.questions)} questions par mois`,
+                 `${n(d.pages)} page${d.pages > 1 ? "s" : ""} importée${d.pages > 1 ? "s" : ""} par mois`, "Score, santé financière et tendance de chaque action", "1 cercle d'épargne"] },
+      { k: "essentiel", nom: "Essentiel", mois: o.essentiel_mois?.[1], an: o.essentiel_an?.[1], pour: "Pour épargner et investir sereinement", reco: true,
+        points: [`BafiBot : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`, "Ce qui fait la note de chaque action",
+                 "Performance complète, simulation, export du journal", "Cercles illimités, rappel WhatsApp"] },
+      { k: "investisseur", nom: "Investisseur", mois: o.investisseur_mois?.[1], an: o.investisseur_an?.[1], pour: "Pour suivre plusieurs lignes en détail",
+        points: [`BafiBot : ${n(i.questions)} questions${i.approfondies ? `, dont ${n(i.approfondies)} approfondies` : ""}`, `${n(i.pages)} pages importées par mois`,
+                 "Analyses financières complètes : ratios, états financiers", "Comparateurs obligations et OPCVM", "Rapport mensuel, seuils d'alerte personnalisés"] },
+    ].filter((f) => f.k === "decouverte" || f.mois != null);
+  }
+  const libObjet = (k) => offres()[k]?.[0] || k;
   const jours = (d) => Math.max(0, Math.ceil((new Date(d) - Date.now()) / 864e5));
 
   function barre(lib, u, q, credit) {
@@ -47,22 +65,22 @@
     return `<div class="card abo-carte"><h2>Mon abonnement</h2>
       <div class="ab-tete f-${esc(f)}"><span class="ab-badge">${esc(nom)}</span><span class="small">${esc(etat)}</span></div>
       ${a.essai ? `<p class="small">Pendant l'essai, vous profitez de tout l'Essentiel. Ensuite, vous repassez en Découverte, sans rien payer ni perdre vos données.</p>` : ""}
-      ${a.demande ? `<div class="notice small">Demande en cours : <b>${esc(OBJETS[a.demande.objet]?.[0] || a.demande.objet)}</b>, envoyée le ${new Date(a.demande.cree_le).toLocaleDateString("fr-FR")}. Elle sera activée dès réception de votre paiement.</div>` : ""}
+      ${a.demande ? `<div class="notice small">Demande en cours : <b>${esc(libObjet(a.demande.objet))}</b>, envoyée le ${new Date(a.demande.cree_le).toLocaleDateString("fr-FR")}. Elle sera activée dès réception de votre paiement.</div>` : ""}
       <h3>Ce mois-ci</h3>
       ${barre("Questions à BafiBot", u.questions || 0, q.questions || 0, c.questions)}
       ${q.approfondies ? barre("Questions approfondies", u.approfondies || 0, q.approfondies) : ""}
       ${barre("Pages importées", u.pages || 0, q.pages || 0, c.pages)}
       <h3>Les formules</h3>
-      <div class="ab-formules">${FORMULES.map((x) => `<div class="ab-f${x.k === f ? " actuelle" : ""}${x.reco ? " reco" : ""}">
+      <div class="ab-formules">${formules().map((x) => `<div class="ab-f${x.k === f ? " actuelle" : ""}${x.reco ? " reco" : ""}">
           ${x.reco ? `<span class="ab-reco">Le plus choisi</span>` : ""}
           <b class="ab-nom">${x.nom}</b><span class="ab-prix">${x.mois ? `${F(x.mois)}<small> / mois</small>` : "Gratuit"}</span>
-          ${x.an ? `<span class="small muted">ou ${F(x.an)} par an (2 mois offerts)</span>` : `<span class="small muted">Pour toujours</span>`}
+          ${x.an ? `<span class="small muted">ou ${F(x.an)} par an${x.mois && x.an < 12 * x.mois ? ` (${Math.round(12 - x.an / x.mois)} mois offerts)` : ""}</span>` : x.mois ? "" : `<span class="small muted">Pour toujours</span>`}
           <p class="small">${x.pour}</p><ul>${x.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
           ${x.k === f && !a.essai ? `<span class="ab-actuel">Votre formule</span>` : x.mois ? `<button type="button" class="btn${x.reco ? " primary" : ""}" data-abo="${x.k}">Choisir ${x.nom}</button>` : ""}
         </div>`).join("")}</div>
       <h3>Les packs</h3>
-      <div class="ab-packs"><button type="button" class="ab-pack" data-abo-objet="pack_questions"><b>50 questions à BafiBot</b><span>500 F · valables 3 mois</span></button>
-        <button type="button" class="ab-pack" data-abo-objet="pack_pages"><b>20 pages à importer</b><span>500 F · valables 3 mois</span></button></div>
+      <div class="ab-packs">${[["pack_questions", 3, "questions à BafiBot"], ["pack_pages", 4, "pages à importer"]].filter(([k]) => offres()[k]).map(([k, i, lib]) =>
+        `<button type="button" class="ab-pack" data-abo-objet="${k}"><b>${nf.format(offres()[k][i] || 0)} ${lib}</b><span>${F(offres()[k][1])} · valables 3 mois</span></button>`).join("")}</div>
       <h3>Parrainez vos proches</h3>
       <p class="small">Quand un proche inscrit avec votre lien prend une formule payante, vous recevez <b>un mois d'Essentiel offert</b>.
         ${a.filleuls ? `Déjà ${a.filleuls} filleul${a.filleuls > 1 ? "s" : ""} inscrit${a.filleuls > 1 ? "s" : ""}.` : ""}</p>
@@ -79,13 +97,14 @@
   const dlg = $("#dlg-abo"), f = $("form", dlg);
   function ouvrir(formule, objet) {
     const cfg = (window.BRVM_CONFIG || {}).paiement || {};
-    const durees = objet ? [objet] : formule === "essentiel" ? ["essentiel_mois", "essentiel_3mois", "essentiel_an"] : ["investisseur_mois", "investisseur_an"];
+    const OBJETS = offres();
+    const durees = objet ? [objet] : Object.keys(OBJETS).filter((k) => k.startsWith(formule + "_"));
     const moyens = [["wave", "Wave", cfg.wave], ["orange_money", "Orange Money", cfg.orange_money]].filter(([, , n]) => n);
     $("#abo-t", dlg).textContent = objet?.startsWith("pack") ? "Prendre un pack" : `Choisir ${app.nomFormule(formule)}`;
     $(".abo-corps", dlg).innerHTML = `
       <fieldset class="abo-durees"><legend>${objet?.startsWith("pack") ? "Pack" : "Durée"}</legend>${durees.map((d, i) => `<label class="abo-d">
         <input type="radio" name="objet" value="${d}"${i === durees.length - 1 || durees.length === 1 ? " checked" : ""}>
-        <span><b>${esc(OBJETS[d][0])}</b><span>${F(OBJETS[d][1])}${d.endsWith("_an") ? " · 2 mois offerts" : d.endsWith("3mois") ? " · un seul paiement" : ""}</span></span></label>`).join("")}</fieldset>
+        <span><b>${esc(OBJETS[d][0])}</b><span>${F(OBJETS[d][1])}${OBJETS[d][2] > 1 ? " · un seul paiement" : ""}</span></span></label>`).join("")}</fieldset>
       ${moyens.length ? `<p>Payez le montant choisi par ${moyens.map(([, n, num]) => `<b>${n}</b> au <b>${esc(num)}</b>`).join(" ou par ")}
         (bénéficiaire : ${esc(cfg.beneficiaire || "BafiBourse")}), puis indiquez la référence de la transaction.</p>
         <label>Moyen de paiement <select name="moyen">${moyens.map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}<option value="autre">Autre</option></select></label>

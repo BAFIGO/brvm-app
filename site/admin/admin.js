@@ -69,6 +69,10 @@
       avis: (st) => rpc("admin_avis", { p_statut: st }),
       abonnements: () => rpc("admin_abonnements"),
       traiterDemande: (id, activer) => rpc("admin_traiter_demande", { p_id: id, p_activer: activer }),
+      tarifs: () => rpc("admin_tarifs"),
+      modifierTarif: (objet, prix, actif) => rpc("admin_modifier_tarif", { p_objet: objet, p_prix: prix, p_actif: actif }),
+      modifierQuotas: (f, q) => rpc("admin_modifier_quotas", { p_formule: f, p_questions: q.questions, p_questions_debut: q.questions_debut,
+                                                                p_approfondies: q.approfondies, p_pages: q.pages }),
       modererAvis: (id, dec, motif) => rpc("admin_moderer_avis", { p_id: id, p_decision: dec, p_motif: motif || null }),
       utilisateurs: (q) => rpc("admin_utilisateurs", { p_recherche: q || null }),
       portefeuille: (u, motif) => rpc("admin_portefeuille", { p_user: u, p_motif: motif }),
@@ -125,6 +129,11 @@
       conformite: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.export", "roles.read", "market.read", "batch.read", "audit.read", "compliance.manage"], observateur: ["dashboard.read"] };
     const attrib = [{ user_id: "f6", email: "admin@exemple.org", role: "super_admin", accorde_le: d(60), expire_le: null, accorde_par: null }];
     M.admin.push("avis.moderate", "abonnements.manage");
+    const TARIFS_DEMO = [["essentiel_mois", "Essentiel · 1 mois", 1000, 1], ["essentiel_3mois", "Essentiel · 3 mois", 2700, 3], ["essentiel_an", "Essentiel · 1 an", 10000, 12],
+      ["investisseur_mois", "Investisseur · 1 mois", 3000, 1], ["investisseur_an", "Investisseur · 1 an", 30000, 12],
+      ["pack_questions", "Pack BafiBot · 50 questions", 500, 0], ["pack_pages", "Pack import · 20 pages", 500, 0]].map(([objet, libelle, prix, duree_mois]) => ({ objet, libelle, prix, duree_mois, actif: true }));
+    const QUOTAS_DEMO = [{ formule: "decouverte", questions: 10, questions_debut: 20, approfondies: 0, pages: 2 },
+      { formule: "essentiel", questions: 100, questions_debut: 0, approfondies: 0, pages: 15 }, { formule: "investisseur", questions: 300, questions_debut: 0, approfondies: 20, pages: 40 }];
     const AV = [
       ["a1", "Awa D.", "Dakar", 5, "Enfin une application qui m'aide à épargner chaque mois sans me perdre dans les chiffres. Le coffre m'a donné une vraie discipline.", "publie", true, 12],
       ["a2", "Koffi A.", "Abidjan", 5, "Les explications sont claires, même pour un débutant. Je comprends enfin ce que je possède chez ma SGI.", "publie", false, 20],
@@ -174,6 +183,9 @@
         demandes: [{ id: 1, email: "awa.diop@exemple.sn", objet: "essentiel_an", moyen: "wave", reference: "TX24101893", cree_le: new Date(Date.now() - 36e5).toISOString() },
                    { id: 2, email: "koffi.a@exemple.ci", objet: "pack_questions", moyen: "orange_money", reference: "OM5521", cree_le: new Date(Date.now() - 864e5).toISOString() }] }),
       traiterDemande: async () => {},
+      tarifs: async () => ({ tarifs: TARIFS_DEMO, quotas: QUOTAS_DEMO }),
+      modifierTarif: async (objet, prix, actif) => { const t = TARIFS_DEMO.find((x) => x.objet === objet); t.prix = prix; t.actif = actif; },
+      modifierQuotas: async (f, q) => Object.assign(QUOTAS_DEMO.find((x) => x.formule === f), q),
       avis: async (st) => {
         need("avis.moderate");
         const rep = [1, 2, 3, 4, 5].map((n) => AV.filter((a) => a.note === n).length);
@@ -399,18 +411,65 @@
       </div>
       <h3>Demandes à traiter (${(r.demandes || []).length})</h3>
       ${(r.demandes || []).length ? `<ul class="list">${r.demandes.map((d) => `<li><div class="main"><div class="name">${esc(OBJ_ABO[d.objet] || d.objet)}</div>
-          <div class="sub">${esc(d.email)} · ${esc(MOYEN[d.moyen] || "moyen non précisé")}${d.reference ? ` · référence <b>${esc(d.reference)}</b>` : ""} · ${DT(d.cree_le)}</div></div>
+          <div class="sub">${d.montant != null ? `<b>${N(d.montant)} F</b> · ` : ""}${esc(d.email)} · ${esc(MOYEN[d.moyen] || "moyen non précisé")}${d.reference ? ` · référence <b>${esc(d.reference)}</b>` : ""} · ${DT(d.cree_le)}</div></div>
           <div class="right"><button class="btn small primary" data-abo-act="${d.id}">Paiement reçu : activer</button>
           <button class="btn small" data-abo-ref="${d.id}">Refuser</button></div></li>`).join("")}</ul>`
         : `<p class="small muted">Aucune demande en attente.</p>`}
       <p class="small muted">Vérifiez la réception du paiement (montant et référence) dans votre compte Wave ou Orange Money avant d'activer.
         L'activation prolonge la formule en cours et, au premier abonnement payant d'un filleul, offre un mois d'Essentiel à son parrain.</p>`;
+    c.insertAdjacentHTML("beforeend", `<div id="tarifs-adm"><p class="muted small">Chargement des tarifs…</p></div>`);
+    afficherTarifs();
     c.querySelectorAll("[data-abo-act], [data-abo-ref]").forEach((b) => b.addEventListener("click", async () => {
       const activer = !!b.dataset.aboAct, id = +(b.dataset.aboAct || b.dataset.aboRef);
       if (!activer && !confirm("Refuser cette demande ? L'utilisateur pourra en faire une nouvelle.")) return;
       b.disabled = true;
       try { await api.traiterDemande(id, activer); toast(activer ? "Formule activée." : "Demande refusée."); afficherAbonnements(); }
       catch (e) { toast("Impossible : " + e.message); b.disabled = false; }
+    }));
+  }
+
+  // Tarifs et quotas : modifiés ici, ils s'affichent aussitôt sur la vitrine et dans l'application
+  const NOMS_F = { decouverte: "Découverte", essentiel: "Essentiel", investisseur: "Investisseur" };
+  async function afficherTarifs() {
+    const z = $("#tarifs-adm");
+    if (!z) return;
+    let r;
+    try { r = await api.tarifs(); }
+    catch (e) { z.innerHTML = `<p class="small muted">Tarifs non modifiables : relancez le fichier abonnements.sql (section 5). (${esc(e.message)})</p>`; return; }
+    const champ = (attrs) => `<input type="number" min="0" step="1" inputmode="numeric" ${attrs} style="width:7.5em">`;
+    z.innerHTML = `<h3>Tarifs</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Offre</th><th>Durée ou contenu</th><th class="num">Prix (F CFA TTC)</th><th>Proposée</th><th></th></tr></thead>
+      <tbody>${(r.tarifs || []).map((t) => `<tr data-objet="${esc(t.objet)}"><td>${esc(t.libelle)}</td>
+        <td class="small">${t.duree_mois ? `${t.duree_mois} mois` : "pack, valable 3 mois"}</td>
+        <td class="num">${champ(`data-k="prix" value="${t.prix}" aria-label="Prix ${esc(t.libelle)}"`)}</td>
+        <td><label class="small" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" data-k="actif" style="width:18px;height:18px"${t.actif ? " checked" : ""}> oui</label></td>
+        <td><button class="btn small" data-tarif-ok>Enregistrer</button></td></tr>`).join("")}</tbody></table></div>
+      <h3>Quotas mensuels par formule</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Formule</th><th class="num">Questions à BafiBot</th><th class="num">1re semaine</th>
+        <th class="num">Dont approfondies</th><th class="num">Pages importées</th><th></th></tr></thead>
+      <tbody>${(r.quotas || []).map((q) => `<tr data-formule="${esc(q.formule)}"><td>${esc(NOMS_F[q.formule] || q.formule)}</td>
+        <td class="num">${champ(`data-k="questions" value="${q.questions}" aria-label="Questions ${esc(q.formule)}"`)}</td>
+        <td class="num">${champ(`data-k="questions_debut" value="${q.questions_debut}" aria-label="Questions la première semaine ${esc(q.formule)}"`)}</td>
+        <td class="num">${champ(`data-k="approfondies" value="${q.approfondies}" aria-label="Questions approfondies ${esc(q.formule)}"`)}</td>
+        <td class="num">${champ(`data-k="pages" value="${q.pages}" aria-label="Pages ${esc(q.formule)}"`)}</td>
+        <td><button class="btn small" data-quota-ok>Enregistrer</button></td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted">Les changements s'affichent aussitôt sur la vitrine et dans l'application, et sont tracés dans le journal d'audit.
+        Une demande déjà envoyée garde le prix affiché au moment de l'envoi. « 1re semaine » ne s'applique qu'à Découverte (0 : désactivé).
+        Une offre décochée n'est plus proposée. Chaque question rapide coûte environ 1 à 2 F, une approfondie environ 25 F, une page importée 10 à 20 F.</p>`;
+    z.querySelectorAll("[data-tarif-ok]").forEach((b) => b.addEventListener("click", async () => {
+      const tr = b.closest("tr"), prix = +tr.querySelector('[data-k="prix"]').value, actif = tr.querySelector('[data-k="actif"]').checked;
+      if (!Number.isInteger(prix) || prix < 0) return toast("Prix invalide.");
+      b.disabled = true;
+      try { await api.modifierTarif(tr.dataset.objet, prix, actif); toast("Tarif enregistré."); } catch (e) { toast("Impossible : " + e.message); }
+      b.disabled = false;
+    }));
+    z.querySelectorAll("[data-quota-ok]").forEach((b) => b.addEventListener("click", async () => {
+      const tr = b.closest("tr"), q = {};
+      for (const k of ["questions", "questions_debut", "approfondies", "pages"]) q[k] = +tr.querySelector(`[data-k="${k}"]`).value;
+      if (Object.values(q).some((v) => !Number.isInteger(v) || v < 0)) return toast("Valeur invalide.");
+      b.disabled = true;
+      try { await api.modifierQuotas(tr.dataset.formule, q); toast("Quotas enregistrés."); } catch (e) { toast("Impossible : " + e.message); }
+      b.disabled = false;
     }));
   }
 

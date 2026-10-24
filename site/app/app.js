@@ -308,6 +308,12 @@
       // Abonnements (abonnements.sql) : formule, quotas, demandes, parrainage
       maFormule: async () => { const { data, error } = await sb.rpc("ma_formule"); if (error) throw error; return data; },
       demanderAbonnement: async (d) => r(await sb.from("abonnement_demandes").insert(d)),
+      tarifs: async () => {
+        const [t, q] = await Promise.all([sb.from("tarifs").select("objet,libelle,prix,duree_mois,credit_questions,credit_pages,ordre").order("ordre"),
+                                          sb.from("quotas_formules").select("formule,questions,questions_debut,approfondies,pages")]);
+        if (t.error) throw t.error;
+        return { tarifs: t.data || [], quotas: q.data || [] };
+      },
       definirParrain: async (code) => { const { data } = await sb.rpc("definir_parrain", { p_code: code }); return data; },
       // Assistant : fonction Supabase « assistant » (la clé de l'API Claude reste sur le serveur)
       assistant: async (body) => {
@@ -430,6 +436,7 @@
         fin: new Date(Date.now() + 9 * 864e5).toISOString(), quotas: { questions: 100, approfondies: 0, pages: 15 },
         usage: { questions: 37, approfondies: 0, pages: 4 }, credits: { questions: 0, pages: 0 }, code_parrain: "DEMO2026", filleuls: 1, demande: null }),
       demanderAbonnement: async () => {}, definirParrain: async () => true,
+      tarifs: async () => { throw new Error("démo : tarifs par défaut"); },
       creerCercle: async (nom, objectif) => {
         const c = { id: "c" + Date.now(), nom, code: Math.random().toString(16).slice(2, 10).toUpperCase(), objectif_pct: objectif, createur: true,
                     membres: [{ pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 }] };
@@ -2780,6 +2787,7 @@
   // Formule de l'utilisateur (abonnements.sql). Sans le fichier SQL, S.abo reste vide et tout est accessible, comme avant.
   async function chargerFormule() {
     try { S.abo = await api.maFormule(); } catch (e) { S.abo = null; return; }
+    try { S.tarifs = await api.tarifs(); } catch (e) { S.tarifs = null; }        // tarifs par défaut tant que la table manque
     let code = null;
     try { code = localStorage.getItem("brvm-parrain"); } catch (e) { /* rien */ }
     if (code && !DEMO) { try { await api.definirParrain(code); localStorage.removeItem("brvm-parrain"); } catch (e) { /* réessayé plus tard */ } }
@@ -2928,7 +2936,7 @@
                         rejoindreCercle: (c) => api.rejoindreCercle(c), quitterCercle: (id) => api.quitterCercle(id),
                         publierRegularite: (x) => api.publierRegularite(x),
                         // abonnements (abonnement.js, assistant.js, import.js, rappels.js, cercles.js)
-                        abo: () => S.abo, acces: (n) => acces(n), nomFormule: (f) => NOM_FORMULE[f] || f, voirFormules: () => voirFormules(),
+                        abo: () => S.abo, tarifs: () => S.tarifs, acces: (n) => acces(n), nomFormule: (f) => NOM_FORMULE[f] || f, voirFormules: () => voirFormules(),
                         rechargerFormule: async () => { await chargerFormule(); window.dispatchEvent(new Event("brvm:formule")); },
                         noterUsage: (k, n = 1) => { if (S.abo?.usage) { const q = S.abo.quotas?.[k] ?? 0, u = S.abo.usage[k] ?? 0;
                           if (u + n <= q) S.abo.usage[k] = u + n; else if (k !== "approfondies" && S.abo.credits) S.abo.credits[k] = Math.max(0, (S.abo.credits[k] || 0) - n); } },

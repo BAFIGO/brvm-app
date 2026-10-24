@@ -119,6 +119,28 @@
   }
   pied();
 
+  // ------------------------------------------------------------ tarifs et quotas : lus dans les tables gérées par la console
+  async function tarifs() {
+    try {
+      const nf = new Intl.NumberFormat("fr-FR"), F = (n) => nf.format(n).replace(/\u202f/g, " ") + " F";
+      const [t, q] = await Promise.all([rest("tarifs?select=objet,prix,duree_mois,credit_questions,credit_pages"), rest("quotas_formules?select=*")]);
+      const T = Object.fromEntries((t || []).map((x) => [x.objet, x])), Q = Object.fromEntries((q || []).map((x) => [x.formule, x]));
+      $$("[data-prix]").forEach((e) => { const x = T[e.dataset.prix]; if (x) e.textContent = F(x.prix); });
+      $$("[data-an]").forEach((e) => {
+        const m = T[e.dataset.an + "_mois"], a = T[e.dataset.an + "_an"];
+        if (!a) { e.textContent = ""; return; }
+        const offerts = m ? Math.round(12 - a.prix / m.prix) : 0;
+        e.textContent = `ou ${F(a.prix)} par an${offerts > 0 ? `, ${offerts} mois offert${offerts > 1 ? "s" : ""}` : ""}`;
+      });
+      $$("[data-q]").forEach((e) => { const [f, k] = e.dataset.q.split("."); if (Q[f]?.[k] != null) e.textContent = nf.format(Q[f][k]); });
+      $$("[data-pack]").forEach((e) => {
+        const x = T[e.dataset.pack]; if (!x) return;
+        e.textContent = x.credit_questions ? `${nf.format(x.credit_questions)} questions à BafiBot pour ${F(x.prix)}` : `${nf.format(x.credit_pages)} pages importées pour ${F(x.prix)}`;
+      });
+    } catch (e) { /* tables pas encore créées : les tarifs affichés restent ceux de la page */ }
+  }
+  tarifs();
+
   // ------------------------------------------------------------ conditions d'utilisation (si publiées)
   async function cgu() {
     try {
