@@ -36,8 +36,10 @@
       $("#cer-t", dlg).textContent = "Créer un cercle d'épargne";
       $(".cer-corps", dlg).innerHTML = `<p class="small">Invitez vos proches à épargner avec vous : chacun chez soi, chacun à son rythme, avec un objectif commun.</p>
         <label for="cer-nom">Nom du cercle</label><input id="cer-nom" name="nom" maxlength="40" placeholder="Les amis de la fac, La famille…" required>
-        <label for="cer-obj">Objectif par personne et par mois</label>
-        <select id="cer-obj" name="objectif">${[8, 10, 15, 20].map((n) => `<option value="${n}"${n === 15 ? " selected" : ""}>${n} jours d'épargne</option>`).join("")}</select>
+        <label for="cer-obj">Objectif commun du mois : tenir son propre rythme d'épargne…</label>
+        <select id="cer-obj" name="objectif">${[[50, "La moitié du temps (50 %)"], [75, "3 fois sur 4 (75 %)"], [80, "4 fois sur 5 (80 %)"], [100, "Sans faute (100 %)"]].map(([n, t]) => `<option value="${n}"${n === 80 ? " selected" : ""}>${t}</option>`).join("")}</select>
+        <p class="small muted">Chacun garde son rythme (par jour, par semaine ou par mois) : un épargnant mensuel et un épargnant quotidien
+          comptent autant dans l'objectif commun.</p>
         <p class="small muted">Les membres voient la série et les jours d'épargne de chacun. Jamais aucun montant.</p>`;
       ok.textContent = "Créer le cercle";
     } else if (m === "rejoindre") {
@@ -50,7 +52,7 @@
       const a = opts.apercu;
       $("#cer-t", dlg).textContent = "Invitation à un cercle d'épargne";
       $(".cer-corps", dlg).innerHTML = `<p>Vous êtes invité à rejoindre <b>« ${esc(a.nom)} »</b> : ${a.membres} membre${a.membres > 1 ? "s" : ""},
-        objectif de <b>${a.objectif_jours} jours d'épargne</b> par personne et par mois.</p>
+        objectif : chacun tient son rythme d'épargne <b>${objectifTexte(a)}</b> ce mois-ci.</p>
         <p class="small muted">Les membres verront votre série et vos jours d'épargne du mois. Jamais vos montants : votre argent reste chez vous.</p>`;
       ok.textContent = "Rejoindre le cercle";
     } else if (m === "inviter") {
@@ -68,7 +70,7 @@
     dlg.querySelector("input, select, .btn.primary")?.focus();
   }
   const lienInvitation = (code) => `${location.origin}${location.pathname}?cercle=${encodeURIComponent(code)}`;
-  const texteInvitation = (c) => `Rejoins mon cercle d'épargne « ${c.nom} » sur BafiBourse : on vise ${c.objectif_jours} jours d'épargne chacun ce mois-ci, `
+  const texteInvitation = (c) => `Rejoins mon cercle d'épargne « ${c.nom} » sur BafiBourse : chacun à son rythme, on vise de le tenir ${objectifTexte(c)} ce mois-ci, `
     + `chacun chez soi, sans jamais montrer de montant. Code : ${c.code} · ${lienInvitation(c.code)}`;
 
   f.addEventListener("submit", async (ev) => {
@@ -81,7 +83,7 @@
         if (nom.length < 2) throw new Error("Donnez un nom au cercle.");
         const c = await app.creerCercle(nom, +f.objectif.value);
         await recharger();
-        const complet = (cercles || []).find((x) => x.id === c.id) || { ...c, objectif_jours: +f.objectif.value };
+        const complet = (cercles || []).find((x) => x.id === c.id) || { ...c, objectif_pct: +f.objectif.value };
         ouvrir("inviter", { cercle: complet });
         app.toast("Cercle créé : invitez vos proches !");
       } else if (mode === "rejoindre" || mode === "invitation") {
@@ -122,29 +124,36 @@
         <button type="button" class="btn" data-cercle="rejoindre">J'ai un code</button></div></div>`;
     return `<div class="card cer-carte" aria-labelledby="h-cer"><h2 id="h-cer">Mes cercles d'épargne</h2>
       ${cercles.map((c) => {
-        const ms = c.membres || [], obj = c.objectif_jours, fait = ms.reduce((a, m) => a + Math.min(m.jours_mois || 0, obj), 0), but = obj * Math.max(1, ms.length);
-        const pc = Math.round((fait / but) * 100);
+        // Régularité du mois : périodes tenues sur périodes attendues, chacun selon son rythme (jour, semaine ou mois)
+        const ms = c.membres || [], obj = objectifPct(c);
+        const tenues = ms.reduce((a, m) => a + (m.tenues || 0), 0), attendues = ms.reduce((a, m) => a + (m.attendues || 0), 0);
+        const pc = attendues ? Math.round((100 * tenues) / attendues) : 0, fait = pc, but = obj;
         return `<section class="cer" aria-label="Cercle ${esc(c.nom)}">
           <div class="cer-tete"><h3>${esc(c.nom)}</h3><span class="small muted">${ms.length} membre${ms.length > 1 ? "s" : ""}</span></div>
           ${scene(c, ms, fait, but, pc)}
-          <p class="small">Ensemble : <b>${fait} jours d'épargne sur ${but}</b> ce mois-ci (${obj} par personne)</p>
-          <div class="cer-barre" role="progressbar" aria-label="Objectif commun du mois" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><i style="width:${Math.min(100, pc)}%"></i></div>
+          <p class="small">Ensemble : <b>${pc} % de régularité</b> ce mois-ci, pour un objectif de ${obj} %${pc >= obj && attendues ? " : objectif atteint ✓" : ""}</p>
+          <div class="cer-barre" role="progressbar" aria-label="Régularité commune du mois" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}" style="--obj:${obj}%">
+            <i style="width:${Math.min(100, pc)}%"></i><b class="cer-cible" aria-hidden="true"></b></div>
           <ol class="cer-membres">${ms.map((m) => {
-            const j = m.jours_mois || 0;
+            const t = m.tenues || 0, at = m.attendues || 0, mp = at ? Math.round((100 * t) / at) : 0;
             return `<li class="${m.moi ? "moi" : ""}"><span class="cer-nom">${m.moi ? "Vous" : esc(m.pseudo)}</span>
               <span class="cer-serie">${m.serie > 0 ? `🔥 ${pl(m.serie, m.unite)}` : `<span class="muted">pas de série</span>`}</span>
-              <span class="cer-jours"><b>${j}</b>/${obj} j${j >= obj ? " ✓" : ""}</span>
-              <span class="cer-mini" aria-hidden="true"><i style="width:${Math.min(100, (j / obj) * 100)}%"></i></span></li>`;
+              <span class="cer-jours">${at ? `<b>${t}</b>/${pl(at, m.unite)}${mp >= obj ? " ✓" : ""}` : `<span class="muted">pas encore de rythme</span>`}</span>
+              <span class="cer-mini" aria-hidden="true"><i style="width:${Math.min(100, mp)}%"></i></span></li>`;
           }).join("")}</ol>
           <div class="cer-act"><button type="button" class="btn small" data-cercle="inviter" data-id="${esc(c.id)}">Inviter</button>
             <button type="button" class="btn link small" data-cercle="quitter" data-id="${esc(c.id)}">Quitter ce cercle</button></div></section>`;
       }).join("")}
-      <p class="small muted">Seules la série et les jours d'épargne sont visibles des membres, jamais vos montants.</p>
+      <p class="small muted">Seules la série et la régularité sont visibles des membres, jamais vos montants.</p>
       ${app.acces && !app.acces(1) ? `<div class="verrou"><span class="vr-ic" aria-hidden="true">🔒</span><span>Plusieurs cercles : disponible avec la formule <b>Essentiel</b>.</span>
         <button type="button" class="btn link small" data-formules>Voir les formules</button></div>`
       : `<div class="actions"><button type="button" class="btn small" data-cercle="creer">Créer un autre cercle</button>
         <button type="button" class="btn small" data-cercle="rejoindre">J'ai un code</button></div>`}</div>`;
   }
+  // Objectif en % de régularité (cercles créés avant : un nombre de jours, ramené à 80 %)
+  const objectifPct = (c) => (c.objectif_pct >= 50 ? c.objectif_pct : 80);
+  const objectifTexte = (c) => ({ 50: "la moitié du temps", 75: "3 fois sur 4", 80: "4 fois sur 5", 100: "sans faute" })[objectifPct(c)] || `${objectifPct(c)} % du temps`;
+
   // Les membres en orbite autour de l'objectif commun : l'anneau se remplit, les bulles arrivent puis flottent ;
   // un membre dont la régularité a été mise à jour aujourd'hui porte un halo « actif aujourd'hui »
   const TEINTES = [330, 190, 150, 25, 270, 200, 230];
@@ -153,7 +162,7 @@
     return `<div class="cer-scene" aria-hidden="true" style="--pc:${Math.min(100, pc)}">
       <div class="cs-centre"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="88" class="cs-fond"/>
         <circle cx="100" cy="100" r="88" class="cs-jauge" style="stroke-dasharray:${C.toFixed(0)};--off:${(C * (1 - Math.min(100, pc) / 100)).toFixed(0)};--c:${C.toFixed(0)}"/></svg>
-        <div class="cs-info"><b>${fait}</b><span>jours sur ${but}</span>${ms.length > 6 ? `<small>+${ms.length - 6} membres</small>` : ""}</div></div>
+        <div class="cs-info"><b>${pc} %</b><span>objectif ${but} %</span>${ms.length > 6 ? `<small>+${ms.length - 6} membres</small>` : ""}</div></div>
       ${vus.map((m, i) => {
         const a = -Math.PI / 2 + (i * 2 * Math.PI) / vus.length, x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a) * 0.92;
         const ini = m.moi ? "Vous" : String(m.pseudo || "?").split(/\s+/).map((t) => t[0]).join("").slice(0, 2).toUpperCase();

@@ -115,11 +115,12 @@
         ${t ? `<span class="rp-val t-${t.k}">${t.fl} ${t.lib} <small>${t.conf ? `confiance ${t.conf} %` : `${P(t.ch)} sur 3 mois`}</small></span>` : `<span class="rp-val muted">–</span>`}</div>
       <div class="rp-tuile"><span class="rp-lbl">Score BafiBourse</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chip(r.decision)}</span></div>
     </div>
-    ${note && t ? `<div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
+    ${note && t ? `<p class="rp-phrase">${esc(phraseReperes(note, t))}</p>
+    <details class="rp-grille"><summary>Comprendre en quatre cases</summary><div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
       <span></span><span class="q-tete">Cours en hausse</span><span class="q-tete">Cours en baisse</span>
       <span class="q-cote">Solide (A, B)</span><span class="q-case${caseActive("sol", "h")}">Solide et porteuse</span><span class="q-case${caseActive("sol", "b")}">Solide, le marché hésite</span>
       <span class="q-cote">Fragile (D, E)</span><span class="q-case${caseActive("fra", "h")}">Le cours monte, prudence</span><span class="q-case${caseActive("fra", "b")}">Fragile et délaissée</span>
-    </div><p class="rp-phrase">${esc(phraseReperes(note, t))} Le score résume les deux, avec le dividende, la valorisation et la liquidité.</p>` : ""}`;
+    </div><p class="small muted">Le score résume les deux, avec le dividende, la valorisation et la liquidité.</p></details>` : ""}`;
   }
   function spark(c, w = 96, h = 30) {
     const pts = c?.points;
@@ -138,13 +139,14 @@
     const pc = (v) => (ok(v) ? nf1.format(v * 100) + " %" : "–");
     let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Santé financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
       <div><b>Santé financière : ${esc(SANTE[a.note] || "non notée")}</b><div class="sub">Note ${esc(a.note || "–")} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
+    if (!acces(2)) {                                          // Essentiel : le pourquoi en un coup d'œil ; le détail est réservé à l'Investisseur
+      if (a.familles?.length) h += `<ul class="fam-pastilles" aria-label="Ce qui fait la note">${a.familles.map((f) =>
+        `<li class="fp-${/bon/i.test(f.appreciation || "") ? "bon" : /faible/i.test(f.appreciation || "") ? "faible" : "moyen"}">${esc(f.nom)}</li>`).join("")}</ul>
+        <p class="small muted fp-legende"><span class="fp-bon">bon</span> <span class="fp-moyen">moyen</span> <span class="fp-faible">faible</span></p>`;
+      return h + verrou(2, "Le verdict détaillé, les niveaux de prix, les chiffres clés et les ratios") + `</div>`;
+    }
     if (a.verdict) h += `<p class="small">${esc(a.verdict)}</p>`;
     for (const al of a.alertes || []) h += `<div class="notice small">⚠ ${esc(al)}</div>`;
-    if (!acces(2)) {                                          // Essentiel : le pourquoi ; le détail est réservé à l'Investisseur
-      if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
-        <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
-      return h + verrou(2, "Les chiffres clés, les ratios détaillés et les signaux d'alerte") + `</div>`;
-    }
     if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
       <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
     const yrs = (a.annees || []).filter((y) => ok(y.rev) || ok(y.ni));
@@ -429,11 +431,11 @@
         usage: { questions: 37, approfondies: 0, pages: 4 }, credits: { questions: 0, pages: 0 }, code_parrain: "DEMO2026", filleuls: 1, demande: null }),
       demanderAbonnement: async () => {}, definirParrain: async () => true,
       creerCercle: async (nom, objectif) => {
-        const c = { id: "c" + Date.now(), nom, code: Math.random().toString(16).slice(2, 10).toUpperCase(), objectif_jours: objectif, createur: true,
-                    membres: [{ pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, regularite: 0.8 }] };
+        const c = { id: "c" + Date.now(), nom, code: Math.random().toString(16).slice(2, 10).toUpperCase(), objectif_pct: objectif, createur: true,
+                    membres: [{ pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 }] };
         cerclesDemo = [...cerclesDemo, c]; return c;
       },
-      apercuCercle: async (code) => ({ nom: "Les amis de la fac", objectif_jours: 15, membres: 4, deja: cerclesDemo.some((c) => c.code === code) }),
+      apercuCercle: async (code) => ({ nom: "Les amis de la fac", objectif_jours: 15, objectif_pct: 80, membres: 4, deja: cerclesDemo.some((c) => c.code === code) }),
       rejoindreCercle: async () => ({ nom: "Les amis de la fac", deja: false }),
       quitterCercle: async (id) => { cerclesDemo = cerclesDemo.filter((c) => c.id !== id); },
       publierRegularite: async () => {},
@@ -1321,11 +1323,11 @@
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
   let tutoDemo = {}, avisDemo = null, rappelsDemo = null;
-  let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, createur: true, membres: [
-    { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, regularite: 0.92, maj_le: new Date().toISOString() },
-    { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, regularite: 0.8 },
-    { pseudo: "Koffi A.", moi: false, serie: 3, unite: "jour", record: 7, jours_mois: 9, regularite: 0.6 },
-    { pseudo: "Mariam S.", moi: false, serie: 0, unite: "semaine", record: 4, jours_mois: 3, regularite: 0.5 }] }];
+  let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, objectif_pct: 80, createur: true, membres: [
+    { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, tenues: 16, attendues: 17, regularite: 0.92, maj_le: new Date().toISOString() },
+    { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 },
+    { pseudo: "Koffi A.", moi: false, serie: 2, unite: "semaine", record: 5, jours_mois: 2, tenues: 2, attendues: 3, regularite: 0.6 },
+    { pseudo: "Mariam S.", moi: false, serie: 1, unite: "mois", record: 4, jours_mois: 1, tenues: 1, attendues: 1, regularite: 1 }] }];
   const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
   function etatTutoriel() {
     if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
@@ -1720,10 +1722,14 @@
       let px, det;
       if (u.mkTab === "actions") {
         px = `${spark(r.courbe)}<div>${F(r.cours)} <span class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</span></div>`;
-        det = `<p>Prix repère ${F(r.limite_achat)} · plancher ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
-          + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>`
-          + (acces(1) ? (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "") + analyse(r.analyse)
-                      : verrou(1, "Le pourquoi de la note et du signal (familles, indicateurs)"));
+        // Découverte : les repères. Essentiel : + dividende, PER et les familles de la note en une ligne.
+        // Investisseur : + niveaux de prix, signal technique détaillé, verdict, alertes, chiffres clés et ratios.
+        const essentiel = `<p class="small">Dividende ${P(r.rendement_div, false)}${ok(r.per) ? ` · PER ${nf1.format(r.per)}` : ""}</p>`;
+        det = !acces(1) ? verrou(1, "Le pourquoi de la note : croissance, rentabilité, solidité, dividende")
+          : !acces(2) ? essentiel + analyse(r.analyse)
+          : `<p>Prix repère ${F(r.limite_achat)} · plancher ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
+            + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>`
+            + (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "") + analyse(r.analyse);
       } else if (u.mkTab === "obligations") {
         px = `${P(r.rendement_actuariel, false)}<div class="sub">${F(r.prix)}</div>`;
         det = `${esc(r.emetteur || "")} · échéance ${D(r.echeance)} · duration ${ok(r.duration) ? nf1.format(r.duration) + " ans" : "–"} · coupon ${P(r.taux_coupon, false)}`;
@@ -2933,7 +2939,17 @@
                           const ep = epargne(); if (!ep?.plan?.montant) return null;
                           const mois = today().slice(0, 7);
                           const jours = new Set((ep.mv || []).filter((m) => m.type === "VERSEMENT" && String(m.date).startsWith(mois)).map((m) => m.date)).size;
+                          // régularité du mois selon son propre rythme : périodes tenues / périodes attendues
+                          // (la période en cours ne compte que si elle est déjà tenue : on ne pénalise pas la journée qui n'est pas finie)
+                          const pl = ep.plan, r = pl.rythme || "mensuel", cur = periode(today(), r), debutK = periode(pl.debut || today(), r);
+                          const faits = new Set((ep.mv || []).filter((m) => m.type === "VERSEMENT").map((m) => periode(m.date, r)));
+                          const dansMois = (k) => (k.length === 7 ? k === mois : k.slice(0, 7) === mois);
+                          let tenues = 0, attendues = 0;
+                          for (let k = cur, i = 0; i < 40 && k >= debutK && dansMois(k); i++, k = prevPeriode(k, r, pl)) {
+                            if (faits.has(k)) { tenues++; attendues++; } else if (k !== cur) attendues++;
+                          }
                           return { serie: ep.serie || 0, record: ep.record || 0, unite: ep.unite || "jour", jours_mois: Math.min(31, jours), mois,
+                                   tenues_mois: tenues, attendues_mois: attendues,
                                    regularite: ep.total ? Math.round((ep.tenus / ep.total) * 1000) / 1000 : null };
                         },
                         portrait: () => voirPortrait(),

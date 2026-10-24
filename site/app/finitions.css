@@ -638,3 +638,21 @@ details.rubrique[open] { box-shadow: 0 6px 20px -14px rgba(0, 0, 0, .35); }
 .ep-anneau { width: 142px; height: 142px; }
 .ea-centre { padding: 0 20px; }
 .ea-centre b { font-size: .92rem; white-space: nowrap; }
+
+/* Essentiel : les familles de la note en pastilles, sans texte détaillé */
+.fam-pastilles { list-style: none; margin: 8px 0 4px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.fam-pastilles li { padding: 5px 11px; border-radius: 999px; font-size: .82rem; font-weight: 700; }
+.fp-bon { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.fp-moyen { background: hsl(35 92% 55% / .18); color: hsl(30 80% 35%); }
+.fp-faible { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.fp-legende { display: flex; gap: 10px; margin: 0 0 6px; }
+.fp-legende span { font-weight: 700; }
+.rp-grille { margin: -4px 0 10px; }
+.rp-grille > summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--accent); padding: 4px 0; }
+.rp-grille[open] > summary { margin-bottom: 6px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fp-moyen { color: hsl(35 92% 65%); } }
+:root[data-theme="dark"] .fp-moyen { color: hsl(35 92% 65%); }
+/* cercles : repère de l'objectif commun sur la barre */
+.cer-barre { position: relative; overflow: visible; }
+.cer-barre > i { overflow: hidden; }
+.cer-cible { position: absolute; top: -4px; bottom: -4px; left: var(--obj); width: 3px; border-radius: 2px; background: var(--text); opacity: .55; }
