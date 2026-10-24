@@ -496,3 +496,21 @@ details.rubrique[open] { box-shadow: 0 6px 20px -14px rgba(0, 0, 0, .35); }
 /* BafiBot : même écriture que BafiBourse (« Bafi » ambre, « Bot » indigo) */
 .marque-bot { font-weight: 800; letter-spacing: -.01em; color: var(--brand, var(--accent)); }
 .marque-bot .mb-bafi { font-weight: inherit; color: hsl(35 92% 55%); }
+
+/* =====================================================================================
+ * Les trois repères d'une action et la grille à quatre cases
+ * ===================================================================================== */
+.reperes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 2px 0 12px; }
+@media (max-width: 420px) { .reperes { grid-template-columns: 1fr; } }
+.rp-tuile { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.rp-lbl { font-size: .74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.rp-val { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 700; font-size: .98rem; }
+.rp-val small { font-weight: 600; color: var(--muted); font-size: .78rem; }
+.rp-val.t-hausse { color: var(--good); } .rp-val.t-baisse { color: var(--bad); }
+.quadrant { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; margin: 0 0 8px; font-size: .8rem; }
+.q-tete { text-align: center; font-weight: 700; color: var(--muted); padding: 2px 0; }
+.q-cote { font-weight: 700; color: var(--muted); align-self: center; padding-right: 6px; }
+.q-case { padding: 10px 8px; border-radius: 10px; text-align: center; background: var(--surface-2); color: var(--muted); line-height: 1.3; }
+.q-case.actif { background: var(--accent); color: var(--accent-text, #fff); font-weight: 700; box-shadow: 0 6px 16px -10px var(--accent); }
+.rp-phrase { margin: 0 0 12px; font-size: .9rem; }
+.mk-courbe { display: flex; align-items: center; gap: 10px; }

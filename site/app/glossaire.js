@@ -38,7 +38,9 @@
     ["Volatilité", ["volatilité"], "L'ampleur des variations d'un cours : plus elle est forte, plus le prix monte et descend."],
     ["Diversification", ["diversification"], "Répartir son argent sur plusieurs titres et types de placements pour limiter le risque."],
     ["Plancher", ["plancher"], "Le niveau sous lequel une alerte vous invite à examiner un titre : 15 % sous le plus haut atteint depuis votre achat. Jamais une vente automatique."],
-    ["Score", ["score"], "La note sur 100 calculée chaque soir par BafiBourse (tendance, fondamentaux, dividende, valorisation, liquidité). Une aide à la décision, pas un conseil."],
+    ["Score", ["score"], "Le score BafiBourse, sur 100 : la synthèse de la santé financière de l'entreprise et de la tendance de son cours, avec le dividende, la valorisation et la liquidité. Un repère, pas un conseil."],
+    ["Santé financière", ["santé financière"], "La note de A (très solide) à E (très fragile) de l'entreprise, tirée de ses états financiers : croissance, rentabilité, solidité, régularité. Elle répond à la question « est-ce une entreprise solide ? »."],
+    ["Tendance du cours", ["tendance du cours"], "Le sens du cours sur les trois derniers mois : en hausse, stable ou en baisse. Elle répond à la question « est-ce un bon moment ? », à court terme."],
   ];
   const DEF = new Map(TERMES.map(([t, , d]) => [t, d]));
   // « Le mot du soir » du récapitulatif : un terme différent chaque soir de séance

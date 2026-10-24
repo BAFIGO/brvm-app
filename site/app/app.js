@@ -66,9 +66,61 @@
   const chip = (d) => {
     if (!d) return "";
     const k = BUY.includes(d) ? "buy" : /VENDRE|ÉVITER|RACHETER/.test(d) ? "sell" : /ALLÉGER|SURVEILLER/.test(d) ? "warn" : "";
-    const lib = String(d).charAt(0) + String(d).slice(1).toLowerCase();      // « ACHAT FORT » → « Achat fort »
-    return `<span class="chip ${k}">${esc(lib)}</span>`;
+    return `<span class="chip ${k}">${esc(libDecision(d))}</span>`;
   };
+  // Les décisions du moteur sont présentées comme des appréciations, jamais comme des ordres (« Achat fort » → « Très bien noté »)
+  const LIB_DECISION = { "ACHAT FORT": "Très bien noté", ACHAT: "Bien noté", SOUSCRIRE: "Bien noté", RENFORCER: "Bien noté",
+    CONSERVER: "Neutre", SURVEILLER: "À surveiller", "ALLÉGER": "Moins bien noté", "ÉVITER": "Fragile", VENDRE: "Fragile",
+    "ÉVITER (illiquide)": "Peu échangé" };
+  function libDecision(d) {
+    const t = String(d || "");
+    if (LIB_DECISION[t]) return LIB_DECISION[t];
+    if (/illiquide/i.test(t)) return "Peu échangé";
+    return t.charAt(0) + t.slice(1).toLowerCase();
+  }
+  // Les trois repères d'une action : santé financière (A à E), tendance du cours, score BafiBourse
+  const SANTE = { A: "Très solide", B: "Solide", C: "Correcte", D: "Fragile", E: "Très fragile" };
+  function tendanceCours(c, raisons) {
+    const m = /Tech\.\s*(Hausse|Baisse|Neutre|Stable)\s*\((\d+)\s*%\)/i.exec(raisons || "");
+    if (m) {
+      const k = /hausse/i.test(m[1]) ? "hausse" : /baisse/i.test(m[1]) ? "baisse" : "stable";
+      return { k, conf: +m[2], lib: { hausse: "En hausse", baisse: "En baisse", stable: "Stable" }[k], fl: { hausse: "↗", baisse: "↘", stable: "→" }[k] };
+    }
+    const pts = c?.points;
+    if (!pts || pts.length < 8) return null;
+    const debut = pts.slice(0, Math.max(3, Math.floor(pts.length / 4)));
+    const ref = debut.reduce((a, v) => a + v, 0) / debut.length, ch = pts[pts.length - 1] / ref - 1;
+    const k = ch > 0.04 ? "hausse" : ch < -0.04 ? "baisse" : "stable";
+    return { k, ch, lib: { hausse: "En hausse", baisse: "En baisse", stable: "Stable" }[k], fl: { hausse: "↗", baisse: "↘", stable: "→" }[k] };
+  }
+  function phraseReperes(note, t) {
+    const sol = /[AB]/.test(note || ""), fra = /[DE]/.test(note || "");
+    if (!note || !t) return "";
+    if (sol && t.k === "hausse") return "Entreprise solide et cours porteur.";
+    if (sol && t.k === "baisse") return "Entreprise solide, mais le marché hésite en ce moment.";
+    if (sol) return "Entreprise solide, cours stable.";
+    if (fra && t.k === "hausse") return "Le cours monte, mais l'entreprise est fragile : prudence.";
+    if (fra && t.k === "baisse") return "Entreprise fragile et cours en baisse.";
+    if (fra) return "Entreprise fragile, cours stable.";
+    return `Santé financière correcte, cours ${t.lib.toLowerCase()}.`;
+  }
+  function reperes(r) {
+    const note = r.analyse?.note, t = tendanceCours(r.courbe, r.raisons);
+    const sol = /[AB]/.test(note || ""), fra = /[DE]/.test(note || "");
+    const caseActive = (ligne, col) => (ligne === "sol" ? sol : fra) && t && (col === "h" ? t.k === "hausse" : t.k === "baisse") ? " actif" : "";
+    return `<div class="reperes">
+      <div class="rp-tuile"><span class="rp-lbl">Santé financière</span>
+        ${note ? `<span class="rp-val"><span class="grade sm g-${esc(note)}">${esc(note)}</span> ${SANTE[note] || ""}</span>` : `<span class="rp-val muted">Non notée</span>`}</div>
+      <div class="rp-tuile"><span class="rp-lbl">Tendance du cours</span>
+        ${t ? `<span class="rp-val t-${t.k}">${t.fl} ${t.lib} <small>${t.conf ? `confiance ${t.conf} %` : `${P(t.ch)} sur 3 mois`}</small></span>` : `<span class="rp-val muted">–</span>`}</div>
+      <div class="rp-tuile"><span class="rp-lbl">Score BafiBourse</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chip(r.decision)}</span></div>
+    </div>
+    ${note && t ? `<div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
+      <span></span><span class="q-tete">Cours en hausse</span><span class="q-tete">Cours en baisse</span>
+      <span class="q-cote">Solide (A, B)</span><span class="q-case${caseActive("sol", "h")}">Solide et porteuse</span><span class="q-case${caseActive("sol", "b")}">Solide, le marché hésite</span>
+      <span class="q-cote">Fragile (D, E)</span><span class="q-case${caseActive("fra", "h")}">Le cours monte, prudence</span><span class="q-case${caseActive("fra", "b")}">Fragile et délaissée</span>
+    </div><p class="rp-phrase">${esc(phraseReperes(note, t))} Le score résume les deux, avec le dividende, la valorisation et la liquidité.</p>` : ""}`;
+  }
   function spark(c, w = 96, h = 30) {
     const pts = c?.points;
     if (!pts || pts.length < 2) return "";
@@ -84,9 +136,8 @@
     if (!a) return `<p class="small muted">Analyse financière indisponible (états financiers non publiés ou illisibles).</p>`;
     const m = (v) => (ok(v) ? nf0.format(Math.round(v)) : "–");
     const pc = (v) => (ok(v) ? nf1.format(v * 100) + " %" : "–");
-    let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Note financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
-      <div><b>Analyse financière : ${esc(a.recommandation || "–")}</b><div class="sub">Note ${esc(a.note || "–")}${ok(a.score) ? ` (${N(a.score)}/100)` : ""} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
-    if (a.proposition) h += `<p>${esc(a.proposition)}</p>`;
+    let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Santé financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
+      <div><b>Santé financière : ${esc(SANTE[a.note] || "non notée")}</b><div class="sub">Note ${esc(a.note || "–")} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
     if (a.verdict) h += `<p class="small">${esc(a.verdict)}</p>`;
     for (const al of a.alertes || []) h += `<div class="notice small">⚠ ${esc(al)}</div>`;
     if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
@@ -1299,7 +1350,7 @@
         const d = S.decisions?.get(p.code);
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
-        h += `<li${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Note financière">${esc(act.analyse.note)}</span>` : ""}</div>
+        h += `<li${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Santé financière">${esc(act.analyse.note)}</span>` : ""}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
           <div class="sub etats">${chip(d)}${pastille(al)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
@@ -1608,17 +1659,17 @@
         </div>
         <input id="mk-q" type="search" placeholder="Rechercher un titre" value="${esc(u.mkQuery)}" aria-label="Rechercher un titre">
         <select id="mk-f" aria-label="Filtre" style="width:auto">
-          <option value="opp"${u.mkFilter === "opp" ? " selected" : ""}>Opportunités</option>
+          <option value="opp"${u.mkFilter === "opp" ? " selected" : ""}>Les mieux notés</option>
           <option value="all"${u.mkFilter === "all" ? " selected" : ""}>Tous</option>
         </select>
       </div>
-      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "l'analyse financière" : "le détail"}</p>
+      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "ses repères et son analyse" : "le détail"}</p>
       <div class="card"><ul class="list">`;
     for (const r of list.slice(0, u.mkShow)) {
       let px, det;
       if (u.mkTab === "actions") {
         px = `${spark(r.courbe)}<div>${F(r.cours)} <span class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</span></div>`;
-        det = `<p>Achat limite ${F(r.limite_achat)} · stop ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
+        det = `<p>Prix repère ${F(r.limite_achat)} · plancher ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
           + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>` + (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "")
           + analyse(r.analyse);
       } else if (u.mkTab === "obligations") {
@@ -1629,14 +1680,14 @@
         const acc = accesFcp();
         det = `${esc(r.gestionnaire || "")}${acc ? (acc.has(r.gestionnaire) ? " · souscriptible via vos comptes" : " · non souscriptible via vos SGI") : ""} · ${esc(CLASSES[r.classe] || r.classe || "")} · volatilité ${P(r.volatilite, false)} · rendement attendu ${P(r.rendement_attendu, false)}`;
       }
-      const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Note financière">${esc(r.analyse.note)}</span>` : "";
+      const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Santé financière">${esc(r.analyse.note)}</span>` : "";
       if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
       const pxCourt = u.mkTab === "actions" ? `${F(r.cours)}<div class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</div>` : px;
       h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}</div>
           <div class="sub">${chip(r.decision)}</div></div>
           <div class="right num">${pxCourt}</div></summary>
-          <div class="why"><p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100${note ? ` · note financière ${note}` : ""}</p>
-            ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}</div>` : ""}${det}</div></details></li>`;
+          <div class="why">${u.mkTab === "actions" ? reperes(r) : `<p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100</p>`}
+            ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}<span class="small muted">${esc(r.code)} · 3 derniers mois</span></div>` : ""}${det}</div></details></li>`;
     }
     h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
       ${tend ? `<details class="card tend-pli"${u.tendOuverte ? " open" : ""}><summary><span class="op-t">Tendance du marché</span>
