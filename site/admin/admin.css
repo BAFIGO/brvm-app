@@ -64,3 +64,20 @@ textarea { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; font
 .abo-fiche .dtable { width: 100%; table-layout: fixed; min-width: 0; }
 .abo-fiche .dtable th { width: 52%; white-space: normal; }
 .abo-fiche .dtable td { white-space: normal; text-align: right; overflow-wrap: anywhere; }
+
+/* Boutons affinés de la console : même hauteur, alignés, relief discret */
+.btn:not(.link) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 12px; font-weight: 700;
+  line-height: 1.2; transition: transform .12s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease, filter .2s ease; }
+.btn.small:not(.link) { min-height: 34px; padding: 0 12px; border-radius: 10px; }
+.btn.primary { border: 0; color: #fff; background: linear-gradient(180deg, hsl(230 55% 40%), hsl(232 52% 29%)); box-shadow: 0 10px 20px -12px hsl(230 55% 28% / .9), inset 0 1px 0 rgb(255 255 255 / .14); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:not(.primary):not(.link):not(.danger) { background: var(--surface); border: 1.5px solid var(--border); color: var(--text); }
+.btn:not(.primary):not(.link):not(.danger):hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); }
+.btn.danger { border: 0; color: #fff; background: linear-gradient(180deg, hsl(0 65% 50%), hsl(0 65% 40%)); }
+.btn:not(.link):active { transform: translateY(1px) scale(.985); }
+.btn:not(.link):focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.actions, dialog .actions { align-items: center; gap: 10px; }
+dialog .actions .btn:not(.link) { min-height: 46px; }
+/* boutons d'une barre d'actions : aucune marge héritée, même bordure, même ligne */
+.actions .btn, dialog .actions .btn { margin: 0 !important; }
+.btn.primary { border: 1.5px solid transparent; }

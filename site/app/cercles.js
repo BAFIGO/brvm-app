@@ -36,8 +36,11 @@
       $("#cer-t", dlg).textContent = "Créer un cercle d'épargne";
       $(".cer-corps", dlg).innerHTML = `<p class="small">Invitez vos proches à épargner avec vous : chacun chez soi, chacun à son rythme, avec un objectif commun.</p>
         <label for="cer-nom">Nom du cercle</label><input id="cer-nom" name="nom" maxlength="40" placeholder="Les amis de la fac, La famille…" required>
-        <label for="cer-obj">Objectif commun du mois : tenir son propre rythme d'épargne…</label>
-        <select id="cer-obj" name="objectif">${[[50, "La moitié du temps (50 %)"], [75, "3 fois sur 4 (75 %)"], [80, "4 fois sur 5 (80 %)"], [100, "Sans faute (100 %)"]].map(([n, t]) => `<option value="${n}"${n === 80 ? " selected" : ""}>${t}</option>`).join("")}</select>
+        <p id="cer-obj-l" class="cc-titre">Objectif commun du mois : tenir son propre rythme d'épargne…</p>
+        <div class="choix-cartes" role="radiogroup" aria-labelledby="cer-obj-l">${[[50, "La moitié du temps", "Pour démarrer en douceur", "🌱"], [75, "3 fois sur 4", "Un effort régulier", "💪"],
+          [80, "4 fois sur 5", "Le choix des cercles motivés", "🔥"], [100, "Sans faute", "Pour les champions", "🏆"]].map(([n, t, d, e]) =>
+          `<label class="choix-c"><input type="radio" name="objectif" value="${n}"${n === 80 ? " checked" : ""}><span class="cc-emo" aria-hidden="true">${e}</span>
+            <span class="cc-t"><b>${t}</b><span>${d}</span></span><span class="cc-pc">${n} %</span></label>`).join("")}</div>
         <p class="small muted">Chacun garde son rythme (par jour, par semaine ou par mois) : un épargnant mensuel et un épargnant quotidien
           comptent autant dans l'objectif commun.</p>
         <p class="small muted">Les membres voient la série et les jours d'épargne de chacun. Jamais aucun montant.</p>`;

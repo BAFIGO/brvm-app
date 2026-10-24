@@ -49,11 +49,24 @@
   const libObjet = (k) => offres()[k]?.[0] || k;
   const jours = (d) => Math.max(0, Math.ceil((new Date(d) - Date.now()) / 864e5));
 
-  function barre(lib, u, q, credit) {
+  const SVG = (d, cl = "") => `<svg class="ab-svg ${cl}" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const ICO = {
+    bot: '<rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 4v3"/><circle cx="9.5" cy="12.5" r="1" class="pl"/><circle cx="14.5" cy="12.5" r="1" class="pl"/><path d="M9.5 16h5"/>',
+    page: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+    loupe: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+    decouverte: '<path d="M12 21c-4-3-7-6.2-7-10a7 7 0 0 1 14 0c0 3.8-3 7-7 10z"/><circle cx="12" cy="11" r="2.5"/>',
+    essentiel: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
+    investisseur: '<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 18 3-18"/>',
+    cadeau: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+  };
+  function barre(ico, lib, u, q, credit) {
     if (!q && !credit) return "";
-    const pc = q ? Math.min(100, Math.round((u / q) * 100)) : 100;
-    return `<div class="ab-conso"><div class="ab-l"><span>${lib}</span><b>${nf.format(Math.min(u, q))} / ${nf.format(q)}</b></div>
-      <div class="ab-barre${pc >= 80 ? " haute" : ""}"><i style="width:${pc}%"></i></div>${credit ? `<p class="small muted">+ ${nf.format(credit)} en réserve (pack)</p>` : ""}</div>`;
+    const pc = q ? Math.min(100, Math.round((u / q) * 100)) : 100, reste = Math.max(0, q - u) + (credit || 0);
+    return `<div class="ab-conso"><span class="ab-conso-ic">${SVG(ICO[ico])}</span><div class="ab-conso-c">
+      <div class="ab-l"><span>${lib}</span><b>${nf.format(Math.min(u, q))} / ${nf.format(q)}</b></div>
+      <div class="ab-barre${pc >= 80 ? " haute" : ""}"><i style="--w:${pc}%"></i></div>
+      <p class="small muted">${reste > 0 ? `${nf.format(reste)} restant${reste > 1 ? "s" : ""}` : "Quota atteint"}${credit ? ` · dont ${nf.format(credit)} en réserve (pack)` : ""}</p></div></div>`;
   }
 
   function carteHtml(a) {
@@ -63,28 +76,31 @@
     const q = a.quotas || {}, u = a.usage || {}, c = a.credits || {};
     const lien = `${location.origin}${location.pathname}?parrain=${encodeURIComponent(a.code_parrain || "")}`;
     return `<div class="card abo-carte"><h2>Mon abonnement</h2>
-      <div class="ab-tete f-${esc(f)}"><span class="ab-badge">${esc(nom)}</span><span class="small">${esc(etat)}</span></div>
-      ${a.essai ? `<p class="small">Pendant l'essai, vous profitez de tout l'Essentiel. Ensuite, vous repassez en Découverte, sans rien payer ni perdre vos données.</p>` : ""}
+      <div class="ab-hero f-${esc(f)}"><span class="ab-hero-ic">${SVG(ICO[f] || ICO.essentiel)}</span>
+        <div><span class="ab-hero-lbl">Votre formule</span><b class="ab-hero-nom">${esc(nom)}</b><span class="ab-hero-etat">${esc(etat)}</span></div>
+        ${f !== "investisseur" ? `<a class="ab-hero-cta" href="#ab-formules">Changer</a>` : ""}</div>
+      ${a.essai ? `<p class="small ab-essai">Pendant l'essai, vous profitez de tout l'Essentiel. Ensuite, vous repassez en Découverte, sans rien payer ni perdre vos données.</p>` : ""}
       ${a.demande ? `<div class="notice small">Demande en cours : <b>${esc(libObjet(a.demande.objet))}</b>, envoyée le ${new Date(a.demande.cree_le).toLocaleDateString("fr-FR")}. Elle sera activée dès réception de votre paiement.</div>` : ""}
       <h3>Ce mois-ci</h3>
-      ${barre("Questions à BafiBot", u.questions || 0, q.questions || 0, c.questions)}
-      ${q.approfondies ? barre("Questions approfondies", u.approfondies || 0, q.approfondies) : ""}
-      ${barre("Pages importées", u.pages || 0, q.pages || 0, c.pages)}
-      <h3>Les formules</h3>
+      <div class="ab-consos">${barre("bot", "Questions à BafiBot", u.questions || 0, q.questions || 0, c.questions)}
+      ${q.approfondies ? barre("loupe", "Questions approfondies", u.approfondies || 0, q.approfondies) : ""}
+      ${barre("page", "Pages importées", u.pages || 0, q.pages || 0, c.pages)}</div>
+      <h3 id="ab-formules">Les formules</h3>
       <div class="ab-formules">${formules().map((x) => `<div class="ab-f${x.k === f ? " actuelle" : ""}${x.reco ? " reco" : ""}">
           ${x.reco ? `<span class="ab-reco">Le plus choisi</span>` : ""}
-          <b class="ab-nom">${x.nom}</b><span class="ab-prix">${x.mois ? `${F(x.mois)}<small> / mois</small>` : "Gratuit"}</span>
+          <span class="ab-f-ic">${SVG(ICO[x.k])}</span><b class="ab-nom">${x.nom}</b><span class="ab-prix">${x.mois ? `${F(x.mois)}<small> / mois</small>` : "Gratuit"}</span>
           ${x.an ? `<span class="small muted">ou ${F(x.an)} par an${x.mois && x.an < 12 * x.mois ? ` (${Math.round(12 - x.an / x.mois)} mois offerts)` : ""}</span>` : x.mois ? "" : `<span class="small muted">Pour toujours</span>`}
-          <p class="small">${x.pour}</p><ul>${x.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
-          ${x.k === f && !a.essai ? `<span class="ab-actuel">Votre formule</span>` : x.mois ? `<button type="button" class="btn${x.reco ? " primary" : ""}" data-abo="${x.k}">Choisir ${x.nom}</button>` : ""}
+          <p class="small">${x.pour}</p><ul class="ab-points">${x.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+          ${x.k === f && !a.essai ? `<span class="ab-actuel">✓ Votre formule</span>` : x.mois ? `<button type="button" class="btn${x.reco ? " primary" : ""}" data-abo="${x.k}">${x.k === f ? "Continuer après l'essai" : `Choisir ${x.nom}`}</button>` : ""}
         </div>`).join("")}</div>
       <h3>Les packs</h3>
       <div class="ab-packs">${[["pack_questions", 3, "questions à BafiBot"], ["pack_pages", 4, "pages à importer"]].filter(([k]) => offres()[k]).map(([k, i, lib]) =>
-        `<button type="button" class="ab-pack" data-abo-objet="${k}"><b>${nf.format(offres()[k][i] || 0)} ${lib}</b><span>${F(offres()[k][1])} · valables 3 mois</span></button>`).join("")}</div>
-      <h3>Parrainez vos proches</h3>
-      <p class="small">Quand un proche inscrit avec votre lien prend une formule payante, vous recevez <b>un mois d'Essentiel offert</b>.
-        ${a.filleuls ? `Déjà ${a.filleuls} filleul${a.filleuls > 1 ? "s" : ""} inscrit${a.filleuls > 1 ? "s" : ""}.` : ""}</p>
-      <div class="ab-parrain"><code>${esc(a.code_parrain || "")}</code><button type="button" class="btn small" data-abo-partager="${esc(lien)}">Partager mon lien</button></div>
+        `<button type="button" class="ab-pack" data-abo-objet="${k}"><span class="ab-pack-ic">${SVG(ICO[k === "pack_pages" ? "page" : "bot"])}</span>
+          <span class="ab-pack-t"><b>${nf.format(offres()[k][i] || 0)} ${lib}</b><span>${F(offres()[k][1])} · valables 3 mois</span></span><span class="ab-pack-plus">${SVG(ICO.plus)}</span></button>`).join("")}</div>
+      <div class="ab-parrainage"><span class="ab-cadeau">${SVG(ICO.cadeau)}</span>
+        <div class="ab-parr-txt"><b>Parrainez vos proches</b><p class="small">Un proche inscrit avec votre lien prend une formule payante :
+          vous recevez <b>un mois d'Essentiel offert</b>.${a.filleuls ? ` Déjà ${a.filleuls} filleul${a.filleuls > 1 ? "s" : ""} inscrit${a.filleuls > 1 ? "s" : ""}.` : ""}</p>
+          <div class="ab-parrain"><code>${esc(a.code_parrain || "")}</code><button type="button" class="btn small primary" data-abo-partager="${esc(lien)}">Partager mon lien</button></div></div></div>
       <p class="small muted">Les formules payantes donnent accès à des outils et à de l'information, jamais à un conseil en investissement personnalisé.</p>
     </div>`;
   }
@@ -101,16 +117,32 @@
     const durees = objet ? [objet] : Object.keys(OBJETS).filter((k) => k.startsWith(formule + "_"));
     const moyens = [["wave", "Wave", cfg.wave], ["orange_money", "Orange Money", cfg.orange_money]].filter(([, , n]) => n);
     $("#abo-t", dlg).textContent = objet?.startsWith("pack") ? "Prendre un pack" : `Choisir ${app.nomFormule(formule)}`;
+    // Choix de la durée en cartes : prix par mois et économie réalisée ; la meilleure affaire est signalée
+    const mensuel = OBJETS[formule + "_mois"]?.[1];
+    const meilleure = durees.length > 1 ? durees.reduce((m, d) => (OBJETS[d][2] && OBJETS[d][1] / OBJETS[d][2] < OBJETS[m][1] / OBJETS[m][2] ? d : m), durees[0]) : null;
+    const MARQUES = { wave: ["#1dc3ff", "W"], orange_money: ["#ff7900", "OM"], autre: ["#6b7280", "…"] };
     $(".abo-corps", dlg).innerHTML = `
-      <fieldset class="abo-durees"><legend>${objet?.startsWith("pack") ? "Pack" : "Durée"}</legend>${durees.map((d, i) => `<label class="abo-d">
-        <input type="radio" name="objet" value="${d}"${i === durees.length - 1 || durees.length === 1 ? " checked" : ""}>
-        <span><b>${esc(OBJETS[d][0])}</b><span>${F(OBJETS[d][1])}${OBJETS[d][2] > 1 ? " · un seul paiement" : ""}</span></span></label>`).join("")}</fieldset>
-      ${moyens.length ? `<p>Payez le montant choisi par ${moyens.map(([, n, num]) => `<b>${n}</b> au <b>${esc(num)}</b>`).join(" ou par ")}
-        (bénéficiaire : ${esc(cfg.beneficiaire || "BafiBourse")}), puis indiquez la référence de la transaction.</p>
-        <label>Moyen de paiement <select name="moyen">${moyens.map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}<option value="autre">Autre</option></select></label>
+      <ol class="abo-etapes" aria-label="Étapes"><li class="on">Choisir</li><li>Payer</li><li>Envoyer la référence</li></ol>
+      <fieldset class="abo-durees"><legend class="sr-only">${objet?.startsWith("pack") ? "Pack" : "Durée"}</legend>${durees.map((d) => {
+        const [lib, prix, mois] = OBJETS[d], parMois = mois ? Math.round(prix / mois) : 0, eco = mensuel && mois > 1 ? mensuel * mois - prix : 0;
+        return `<label class="abo-d${d === meilleure ? " meilleure" : ""}">
+          <input type="radio" name="objet" value="${d}"${d === (meilleure || durees[0]) ? " checked" : ""}>
+          <span class="abo-d-coche" aria-hidden="true"></span>
+          <span class="abo-d-txt"><b>${esc(lib.replace(/^[^·]+·\s*/, "") || lib)}</b>
+            <span>${mois > 1 ? `soit ${F(parMois)} par mois` : mois === 1 ? "sans engagement" : "valable 3 mois"}${eco > 0 ? ` · <em>${F(eco)} d'économie</em>` : ""}</span></span>
+          <span class="abo-d-prix">${F(prix)}</span>
+          ${d === meilleure ? `<span class="abo-d-badge">Le plus avantageux</span>` : ""}</label>`; }).join("")}</fieldset>
+      ${moyens.length ? `<p class="abo-consigne">Payez le montant choisi, puis indiquez la référence de la transaction.</p>
+        <fieldset class="abo-moyens"><legend class="sr-only">Moyen de paiement</legend>${[...moyens, ["autre", "Autre", ""]].map(([k, n, num], i) =>
+          `<label class="abo-m"><input type="radio" name="moyen" value="${k}"${i === 0 ? " checked" : ""}>
+            <span class="abo-m-logo" style="--c:${MARQUES[k][0]}">${MARQUES[k][1]}</span><span class="abo-m-t"><b>${n}</b>${num ? `<span>${esc(num)}</span>` : "<span>autre moyen</span>"}</span></label>`).join("")}</fieldset>
+        <p class="small muted">Bénéficiaire : ${esc(cfg.beneficiaire || "BafiBourse")}.</p>
         <label>Référence de la transaction <input name="reference" maxlength="60" autocomplete="off" placeholder="Ex. TX2410…"></label>`
-      : `<p>Le paiement en ligne arrive très bientôt. Envoyez votre demande : notre équipe vous contacte pour le règlement par Wave ou Orange Money.</p>`}
-      <p class="small muted">La formule est activée dès réception du paiement, en général sous 24 h. Les montants s'entendent toutes taxes comprises.</p>`;
+      : `<p class="abo-consigne">Le paiement en ligne arrive très bientôt. Envoyez votre demande : notre équipe vous contacte pour le règlement par Wave ou Orange Money.</p>`}
+      <p class="small muted">Activée dès réception du paiement, en général sous 24 h. Montants toutes taxes comprises.</p>`;
+    // étapes : « Payer » s'allume quand une durée est choisie, « Envoyer » quand la référence est saisie
+    const etapes = () => { const li = dlg.querySelectorAll(".abo-etapes li"); li[1]?.classList.toggle("on", !!f.objet?.value); li[2]?.classList.toggle("on", !!f.reference?.value.trim()); };
+    f.oninput = etapes; etapes();
     $(".msg", dlg).textContent = "";
     dlg.showModal();
   }

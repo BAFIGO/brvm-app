@@ -1610,6 +1610,28 @@
       <p class="small muted">Aide à la décision, pas un conseil en investissement.</p>`, "rc-fin");
     return cartes;
   }
+  function animerNombre(el) {
+    const t = el.firstChild?.nodeType === 3 ? el.firstChild : null, txt = t?.nodeValue || "";
+    const v = +txt.replace(/[^\d-]/g, "");
+    if (!t || !Number.isFinite(v) || !v) return;
+    const t0 = performance.now(), fmt = (x) => nf0.format(Math.round(x)).replace(/\u202f/g, " ");
+    (function pas(now) { const k = Math.min(1, (now - t0) / 900); t.nodeValue = txt.replace(/[\d\s\u202f\u00a0.,-]+/, fmt(v * (1 - Math.pow(1 - k, 3))) + " ");
+      if (k < 1) requestAnimationFrame(pas); else t.nodeValue = txt; })(t0);
+  }
+  const ICO_RC = {
+    argent: ["rc-t-indigo", '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M16 12.5h2.5M3 9.5h18"/>'],
+    titres: ["rc-t-vert", '<path d="M4 18l5-6 4 3 7-8"/><path d="M15 7h5v5"/>'],
+    alerte: ["rc-t-ambre", '<path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.5v.5"/>'],
+    marche: ["rc-t-bleu", '<path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>'],
+    mot: ["rc-t-ambre", '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>'],
+    epargne: ["rc-t-ambre", '<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/>'],
+    demain: ["rc-t-nuit", '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><path d="M17 3.5v3M15.5 5h3"/>'],
+  };
+  const EMO_RC = { "💰": "argent", "📈": "titres", "🏛️": "marche", "💡": "mot", "🔥": "epargne", "🌙": "demain", "⚠️": "alerte", "🔔": "alerte", "⚠": "alerte" };
+  const tuileRecap = (emo) => { const [cl, d] = ICO_RC[EMO_RC[emo]] || ICO_RC.mot;
+    return `<span class="rc-tuile ${cl}" aria-hidden="true"><svg viewBox="0 0 24 24">${d}</svg></span>`; };
+  const DUREE_CARTE = 7000;       // défilement automatique, comme des « stories » : en pause dès qu'on touche ou qu'on survole
+
   function ouvrirRecap() {
     let d = $("#dlg-recap");
     if (!d) {
@@ -1624,9 +1646,32 @@
       const piste = $(".rc-piste", d);
       const pos = () => Math.round(piste.scrollLeft / piste.clientWidth);
       const aller = (i) => piste.scrollTo({ left: i * piste.clientWidth, behavior: CALME ? "auto" : "smooth" });
+      // Défilement automatique : la barre de la carte active se remplit, puis on passe à la suivante
+      let minuterie = 0, pause = false, actuelle = -1;
+      const relancer = () => {
+        clearTimeout(minuterie);
+        const i = pos(), n = piste.children.length;
+        if (CALME || pause || !d.open || i >= n - 1) return;
+        minuterie = setTimeout(() => aller(i + 1), DUREE_CARTE);
+      };
+      d._relancer = relancer;
+      const suspendre = (v) => { pause = v; d.classList.toggle("rc-pause", v); if (!v) relancer(); else clearTimeout(minuterie); };
+      piste.addEventListener("pointerdown", () => suspendre(true));
+      piste.addEventListener("pointerup", () => setTimeout(() => suspendre(false), 400));
+      d.addEventListener("mouseenter", () => suspendre(true));
+      d.addEventListener("mouseleave", () => suspendre(false));
       const maj = () => {
         const i = pos(), n = piste.children.length;
-        d.querySelectorAll(".rc-barres i").forEach((b, k) => b.classList.toggle("on", k <= i));
+        d.querySelectorAll(".rc-barres i").forEach((b, k) => { b.classList.toggle("on", k < i); b.classList.toggle("cours", k === i); });
+        if (i !== actuelle) {                                  // nouvelle carte : son contenu entre en scène, et le compteur redémarre
+          actuelle = i;
+          piste.querySelectorAll(".rc-carte").forEach((c, k) => c.classList.toggle("actif", k === i));
+          const g = piste.children[i]?.querySelector(".rc-grand .num, .rc-grand");
+          if (g && !CALME && !g.dataset.joue) { g.dataset.joue = "1"; animerNombre(g); }
+          const b = d.querySelector(".rc-barres i.cours");
+          if (b) { b.style.animation = "none"; void b.offsetWidth; b.style.animation = ""; }
+          relancer();
+        }
         $(".rc-pos", d).textContent = `${i + 1} sur ${n}`;
         $('[data-rc="prec"]', d).disabled = i === 0;
         $('[data-rc="suiv"]', d).textContent = i === n - 1 ? "Terminer" : "Suivant";
@@ -1645,13 +1690,14 @@
         if (ev.key === "ArrowRight") { ev.preventDefault(); aller(Math.min(pos() + 1, piste.children.length - 1)); }
         if (ev.key === "ArrowLeft") { ev.preventDefault(); aller(Math.max(pos() - 1, 0)); }
       });
-      d.addEventListener("close", () => render());
+      d.addEventListener("close", () => { clearTimeout(minuterie); actuelle = -1; render(); });
       d._maj = maj;
     }
     const cartes = recapCartes();
     $(".rc-barres", d).innerHTML = cartes.map(() => "<i></i>").join("");
     $(".rc-piste", d).innerHTML = cartes.map((c, k) => `<section class="rc-carte ${c.cl}" role="group" aria-roledescription="carte" aria-label="${k + 1} sur ${cartes.length} : ${esc(c.titre)}">
-        <p class="rc-ic" aria-hidden="true">${c.ic}</p><h3>${esc(c.titre)}</h3>${c.corps}</section>`).join("");
+        ${tuileRecap(c.ic)}<h3>${esc(c.titre)}</h3><div class="rc-corps">${c.corps}</div></section>`).join("");
+    d.style.setProperty("--rc-duree", CALME ? "0s" : DUREE_CARTE + "ms");
     d.showModal();
     $(".rc-piste", d).scrollLeft = 0;
     d._maj();
@@ -2965,7 +3011,7 @@
                         etatRubrique: (k) => {
                           const p = S.profil || {}, pl = S.coffre?.plan || {};
                           if (k === "abo" && S.abo) { const a = S.abo, j = a.fin ? Math.max(0, Math.ceil((new Date(a.fin) - Date.now()) / 864e5)) : 0;
-                            return `${NOM_FORMULE[a.formule]}${a.essai ? ` · essai, encore ${j} jour${j > 1 ? "s" : ""}` : a.formule !== "decouverte" && a.fin ? ` · jusqu'au ${D(a.fin)}` : " · gratuite"}`; }
+                            return `${NOM_FORMULE[a.formule]}${a.essai ? ` · essai, encore ${j} jour${j > 1 ? "s" : ""}` : a.formule !== "decouverte" && a.fin ? ` · jusqu'au ${new Date(a.fin).toLocaleDateString("fr-FR")}` : " · gratuite"}`; }
                           if (k === "plan") return +pl.montant > 0 ? `${F(pl.montant)} ${RYTHMES[pl.rythme]?.[0] || ""}${+pl.objectif > 0 ? ` · objectif ${F(pl.objectif)}` : ""}` : "Pas encore de rythme choisi";
                           if (k === "invest") return `Profil ${PROFILS[p.profil]?.t || "équilibré"} · montant ${p.budget_mode === "auto" ? "automatique" : p.budget ? F(p.budget) : "à saisir"}`;
                           if (k === "coord") return [p.prenom, p.nom].filter(Boolean).join(" ") || "Prénom, nom, téléphone";
