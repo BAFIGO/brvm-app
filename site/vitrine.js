@@ -218,6 +218,39 @@
     b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse");
   }
 
+  // ------------------------------------------------------------ Cercles : les membres arrivent en orbite, l'anneau se remplit,
+  // puis, toutes les quelques secondes, un membre « épargne » : un « +1 jour » s'envole et le compteur avance. Rejoué à chaque retour.
+  function cerclesAnimes() {
+    const sc = $(".cv-scene");
+    if (!sc || CALME) return;
+    const compte = $(".cv-compte", sc), jauge = $(".cv-jauge", sc), membres = [...sc.querySelectorAll(".cv-membre")];
+    const TOTAL = 60, C = 553;
+    let n = 41, minuterie = 0, debut = 0;
+    const regler = (v) => { compte.textContent = v; jauge.style.strokeDashoffset = String(C * (1 - v / TOTAL)); };
+    function epargne() {
+      if (n >= 46) return;
+      const m = membres[(Math.random() * membres.length) | 0], r = m.getBoundingClientRect(), rs = sc.getBoundingClientRect();
+      const p = document.createElement("span"); p.className = "cv-plus"; p.textContent = "+1 jour";
+      p.style.left = `${r.left - rs.left + 14}px`; p.style.top = `${r.top - rs.top - 8}px`;
+      sc.append(p); setTimeout(() => p.remove(), 1400);
+      n += 1; setTimeout(() => regler(n), 500);
+    }
+    function jouer() {
+      clearInterval(minuterie); clearTimeout(debut);
+      sc.classList.remove("joue"); jauge.style.strokeDashoffset = ""; void sc.offsetWidth;
+      n = 41; compte.textContent = "0";
+      sc.classList.add("joue");
+      // le compteur monte jusqu'à 41 pendant que l'anneau se remplit
+      const t0 = performance.now();
+      (function pas(t) { const k = Math.min(1, (t - t0) / 1500); compte.textContent = Math.round(41 * (1 - Math.pow(1 - k, 3))); if (k < 1 && sc.classList.contains("joue")) requestAnimationFrame(pas); })(t0);
+      requestAnimationFrame(() => (jauge.style.strokeDashoffset = String(C * (1 - 41 / TOTAL))));
+      debut = setTimeout(() => { minuterie = setInterval(epargne, 2600); }, 2200);
+    }
+    function arreter() { clearInterval(minuterie); clearTimeout(debut); sc.classList.remove("joue"); sc.querySelectorAll(".cv-plus").forEach((p) => p.remove()); }
+    sc.classList.add("anime");
+    new IntersectionObserver(([e]) => (e.isIntersecting ? jouer() : arreter()), { threshold: 0.35 }).observe(sc);
+  }
+
   function animate() {
     gsap.registerPlugin(ScrollTrigger);
     // Téléphone : la barre d'adresse qui apparaît ou disparaît ne doit pas recalculer les animations (petits sauts)
@@ -324,6 +357,7 @@
 
   if (ANIM) animate(); else draw();
   conversationBafiBot();
+  cerclesAnimes();
   // « Pour les curieux » : à l'ouverture, les blocs repliés s'affichent et les animations se recalent
   document.getElementById("curieux")?.addEventListener("toggle", (ev) => {
     if (!ev.target.open) return;

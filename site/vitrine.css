@@ -391,3 +391,66 @@ details.curieux > section { padding-left: 0; padding-right: 0; }
 /* conversation : bulles qui arrivent une à une (seulement quand l'animation joue) */
 .bb-fil.anime .bb-b { opacity: 0; transform: translateY(10px) scale(.97); transition: opacity .35s ease, transform .35s ease; }
 .bb-fil.anime .bb-b.vu { opacity: 1; transform: none; }
+
+/* =====================================================================================
+ * Cercles d'épargne : les membres flottent en orbite autour de l'objectif commun
+ * ===================================================================================== */
+.cercles-v { display: grid; gap: 28px; align-items: center; }
+@media (min-width: 960px) { .cercles-v { grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); gap: 56px; } }
+.cv-scene { position: relative; width: min(400px, 100%); aspect-ratio: 1 / 0.95; justify-self: center; }
+.cv-halo { position: absolute; border-radius: 50%; filter: blur(42px); pointer-events: none; }
+.cv-halo-a { width: 58%; height: 58%; left: 4%; top: 36%; background: hsl(35 92% 60% / .35); }
+.cv-halo-b { width: 58%; height: 58%; right: 2%; top: 4%; background: hsl(230 70% 62% / .28); }
+.cv-centre { position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--surface); box-shadow: 0 24px 50px -24px rgba(20, 26, 70, .45); display: grid; place-items: center; }
+.cv-anneau { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.cv-anneau circle { fill: none; stroke-width: 12; }
+.cv-fond { stroke: var(--surface-2); }
+.cv-jauge { stroke: hsl(35 92% 55%); stroke-linecap: round; stroke-dasharray: 553; stroke-dashoffset: 177; }
+.cv-info { position: relative; display: grid; justify-items: center; text-align: center; line-height: 1.15; }
+.cv-compte { font-size: clamp(1.8rem, 6vw, 2.4rem); font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.cv-info span { font-size: .78rem; color: var(--muted); font-weight: 600; }
+.cv-info small { margin-top: 4px; font-size: .68rem; color: var(--accent); font-weight: 700; }
+.cv-membre { position: absolute; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px;
+  background: var(--surface); box-shadow: 0 10px 26px -12px rgba(20, 26, 70, .4); white-space: nowrap; font-size: .8rem; font-weight: 700; color: var(--text); }
+.cv-membre small { display: block; font-size: .7rem; font-weight: 600; color: var(--muted); }
+.cv-membre.moi { box-shadow: 0 0 0 2px var(--accent), 0 10px 26px -12px rgba(20, 26, 70, .4); }
+.cv-av { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-size: .68rem; font-weight: 800; color: #fff; }
+.av-a { background: hsl(330 60% 52%); } .av-b { background: hsl(190 60% 40%); } .av-c { background: hsl(150 50% 38%); }
+.av-d { background: var(--accent); color: var(--accent-text, #fff); font-size: .6rem; } .av-e { background: hsl(25 75% 50%); }
+.m1 { left: 0; top: 4%; } .m2 { right: 0; top: 10%; } .m3 { right: 0; top: 66%; } .m4 { left: 4%; top: 76%; } .m5 { left: 0; top: 40%; }
+.cv-plus { position: absolute; padding: 3px 9px; border-radius: 999px; background: hsl(35 92% 55%); color: hsl(232 34% 12%);
+  font-size: .72rem; font-weight: 800; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .cv-scene.anime .cv-membre { opacity: 0; transform: scale(.4); transition: opacity .5s ease, transform .6s cubic-bezier(.34, 1.56, .64, 1); }
+  .cv-scene.anime .cv-jauge { stroke-dashoffset: 553; transition: stroke-dashoffset 1.6s cubic-bezier(.22, 1, .36, 1); }
+  .cv-scene.anime .cv-centre { transform: translate(-50%, -50%) scale(.85); opacity: .4; transition: transform .7s cubic-bezier(.34, 1.56, .64, 1), opacity .5s; }
+  .cv-scene.anime.joue .cv-centre { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  .cv-scene.anime.joue .cv-membre { opacity: 1; transform: none; animation: cv-flotte 5s ease-in-out infinite; }
+  .cv-scene.anime.joue .m1 { transition-delay: .25s; animation-delay: 1s; } .cv-scene.anime.joue .m2 { transition-delay: .4s; animation-delay: 2.2s; }
+  .cv-scene.anime.joue .m3 { transition-delay: .55s; animation-delay: .4s; } .cv-scene.anime.joue .m4 { transition-delay: .7s; animation-delay: 1.6s; }
+  .cv-scene.anime.joue .m5 { transition-delay: .85s; animation-delay: 2.8s; }
+  .cv-halo { animation: cv-respire 7s ease-in-out infinite; } .cv-halo-b { animation-delay: -3.5s; }
+  .cv-plus { animation: cv-monte 1.3s ease-out forwards; }
+}
+@keyframes cv-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes cv-respire { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.12); opacity: 1; } }
+@keyframes cv-monte { 0% { opacity: 0; transform: translateY(6px) scale(.7); } 25% { opacity: 1; transform: translateY(0) scale(1.05); } 100% { opacity: 0; transform: translateY(-34px) scale(.95); } }
+/* petit écran : bulles un peu plus compactes */
+@media (max-width: 480px) {
+  .cv-membre { font-size: .74rem; padding: 5px 10px 5px 5px; gap: 6px; }
+  .cv-av { width: 30px; height: 30px; }
+  .m1 { top: 2%; }
+  .cv-centre { width: 40%; }
+  .m3 { top: 70%; }
+}
+
+/* sécurité : aucun élément animé ne crée de défilement horizontal */
+body { overflow-x: clip; }
+/* menu : masqué tant qu'il n'a pas la place de ses six liens */
+@media (max-width: 959px) { .v-nav { display: none; } .v-top .btn { margin-left: auto; } }
+html { overflow-x: clip; }
+.imp-demo { overflow: hidden; padding: 12px 4px; }
+.cv-info { max-width: 74%; }
+.cv-info small { line-height: 1.2; }
+@media (max-width: 480px) { .cv-info small { font-size: .6rem; } .cv-info span { font-size: .7rem; } }

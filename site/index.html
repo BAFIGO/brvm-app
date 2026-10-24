@@ -10,15 +10,15 @@
   <meta name="theme-color" content="#0f5c4d">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
-  <script src="charte.js?v=20261023g"></script>
-  <link rel="stylesheet" href="styles.css?v=20261023g">
-  <link rel="stylesheet" href="vitrine.css?v=20261023g">
-  <link rel="stylesheet" href="charte-indigo.css?v=20261023g">
-  <script src="boot.js?v=20261023g"></script>
-  <script src="config.js?v=20261023g" defer></script>
-  <script src="vendor/gsap.min.js?v=20261023g" defer></script>
-  <script src="vendor/ScrollTrigger.min.js?v=20261023g" defer></script>
-  <script src="vitrine.js?v=20261023g" defer></script>
+  <script src="charte.js?v=20261024a"></script>
+  <link rel="stylesheet" href="styles.css?v=20261024a">
+  <link rel="stylesheet" href="vitrine.css?v=20261024a">
+  <link rel="stylesheet" href="charte-indigo.css?v=20261024a">
+  <script src="boot.js?v=20261024a"></script>
+  <script src="config.js?v=20261024a" defer></script>
+  <script src="vendor/gsap.min.js?v=20261024a" defer></script>
+  <script src="vendor/ScrollTrigger.min.js?v=20261024a" defer></script>
+  <script src="vitrine.js?v=20261024a" defer></script>
 </head>
 <body class="vitrine">
   <a class="skip" href="#main">Aller au contenu</a>
@@ -26,7 +26,7 @@
   <header class="v-top">
     <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
     <nav class="v-nav" aria-label="Sections">
-      <a href="#epargne">Épargne</a><a href="#bafibot">BafiBot</a><a href="#import">Import</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a>
+      <a href="#epargne">Épargne</a><a href="#cercles">Cercles</a><a href="#bafibot">BafiBot</a><a href="#import">Import</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a>
     </nav>
     <a class="btn primary small" href="app/#connexion" data-espace>Se connecter</a>
   </header>
@@ -80,6 +80,33 @@
           <li><span class="ev-pt c1" aria-hidden="true"></span><div><b>Placé en bourse</b><p>Les ordres sont recalculés pour ce nouvel apport, selon votre profil.</p></div></li>
         </ol>
         <div class="ev-barre" data-reveal aria-hidden="true"><i class="c3" data-fill="20"></i><i class="c2" data-fill="35"></i><i class="c1" data-fill="45"></i></div>
+      </div>
+    </section>
+
+    <!-- Cercles d'épargne : des proches autour d'un objectif commun, en orbite animée -->
+    <section id="cercles" class="cercles-v" aria-labelledby="cercles-title">
+      <div class="cv-texte">
+        <p class="eyebrow" data-reveal>Épargner à plusieurs</p>
+        <h2 id="cercles-title" class="display">Vos proches, votre meilleure motivation.</h2>
+        <p class="lead" data-reveal>Créez un cercle d'épargne avec vos amis, vos collègues ou votre famille : un objectif commun de jours d'épargne
+          chaque mois, et la série de chacun en un coup d'œil. Comme une tontine, mais sans argent qui circule : chacun épargne chez soi.</p>
+        <ul class="aj-points">
+          <li data-reveal><span class="aj-ok">✓</span>Invitez vos proches par un lien WhatsApp ou un code</li>
+          <li data-reveal><span class="aj-ok">✓</span>Avancez ensemble vers l'objectif commun du mois</li>
+          <li data-reveal><span class="aj-ok">✓</span>Encouragez-vous : séries et jours d'épargne visibles</li>
+          <li data-reveal><span class="aj-ok">✓</span>Jusqu'à 12 membres, et aucun montant n'est jamais affiché</li>
+        </ul>
+      </div>
+      <div class="cv-scene" aria-hidden="true">
+        <span class="cv-halo cv-halo-a"></span><span class="cv-halo cv-halo-b"></span>
+        <div class="cv-centre">
+          <svg viewBox="0 0 200 200" class="cv-anneau"><circle cx="100" cy="100" r="88" class="cv-fond"/><circle cx="100" cy="100" r="88" class="cv-jauge"/></svg>
+          <div class="cv-info"><b class="cv-compte">41</b><span>jours sur 60</span><small>Les amis de la fac</small></div>
+        </div>
+        <div class="cv-membre m1"><span class="cv-av av-a">AD</span><span class="cv-nom">Awa D.<small>🔥 12 jours</small></span></div>
+        <div class="cv-membre m2"><span class="cv-av av-b">KA</span><span class="cv-nom">Koffi A.<small>🔥 3 jours</small></span></div>
+        <div class="cv-membre m3"><span class="cv-av av-c">FN</span><span class="cv-nom">Fatou N.<small>🔥 9 jours</small></span></div>
+        <div class="cv-membre m4 moi"><span class="cv-av av-d">Vous</span><span class="cv-nom">Vous<small>🔥 6 jours</small></span></div>
       </div>
     </section>
 
