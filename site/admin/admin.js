@@ -70,6 +70,11 @@
       abonnements: () => rpc("admin_abonnements"),
       traiterDemande: (id, activer) => rpc("admin_traiter_demande", { p_id: id, p_activer: activer }),
       tarifs: () => rpc("admin_tarifs"),
+      formules: (ids) => rpc("admin_formules", { p_ids: ids }),
+      abonnes: () => rpc("admin_abonnes"),
+      abonnement: (u) => rpc("admin_abonnement", { p_user: u }),
+      definirFormule: (u, f, fin, motif) => rpc("admin_definir_formule", { p_user: u, p_formule: f, p_fin: fin, p_motif: motif }),
+      crediter: (u, q, pg, motif) => rpc("admin_crediter", { p_user: u, p_questions: q, p_pages: pg, p_motif: motif }),
       modifierTarif: (objet, prix, actif) => rpc("admin_modifier_tarif", { p_objet: objet, p_prix: prix, p_actif: actif }),
       modifierQuotas: (f, q) => rpc("admin_modifier_quotas", { p_formule: f, p_questions: q.questions, p_questions_debut: q.questions_debut,
                                                                 p_approfondies: q.approfondies, p_pages: q.pages }),
@@ -180,10 +185,20 @@
       aal: async () => ({ currentLevel: "aal2", nextLevel: "aal2" }), factors: async () => ({ totp: [], all: [] }),
       moi: async () => ({ email: "admin@exemple.org", mfa: true, roles: [roles.find((r) => r.code === role).libelle], permissions: M[role] }),
       abonnements: async () => ({ repartition: { decouverte: 412, essentiel: 38, investisseur: 9 }, essais: 57,
-        demandes: [{ id: 1, email: "awa.diop@exemple.sn", objet: "essentiel_an", moyen: "wave", reference: "TX24101893", cree_le: new Date(Date.now() - 36e5).toISOString() },
+        demandes: [{ id: 1, user_id: "a1", email: "awa.diop@exemple.sn", objet: "essentiel_an", montant: 10000, moyen: "wave", reference: "TX24101893", cree_le: new Date(Date.now() - 36e5).toISOString() },
                    { id: 2, email: "koffi.a@exemple.ci", objet: "pack_questions", moyen: "orange_money", reference: "OM5521", cree_le: new Date(Date.now() - 864e5).toISOString() }] }),
       traiterDemande: async () => {},
       tarifs: async () => ({ tarifs: TARIFS_DEMO, quotas: QUOTAS_DEMO }),
+      formules: async (ids) => Object.fromEntries(ids.map((id, i) => [id, { formule: ["essentiel", "decouverte", "investisseur", "decouverte"][i % 4],
+        fin: new Date(Date.now() + (20 - i) * 864e5).toISOString(), essai: i % 4 === 0 }])),
+      abonnes: async () => [{ user_id: "a1", email: "awa.diop@exemple.sn", formule: "essentiel", effective: "essentiel", fin: new Date(Date.now() + 340 * 864e5).toISOString(), essai: false, source: "paiement" },
+        { user_id: "a2", email: "koffi.a@exemple.ci", formule: "investisseur", effective: "investisseur", fin: new Date(Date.now() + 22 * 864e5).toISOString(), essai: false, source: "paiement" },
+        { user_id: "a3", email: "mariam.s@exemple.ml", formule: "essentiel", effective: "essentiel", fin: new Date(Date.now() + 9 * 864e5).toISOString(), essai: true, source: "essai" }],
+      abonnement: async (u) => ({ user_id: u, email: "awa.diop@exemple.sn", formule: "essentiel", souscrite: "essentiel", fin: new Date(Date.now() + 340 * 864e5).toISOString(),
+        essai: false, source: "paiement", quotas: { questions: 100, approfondies: 0, pages: 15 }, usage: { questions: 37, approfondies: 0, pages: 4 },
+        credits: { questions: 50, pages: 0, expire_le: new Date(Date.now() + 60 * 864e5).toISOString() }, parrain: "koffi.a@exemple.ci", filleuls: 2,
+        demandes: [{ objet: "essentiel_an", montant: 10000, statut: "activee", moyen: "wave", reference: "TX24101893", cree_le: new Date(Date.now() - 2 * 864e5).toISOString(), traite_le: new Date(Date.now() - 864e5).toISOString() }] }),
+      definirFormule: async () => {}, crediter: async () => {},
       modifierTarif: async (objet, prix, actif) => { const t = TARIFS_DEMO.find((x) => x.objet === objet); t.prix = prix; t.actif = actif; },
       modifierQuotas: async (f, q) => Object.assign(QUOTAS_DEMO.find((x) => x.formule === f), q),
       avis: async (st) => {
@@ -413,12 +428,14 @@
       ${(r.demandes || []).length ? `<ul class="list">${r.demandes.map((d) => `<li><div class="main"><div class="name">${esc(OBJ_ABO[d.objet] || d.objet)}</div>
           <div class="sub">${d.montant != null ? `<b>${N(d.montant)} F</b> · ` : ""}${esc(d.email)} · ${esc(MOYEN[d.moyen] || "moyen non précisé")}${d.reference ? ` · référence <b>${esc(d.reference)}</b>` : ""} · ${DT(d.cree_le)}</div></div>
           <div class="right"><button class="btn small primary" data-abo-act="${d.id}">Paiement reçu : activer</button>
-          <button class="btn small" data-abo-ref="${d.id}">Refuser</button></div></li>`).join("")}</ul>`
+          <button class="btn small" data-abo-ref="${d.id}">Refuser</button>${d.user_id ? `<button class="btn small" data-gerer="${esc(d.user_id)}">Fiche</button>` : ""}</div></li>`).join("")}</ul>`
         : `<p class="small muted">Aucune demande en attente.</p>`}
       <p class="small muted">Vérifiez la réception du paiement (montant et référence) dans votre compte Wave ou Orange Money avant d'activer.
         L'activation prolonge la formule en cours et, au premier abonnement payant d'un filleul, offre un mois d'Essentiel à son parrain.</p>`;
-    c.insertAdjacentHTML("beforeend", `<div id="tarifs-adm"><p class="muted small">Chargement des tarifs…</p></div>`);
+    c.insertAdjacentHTML("beforeend", `<div id="abonnes-adm"></div><div id="tarifs-adm"><p class="muted small">Chargement des tarifs…</p></div>`);
+    afficherAbonnes();
     afficherTarifs();
+    c.querySelectorAll(".list [data-gerer]").forEach((b) => b.addEventListener("click", () => gererAbonnement(b.dataset.gerer)));
     c.querySelectorAll("[data-abo-act], [data-abo-ref]").forEach((b) => b.addEventListener("click", async () => {
       const activer = !!b.dataset.aboAct, id = +(b.dataset.aboAct || b.dataset.aboRef);
       if (!activer && !confirm("Refuser cette demande ? L'utilisateur pourra en faire une nouvelle.")) return;
@@ -426,6 +443,67 @@
       try { await api.traiterDemande(id, activer); toast(activer ? "Formule activée." : "Demande refusée."); afficherAbonnements(); }
       catch (e) { toast("Impossible : " + e.message); b.disabled = false; }
     }));
+  }
+
+  const puceFormule = (f, essai) => `<span class="chip f-${esc(f)}">${esc(NOMS_F[f] || f)}${essai ? " · essai" : ""}</span>`;
+  // Les abonnés (formules payantes, essais, fins récentes) avec un accès direct à leur fiche
+  async function afficherAbonnes() {
+    const z = $("#abonnes-adm");
+    if (!z) return;
+    let l;
+    try { l = await api.abonnes(); } catch (e) { z.innerHTML = `<p class="small muted">Liste des abonnés indisponible : relancez abonnements.sql (section 6).</p>`; return; }
+    const auj = Date.now();
+    z.innerHTML = `<h3>Abonnés (${l.length})</h3>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Compte</th><th>Formule</th><th>Jusqu'au</th><th>Origine</th><th></th></tr></thead>
+      <tbody>${l.map((a) => { const fini = a.fin && new Date(a.fin) < auj;
+        return `<tr><td>${esc(a.email)}</td><td>${puceFormule(a.formule, a.essai)}${fini ? ` <span class="status ko">terminé</span>` : ""}</td>
+          <td>${a.fin ? D(a.fin) : "–"}</td><td class="small">${esc({ essai: "Essai offert", paiement: "Paiement", console: "Console", parrainage: "Parrainage" }[a.source] || a.source || "")}</td>
+          <td><button class="btn small" data-gerer="${esc(a.user_id)}">Gérer</button></td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">Aucun abonné pour l'instant.</td></tr>`}</tbody></table></div>`;
+    z.querySelectorAll("[data-gerer]").forEach((b) => b.addEventListener("click", () => gererAbonnement(b.dataset.gerer)));
+  }
+  // Fiche abonnement d'un utilisateur : formule, fin, consommation, crédits, parrainage, historique ; changer la formule ou offrir des crédits
+  async function gererAbonnement(uid) {
+    let a;
+    try { a = await api.abonnement(uid); } catch (e) { return toast("Fiche indisponible : " + msgErr(e)); }
+    const q = a.quotas || {}, u = a.usage || {}, cr = a.credits || {};
+    const finDefaut = a.fin && new Date(a.fin) > Date.now() ? a.fin.slice(0, 10) : new Date(Date.now() + 31 * 864e5).toISOString().slice(0, 10);
+    const r = await ask({ title: "Abonnement de " + a.email, ok: "Enregistrer les changements",
+      body: `<div class="abo-fiche">
+        <p>${puceFormule(a.formule, a.essai)} ${a.formule !== "decouverte" && a.fin ? `jusqu'au <b>${D(a.fin)}</b>` : "formule gratuite"}
+          · origine : ${esc({ essai: "essai offert", paiement: "paiement", console: "console", parrainage: "parrainage" }[a.source] || "–")}</p>
+        <table class="dtable"><tbody>
+          <tr><th>Questions à BafiBot ce mois-ci</th><td class="num">${N(u.questions)} / ${N(q.questions)}</td></tr>
+          ${q.approfondies ? `<tr><th>Questions approfondies</th><td class="num">${N(u.approfondies)} / ${N(q.approfondies)}</td></tr>` : ""}
+          <tr><th>Pages importées ce mois-ci</th><td class="num">${N(u.pages)} / ${N(q.pages)}</td></tr>
+          <tr><th>Crédits des packs</th><td class="num">${N(cr.questions)} questions · ${N(cr.pages)} pages${cr.expire_le ? ` (jusqu'au ${D(cr.expire_le)})` : ""}</td></tr>
+          <tr><th>Parrainage</th><td>${a.parrain ? `parrainé par ${esc(a.parrain)} · ` : ""}${N(a.filleuls)} filleul${a.filleuls > 1 ? "s" : ""}</td></tr>
+        </tbody></table>
+        ${(a.demandes || []).length ? `<details><summary>Historique des demandes (${a.demandes.length})</summary><ul class="list">${a.demandes.map((d) => `<li><div class="main">
+          <div class="name">${esc(OBJ_ABO[d.objet] || d.objet)}${d.montant != null ? ` · ${N(d.montant)} F` : ""}</div>
+          <div class="sub">${esc({ en_attente: "en attente", activee: "activée", refusee: "refusée" }[d.statut] || d.statut)} · envoyée ${DT(d.cree_le)}${d.reference ? ` · réf. ${esc(d.reference)}` : ""}</div></div></li>`).join("")}</ul></details>` : ""}
+        <h3>Changer la formule</h3>
+        <div class="grid-role"><label>Formule<select name="formule">${["decouverte", "essentiel", "investisseur"].map((f) =>
+          `<option value="${f}"${f === a.formule ? " selected" : ""}>${NOMS_F[f]}</option>`).join("")}</select></label>
+          <label>Jusqu'au<input type="date" name="fin" value="${finDefaut}"></label></div>
+        <h3>Offrir des crédits (valables 3 mois)</h3>
+        <div class="grid-role"><label>Questions<input type="number" name="cq" min="0" max="2000" value="0"></label>
+          <label>Pages<input type="number" name="cp" min="0" max="500" value="0"></label></div>
+        <p class="small muted">Découverte remet le compte en formule gratuite. Chaque changement est tracé dans le journal d'audit avec le motif.</p></div>`,
+      validate: ({ form }) => {
+        if (form.formule.value !== "decouverte" && (!form.fin.value || new Date(form.fin.value) <= new Date())) return "Indiquez une date de fin future.";
+        if (+form.cq.value < 0 || +form.cp.value < 0) return "Les crédits ne peuvent pas être négatifs.";
+        return null;
+      } });
+    if (!r) return;
+    const f = r.form, formule = f.formule.value, fin = f.fin.value ? f.fin.value + "T23:59:59Z" : null;
+    const change = formule !== a.formule || (formule !== "decouverte" && f.fin.value !== (a.fin || "").slice(0, 10));
+    try {
+      if (change) await api.definirFormule(uid, formule, formule === "decouverte" ? null : fin, r.motif);
+      if (+f.cq.value > 0 || +f.cp.value > 0) await api.crediter(uid, +f.cq.value, +f.cp.value, r.motif);
+      toast(change || +f.cq.value || +f.cp.value ? "Abonnement mis à jour." : "Aucun changement.");
+      afficherAbonnes();
+      if (location.hash === "#utilisateurs") vUtilisateurs();
+    } catch (e) { toast("Action refusée : " + msgErr(e)); }
   }
 
   // Tarifs et quotas : modifiés ici, ils s'affichent aussitôt sur la vitrine et dans l'application
@@ -597,30 +675,35 @@
 
   async function vUtilisateurs(reload = true) {
     const v = $("#v-utilisateurs");
-    if (reload) { v.innerHTML = `<h1 id="h-utilisateurs">Utilisateurs</h1><p class="muted">Chargement…</p>`; S.users = await api.utilisateurs(S.q); }
-    const c = S.can;
+    if (reload) { v.innerHTML = `<h1 id="h-utilisateurs">Utilisateurs</h1><p class="muted">Chargement…</p>`; S.users = await api.utilisateurs(S.q);
+      S.formules = {};
+      if (S.can("abonnements.manage") && S.users.length) try { S.formules = await api.formules(S.users.map((u) => u.id)) || {}; } catch (e) { S.formules = {}; } }
+    const c = S.can, fo = (id) => S.formules?.[id];
     v.innerHTML = `<h1 id="h-utilisateurs">Utilisateurs</h1>
       <form class="toolbar" id="f-q" role="search"><input type="search" name="q" placeholder="Rechercher par adresse e-mail" value="${esc(S.q)}" aria-label="Rechercher par adresse e-mail">
         <button class="btn" type="submit">Rechercher</button></form>
       <p class="small muted">${S.users.length} compte${S.users.length > 1 ? "s" : ""}${c("users.read_pii") ? "" : " · adresses masquées (permission « voir l'e-mail complet » requise)"}</p>
       <div class="card scroll-x"><table class="dtable">
-        <thead><tr><th>Compte</th><th>Inscrit</th><th>Dernière connexion</th><th>Profil</th><th class="num">Budget</th><th class="num">Opérations</th><th>Statut</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Compte</th><th>Inscrit</th><th>Dernière connexion</th>${c("abonnements.manage") ? "<th>Formule</th>" : ""}<th>Profil</th><th class="num">Budget</th><th class="num">Opérations</th><th>Statut</th><th>Actions</th></tr></thead>
         <tbody>${S.users.map((u) => `<tr>
           <td>${esc(u.email)}${u.a_un_role ? ` <span class="chip">admin</span>` : ""}</td><td>${D(u.inscrit_le)}</td><td>${ago(u.derniere_connexion)}</td>
+          ${c("abonnements.manage") ? `<td>${fo(u.id) ? `${puceFormule(fo(u.id).formule, fo(u.id).essai)}${fo(u.id).formule !== "decouverte" && fo(u.id).fin ? `<div class="small muted">jusqu'au ${D(fo(u.id).fin)}</div>` : ""}` : "–"}</td>` : ""}
           <td>${esc(u.profil || "–")}</td><td class="num">${F(u.budget)}</td><td class="num">${N(u.operations)}</td>
           <td>${u.suspendu ? `<span class="status ko">Suspendu</span>` : `<span class="status ok">Actif</span>`}${u.cgu_version ? `<div class="small muted">CGU v${esc(u.cgu_version)}</div>` : ""}</td>
           <td><div class="row-actions">
+            ${c("abonnements.manage") ? `<button class="btn small" data-act="abonnement" data-id="${esc(u.id)}">Abonnement</button>` : ""}
             ${c("users.read_portfolio") ? `<button class="btn small" data-act="voir" data-id="${esc(u.id)}">Portefeuille</button>` : ""}
             ${c("users.export") ? `<button class="btn small" data-act="export" data-id="${esc(u.id)}">Exporter</button>` : ""}
             ${c("users.suspend") ? `<button class="btn small" data-act="${u.suspendu ? "reactiver" : "suspendre"}" data-id="${esc(u.id)}">${u.suspendu ? "Réactiver" : "Suspendre"}</button>` : ""}
             ${c("users.delete") ? `<button class="btn small danger" data-act="supprimer" data-id="${esc(u.id)}">Supprimer</button>` : ""}
-          </div></td></tr>`).join("") || `<tr><td colspan="8" class="muted">Aucun compte.</td></tr>`}</tbody></table></div>`;
+          </div></td></tr>`).join("") || `<tr><td colspan="9" class="muted">Aucun compte.</td></tr>`}</tbody></table></div>`;
     $("#f-q", v).addEventListener("submit", (ev) => { ev.preventDefault(); S.q = ev.target.q.value.trim(); vUtilisateurs(); });
     v.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => userAction(b.dataset.act, S.users.find((u) => u.id === b.dataset.id))));
   }
 
   async function userAction(act, u) {
     try {
+      if (act === "abonnement") return gererAbonnement(u.id);
       if (act === "voir") {
         const r = await ask({ title: "Consulter le portefeuille", body: `<p>Compte <b>${esc(u.email)}</b>. Cette consultation sera consignée dans le journal d'audit.</p>`, ok: "Consulter" });
         if (!r) return;

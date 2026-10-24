@@ -53,3 +53,14 @@ textarea { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; font
 .demo-role select { width: auto; min-height: 36px; margin: 0; padding: 4px 8px; }
 .toolbar label select { margin-top: 0; }
 @media (max-width: 599px) { .demo-role-l { display: none; } .demo-role select { max-width: 150px; } }
+
+/* Abonnements : puces de formule et fiche */
+.chip.f-decouverte { background: var(--surface-2); color: var(--text); }
+.chip.f-essentiel { background: var(--accent); color: var(--accent-text, #fff); }
+.chip.f-investisseur { background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+.abo-fiche .dtable th { font-weight: 600; text-align: left; }
+.abo-fiche h3 { margin: 16px 0 6px; font-size: 1rem; }
+.abo-fiche .grid-role { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.abo-fiche .dtable { width: 100%; table-layout: fixed; min-width: 0; }
+.abo-fiche .dtable th { width: 52%; white-space: normal; }
+.abo-fiche .dtable td { white-space: normal; text-align: right; overflow-wrap: anywhere; }
