@@ -126,6 +126,7 @@
         const pc = Math.round((fait / but) * 100);
         return `<section class="cer" aria-label="Cercle ${esc(c.nom)}">
           <div class="cer-tete"><h3>${esc(c.nom)}</h3><span class="small muted">${ms.length} membre${ms.length > 1 ? "s" : ""}</span></div>
+          ${scene(c, ms, fait, but, pc)}
           <p class="small">Ensemble : <b>${fait} jours d'épargne sur ${but}</b> ce mois-ci (${obj} par personne)</p>
           <div class="cer-barre" role="progressbar" aria-label="Objectif commun du mois" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><i style="width:${Math.min(100, pc)}%"></i></div>
           <ol class="cer-membres">${ms.map((m) => {
@@ -139,15 +140,43 @@
             <button type="button" class="btn link small" data-cercle="quitter" data-id="${esc(c.id)}">Quitter ce cercle</button></div></section>`;
       }).join("")}
       <p class="small muted">Seules la série et les jours d'épargne sont visibles des membres, jamais vos montants.</p>
-      <div class="actions"><button type="button" class="btn small" data-cercle="creer">Créer un autre cercle</button>
-        <button type="button" class="btn small" data-cercle="rejoindre">J'ai un code</button></div></div>`;
+      ${app.acces && !app.acces(1) ? `<div class="verrou"><span class="vr-ic" aria-hidden="true">🔒</span><span>Plusieurs cercles : disponible avec la formule <b>Essentiel</b>.</span>
+        <button type="button" class="btn link small" data-formules>Voir les formules</button></div>`
+      : `<div class="actions"><button type="button" class="btn small" data-cercle="creer">Créer un autre cercle</button>
+        <button type="button" class="btn small" data-cercle="rejoindre">J'ai un code</button></div>`}</div>`;
   }
+  // Les membres en orbite autour de l'objectif commun : l'anneau se remplit, les bulles arrivent puis flottent ;
+  // un membre dont la régularité a été mise à jour aujourd'hui porte un halo « actif aujourd'hui »
+  const TEINTES = [330, 190, 150, 25, 270, 200, 230];
+  function scene(c, ms, fait, but, pc) {
+    const vus = ms.slice(0, 6), R = 39, C = 2 * Math.PI * 88, auj = new Date().toISOString().slice(0, 10);
+    return `<div class="cer-scene" aria-hidden="true" style="--pc:${Math.min(100, pc)}">
+      <div class="cs-centre"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="88" class="cs-fond"/>
+        <circle cx="100" cy="100" r="88" class="cs-jauge" style="stroke-dasharray:${C.toFixed(0)};--off:${(C * (1 - Math.min(100, pc) / 100)).toFixed(0)};--c:${C.toFixed(0)}"/></svg>
+        <div class="cs-info"><b>${fait}</b><span>jours sur ${but}</span>${ms.length > 6 ? `<small>+${ms.length - 6} membres</small>` : ""}</div></div>
+      ${vus.map((m, i) => {
+        const a = -Math.PI / 2 + (i * 2 * Math.PI) / vus.length, x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a) * 0.92;
+        const ini = m.moi ? "Vous" : String(m.pseudo || "?").split(/\s+/).map((t) => t[0]).join("").slice(0, 2).toUpperCase();
+        const actif = m.maj_le && String(m.maj_le).slice(0, 10) === auj;
+        return `<div class="cs-m${m.moi ? " moi" : ""}${actif ? " actif" : ""}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;--d:${(i * 0.12).toFixed(2)}s;--f:${(1 + (i % 3) * 0.7).toFixed(1)}s">
+          <span class="cs-av" style="--h:${TEINTES[i % TEINTES.length]}">${esc(ini)}</span>
+          <span class="cs-serie">${m.serie > 0 ? `🔥 ${m.serie}` : "–"}</span></div>`;
+      }).join("")}</div>`;
+  }
+  function animerScenes(v) {
+    const scs = v.querySelectorAll(".cer-scene:not(.vue)");
+    if (!scs.length) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { scs.forEach((x) => x.classList.add("vue", "joue")); return; }
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("joue"); io.unobserve(e.target); } }), { threshold: 0.35 });
+    scs.forEach((x) => { x.classList.add("vue"); io.observe(x); });
+  }
+
   function carte() {
     const v = $("#v-portefeuille");
     if (!v || v.hidden || !charge) return;
     $(".cer-carte", v)?.remove();
     const ancre = $(".pf-ancre-cercles", v);            // seulement dans l'onglet « Mon épargne »
-    if (ancre) ancre.insertAdjacentHTML("beforebegin", carteHtml());
+    if (ancre) { ancre.insertAdjacentHTML("beforebegin", carteHtml()); animerScenes(v); }
   }
 
   document.addEventListener("click", async (ev) => {

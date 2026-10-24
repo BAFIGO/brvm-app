@@ -39,6 +39,8 @@
         <button type="button" class="ia-micro" aria-label="Dicter ma question" aria-pressed="false" hidden>${ICONE_MICRO}</button>
         <button type="submit" class="ia-envoyer" aria-label="Envoyer">${ICONE_ENVOI}</button>
       </form>
+      <div class="ia-quota" aria-live="polite"><span class="iq-txt"></span>
+        <label class="iq-appro" hidden><input type="checkbox" id="ia-appro"> Analyse approfondie <span class="iq-appro-n"></span></label></div>
       <p class="ia-avert">Aide à la décision, pas un conseil en investissement. Vérifiez toujours avant de passer un ordre.</p>
     </dialog>`);
 
@@ -85,6 +87,26 @@
   sugg.addEventListener("click", (ev) => { const b = ev.target.closest(".ia-chip"); if (b) poser(b.textContent); });
 
   // ---------------------------------------------------------------- envoi d'une question
+  // Quota du mois : « 63 questions restantes » ; à 80 % consommé, l'alerte devient visible
+  function majQuota() {
+    const a = window.BRVM_APP?.abo?.(), z = $(".ia-quota", dlg);
+    if (!z) return;
+    if (!a) { z.hidden = true; return; }
+    const q = a.quotas || {}, u = a.usage || {}, c = a.credits || {};
+    const reste = Math.max(0, (q.questions || 0) - (u.questions || 0)) + (c.questions || 0);
+    const bas = reste <= Math.ceil((q.questions || 0) * 0.2);
+    z.hidden = false; z.classList.toggle("bas", bas);
+    $(".iq-txt", z).innerHTML = reste > 0 ? `${reste} question${reste > 1 ? "s" : ""} restante${reste > 1 ? "s" : ""} ce mois-ci`
+      + (bas ? ` · <button type="button" class="btn link small" data-formules>plus de questions</button>` : "")
+      : `Plus de question ce mois-ci · <button type="button" class="btn link small" data-formules>voir les packs</button>`;
+    const ra = Math.max(0, (q.approfondies || 0) - (u.approfondies || 0));
+    $(".iq-appro", z).hidden = !(q.approfondies > 0);
+    $(".iq-appro-n", z).textContent = `(${ra} restante${ra > 1 ? "s" : ""})`;
+    $("#ia-appro").disabled = ra <= 0;
+  }
+  window.addEventListener("brvm:pret", () => setTimeout(majQuota, 300));
+  fab?.addEventListener("click", () => setTimeout(majQuota, 50));
+
   async function poser(question) {
     question = String(question || "").trim();
     const app = window.BRVM_APP;
@@ -94,7 +116,10 @@
     bulle("moi", esc(question));
     const attente = bulle("ia attente", `<span class="ia-points" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">BafiBot prépare sa réponse…</span>`);
     try {
-      const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte(question) });
+      const approfondie = !!$("#ia-appro")?.checked && !$(".iq-appro", dlg).hidden;
+      const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte(question), approfondie });
+      if ($("#ia-appro")) $("#ia-appro").checked = false;
+      app.noterUsage?.(approfondie ? "approfondies" : "questions");
       attente.remove();
       const texte = rep?.texte || "Je n'ai pas de réponse pour le moment.";
       bulle("ia", formater(texte) + sources(rep?.sources));
@@ -102,12 +127,19 @@
       window.dispatchEvent(new Event("brvm:question"));      // prise en main : « poser une question au robot » est fait
     } catch (e) {
       attente.remove();
+      if (e.quota) {                                           // quota du mois atteint : trois choix, jamais de blocage sans issue
+        bulle("ia erreur", `<p>${esc(e.message)}</p><p class="small">Vous pouvez attendre le 1er du mois, prendre un pack de 50 questions (500 F),
+          ou passer à une formule supérieure.</p><p><button type="button" class="btn small primary" data-formules>Voir les formules et les packs</button></p>`);
+        app.rechargerFormule?.().then(majQuota);
+        return;
+      }
       const absent = e.status === 404 || /not found|failed to send|fetch/i.test(e.message || "");
       bulle("ia erreur", `<p>${absent
         ? "L'assistant n'est pas encore activé. L'administrateur doit installer la fonction « assistant » dans Supabase."
         : esc(e.message || "La réponse n'a pas pu être obtenue.")}</p><p class="small">Réessayez dans un instant.</p>`);
     } finally {
       enCours = false; envoyer.disabled = false;
+      majQuota();
       afficherSuggestions();
       if (!matchMedia("(pointer: coarse)").matches) champ.focus();    // sur téléphone, le clavier ne se rouvre pas tout seul
     }

@@ -66,7 +66,7 @@
         <figcaption><span class="av-avatar" aria-hidden="true">${echapper(initiales(x.nom))}</span>
           <span><b>${echapper(x.nom)}</b><small>${[x.ville, mois(x.date)].filter(Boolean).map(echapper).join(" · ")}</small></span></figcaption></figure>`).join("");
     points.innerHTML = liste.map((x, i) => `<button type="button" class="car-point" data-i="${i}" aria-label="Avis ${i + 1}"></button>`).join("");
-    sec.hidden = false; $("[data-avis-lien]").hidden = false;
+    sec.hidden = false; $$("[data-avis-lien]").forEach((l) => (l.hidden = false));
 
     const cartes = [...piste.children];
     const actuel = () => { const g = piste.scrollLeft + 4; let k = 0; cartes.forEach((c, i) => { if (c.offsetLeft - piste.offsetLeft <= g) k = i; }); return k; };
@@ -106,13 +106,26 @@
     } catch (e) { /* hors ligne ou fonction pas encore installée : textes par défaut */ }
   }
 
+  // ------------------------------------------------------------ pied de page : contact et réseaux renseignés dans config.js
+  function pied() {
+    const cfg = window.BRVM_CONFIG || {}, c = cfg.contact || {}, r = cfg.reseaux || {};
+    const ct = $("#pied-contact"), lignes = [];
+    if (c.email) lignes.push(`<a href="mailto:${encodeURI(c.email)}">${c.email.replace(/[<>&"]/g, "")}</a>`);
+    if (c.whatsapp) lignes.push(`<a href="https://wa.me/${String(c.whatsapp).replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp : ${String(c.whatsapp).replace(/[<>&"]/g, "")}</a>`);
+    if (ct && lignes.length) ct.innerHTML = lignes.join("");
+    const NOMS = { facebook: "Facebook", instagram: "Instagram", linkedin: "LinkedIn", tiktok: "TikTok", youtube: "YouTube", x: "X" };
+    const liens = Object.entries(NOMS).filter(([k]) => /^https:\/\//.test(r[k] || "")).map(([k, n]) => `<a href="${encodeURI(r[k])}" target="_blank" rel="noopener">${n}</a>`);
+    if (liens.length) { $("#pied-reseaux").innerHTML = liens.join(""); $("#pc-suivre").hidden = false; }
+  }
+  pied();
+
   // ------------------------------------------------------------ conditions d'utilisation (si publiées)
   async function cgu() {
     try {
       const [d] = await rest("documents_legaux?select=titre,version,texte,publie_le&type=eq.cgu&order=version.desc&limit=1");
       if (!d) return;
       const b = $("#voir-cgu");
-      b.textContent = `${d.titre} (version ${d.version})`;
+      b.textContent = d.titre || "Conditions d'utilisation";
       b.hidden = false;
       b.addEventListener("click", () => {
         $("#dlg-cgu-title").textContent = d.titre;

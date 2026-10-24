@@ -140,6 +140,11 @@
       <div><b>Santé financière : ${esc(SANTE[a.note] || "non notée")}</b><div class="sub">Note ${esc(a.note || "–")} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
     if (a.verdict) h += `<p class="small">${esc(a.verdict)}</p>`;
     for (const al of a.alertes || []) h += `<div class="notice small">⚠ ${esc(al)}</div>`;
+    if (!acces(2)) {                                          // Essentiel : le pourquoi ; le détail est réservé à l'Investisseur
+      if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
+        <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
+      return h + verrou(2, "Les chiffres clés, les ratios détaillés et les signaux d'alerte") + `</div>`;
+    }
     if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
       <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
     const yrs = (a.annees || []).filter((y) => ok(y.rev) || ok(y.ni));
@@ -221,7 +226,7 @@
         if (error) {
           let m = error.message;
           try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ }
-          throw new Error(m);
+          const err = new Error(m); err.quota = error.context?.status === 402; throw err;
         }
         return data;
       },
@@ -298,13 +303,18 @@
       evenementTutoriel: async (evenement, etape) => { await sb.from("tutoriel_evenements").insert({ evenement, etape }); },
       // Alertes des positions (vue v_alertes_positions, fichier alertes.sql) : erreur si la vue n'est pas installée → rubrique masquée
       alertes: async () => r(await sb.from("v_alertes_positions").select("classe_actif,ticker,alerte,motif,plancher,jours_echeance,perf_pct,dernier_cours")),
+      // Abonnements (abonnements.sql) : formule, quotas, demandes, parrainage
+      maFormule: async () => { const { data, error } = await sb.rpc("ma_formule"); if (error) throw error; return data; },
+      demanderAbonnement: async (d) => r(await sb.from("abonnement_demandes").insert(d)),
+      definirParrain: async (code) => { const { data } = await sb.rpc("definir_parrain", { p_code: code }); return data; },
       // Assistant : fonction Supabase « assistant » (la clé de l'API Claude reste sur le serveur)
       assistant: async (body) => {
         const { data, error } = await sb.functions.invoke("assistant", { body });
         if (error) {
           let msg = error.message || "erreur inconnue", code = error.context?.status;
           try { const j = await error.context.json(); if (j?.erreur) msg = j.erreur; } catch (e) { /* réponse non JSON */ }
-          const err = new Error(msg); err.status = code; throw err;
+          let j2 = null; try { j2 = await error.context.clone?.().json(); } catch (e) { /* déjà lu */ }
+          const err = new Error(msg); err.status = code; err.quota = code === 402; throw err;
         }
         return data;
       },
@@ -414,6 +424,10 @@
       noterDemandeAvis: async () => {},
       rappels: async () => rappelsDemo, sauverRappels: async (x) => { rappelsDemo = { ...rappelsDemo, ...x }; },
       cercles: async () => cerclesDemo,
+      maFormule: async () => ({ formule: new URLSearchParams(location.search).get("formule") || "essentiel", souscrite: "essentiel", essai: true,
+        fin: new Date(Date.now() + 9 * 864e5).toISOString(), quotas: { questions: 100, approfondies: 0, pages: 15 },
+        usage: { questions: 37, approfondies: 0, pages: 4 }, credits: { questions: 0, pages: 0 }, code_parrain: "DEMO2026", filleuls: 1, demande: null }),
+      demanderAbonnement: async () => {}, definirParrain: async () => true,
       creerCercle: async (nom, objectif) => {
         const c = { id: "c" + Date.now(), nom, code: Math.random().toString(16).slice(2, 10).toUpperCase(), objectif_jours: objectif, createur: true,
                     membres: [{ pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, regularite: 0.8 }] };
@@ -690,6 +704,11 @@
     }
     record = Math.max(record, serie);
     Object.assign(e, { tenus, total, serie, record, joker, unite: r === "quotidien" ? "jour" : r === "hebdo" ? "semaine" : "mois" });
+    // calendrier : 20 derniers jours ouvrés, 12 semaines ou 6 mois, du plus ancien au plus récent
+    const cal = [];
+    for (let i = 0, kk = cur; i < n && kk >= debutK; i++, kk = prevPeriode(kk, r, plan))
+      cal.push({ k: kk, fait: faits.has(kk), joker: kk === joker, encours: kk === cur && !faits.has(kk) });
+    e.calendrier = cal.reverse();
     // projections (sommes versées seulement, sans rendement supposé)
     const parPeriode = +plan.montant;
     const periodesVers = (montant) => Math.max(0, Math.ceil(montant / parPeriode));
@@ -954,6 +973,8 @@
       const ordres = changed ? inst.ordres : c?.ordres || [];
       S.ordres = ordres;
       const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
+      if (!acces(1)) h += `<div class="card ordres">${verrou(1, "La simulation des ajustements de votre portefeuille")}</div>`;
+      else {
       const nV = ordres.filter((o) => o.sens === "VENTE").length, nA = ordres.length - nV;
       const resume = !ordres.length ? "Rien à faire pour l'instant"
         : [nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ") + (SIM() ? " simulés" : " proposés") + " ce soir";
@@ -985,6 +1006,7 @@
         ? `<p class="small muted">Recalculés à l'instant avec votre journal à jour (estimation). Le calcul détaillé, qui tient compte de la liquidité de chaque titre, est refait ce soir après la séance.</p>`
         : `<p class="small muted">Calculés avec votre journal au soir du ${D(S.prop.date)}.</p>`;
       h += `</details>`;
+      }
       // la cible du profil est un réglage, pas un suivi du soir : elle est affichée dans Portefeuille
     } else {
       const auto = S.coffre && S.profil?.budget_mode === "auto";
@@ -1064,6 +1086,24 @@
   async function ciblesLisibles(date, profil) {
     return ((await api.cibles(date, profil)) || []).map((c) => ({ ...c, libelle: nomLisible(c.libelle) }));
   }
+  function animerEpargne(v) {
+    const an = $(".ep-anneau", v), cpt = $(".ep-compte", v);
+    if (!an || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const val = +cpt.dataset.val, cle = `${val}|${$(".ea-jauge", an).dataset.offset}`;
+    if (S.ui.epAnime === cle) return;                          // déjà joué pour ces chiffres
+    S.ui.epAnime = cle;
+    const j = $(".ea-jauge", an), off = +j.dataset.offset, C = +j.dataset.c;
+    j.style.transition = "none"; j.style.strokeDashoffset = C; void j.getBoundingClientRect();
+    cpt.textContent = F(0);
+    new IntersectionObserver(([e], o) => {
+      if (!e.isIntersecting) return;
+      o.disconnect();
+      j.style.transition = "stroke-dashoffset 1.4s cubic-bezier(.22,1,.36,1)"; j.style.strokeDashoffset = off;
+      const t0 = performance.now();
+      (function pas(t) { const k = Math.min(1, (t - t0) / 1200); cpt.textContent = F(Math.round(val * (1 - Math.pow(1 - k, 3)))); if (k < 1) requestAnimationFrame(pas); })(t0);
+      an.closest(".epargne")?.classList.add("anime");
+    }, { threshold: 0.4 }).observe(an);
+  }
   function carteEpargne(ep) {
     const pl = ep.plan, r = pl?.rythme;
     let h = `<div class="card epargne" id="mon-epargne"><div class="ep-head"><h2>Mon épargne</h2>
@@ -1073,17 +1113,24 @@
         <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="plan">Créer mon plan d'épargne</button>
         <button class="btn" data-coffre="verser">J'ai épargné</button></div></div>`;
     }
-    if (ep.objectif) {
-      const pc = Math.min(100, (100 * ep.verse) / ep.objectif);
-      h += `<div class="jauge" role="img" aria-label="${Math.round(pc)} % de l'objectif"><i style="width:${pc.toFixed(1)}%"></i></div>
-        <p class="small">${F(ep.verse)} épargnés sur un objectif de ${F(ep.objectif)}${ep.objectifLe ? ` · atteint vers le ${D(ep.objectifLe)} à ce rythme` : " · objectif atteint !"}</p>`;
-    }
-    h += `<div class="ep-stats">
-        <div><div class="lbl">Mis de côté</div><b class="num">${F(ep.solde)}</b></div>
-        <div><div class="lbl">Régularité</div><b class="num">${ep.tenus} / ${pluriel(ep.total, ep.unite)}</b></div>
-        <div><div class="lbl">Série en cours</div><b class="num">${pluriel(ep.serie, ep.unite)}</b></div>
-        <div><div class="lbl">Prochain versement</div><b>${ep.aFaire ? RYTHMES[r][1] : "à jour ✓"}</b></div>
+    const pc = ep.objectif ? Math.min(100, (100 * ep.verse) / ep.objectif) : Math.min(100, (100 * ep.serie) / Math.max(ep.record, 7));
+    const C = 2 * Math.PI * 52, tr0 = trophees(ep), suivant = tr0.find((t) => !t.ok && t.reste > 0);
+    const libCal = (c) => `${c.k.length === 7 ? c.k : D(c.k)} : ${c.fait ? "épargné" : c.joker ? "oubli couvert par le joker" : c.encours ? "à faire" : "manqué"}`;
+    h += `<div class="ep-hero">
+        <div class="ep-anneau" role="img" aria-label="${ep.objectif ? `${Math.round(pc)} % de l'objectif de ${F(ep.objectif)}` : `Série de ${pluriel(ep.serie, ep.unite)}`}">
+          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="ea-fond"/><circle cx="60" cy="60" r="52" class="ea-jauge"
+            style="stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${(C * (1 - pc / 100)).toFixed(1)}" data-offset="${(C * (1 - pc / 100)).toFixed(1)}" data-c="${C.toFixed(1)}"/></svg>
+          <div class="ea-centre"><b class="ep-compte" data-val="${ep.solde}">${F(ep.solde)}</b><span>mis de côté</span>
+            ${ep.objectif ? `<small>${Math.round(pc)} % de l'objectif</small>` : ""}</div></div>
+        <div class="ep-serie${ep.serie > 0 ? " vive" : ""}"><span class="ep-flamme" aria-hidden="true">🔥</span>
+          <b>${pluriel(ep.serie, ep.unite)}</b><span>série en cours · record ${pluriel(Math.max(ep.record, ep.serie), ep.unite)}</span>
+          <span class="ep-prochain ${ep.aFaire ? "a-faire" : "ok"}">${ep.aFaire ? `À faire ${RYTHMES[r][1]}` : "À jour ✓"}</span></div>
       </div>
+      ${ep.calendrier?.length ? `<div class="ep-cal" role="list" aria-label="Mes ${ep.calendrier.length} dernières périodes d'épargne">${ep.calendrier.map((c, i) =>
+        `<span role="listitem" class="ec ${c.fait ? "fait" : c.joker ? "joker" : c.encours ? "encours" : "manque"}" style="--i:${i}" title="${esc(libCal(c))}" aria-label="${esc(libCal(c))}"></span>`).join("")}</div>
+        <p class="ep-legende small muted"><span class="ec fait"></span> épargné <span class="ec joker"></span> joker <span class="ec manque"></span> manqué · régularité ${ep.tenus} sur ${pluriel(ep.total, ep.unite)}</p>` : ""}
+      ${suivant ? `<div class="ep-palier"><span>Prochain trophée : <b>${esc(suivant.titre)}</b></span><span class="small">encore ${pluriel(suivant.reste, suivant.unite)}</span></div>` : ""}
+      ${ep.objectif ? `<p class="small">${F(ep.verse)} épargnés sur ${F(ep.objectif)}${ep.objectifLe ? ` · objectif atteint vers le ${D(ep.objectifLe)} à ce rythme` : " · objectif atteint !"}</p>` : ""}
       ${(ep.serie === 0 && ep.record > 1) || S.demoPerdue
         ? `<p class="encourage">Une série s'arrête, une nouvelle commence. Votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre !</p>` : ""}
       ${ep.joker && ep.serie > 0 ? `<p class="small muted">Joker utilisé : l'oubli du ${D(ep.joker.length === 7 ? ep.joker + "-01" : ep.joker)} n'a pas cassé votre série (un joker par mois).</p>` : ""}
@@ -1092,7 +1139,7 @@
       <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
         <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
         ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
-    const tr = trophees(ep), gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
+    const tr = tr0, gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
     h += `<div class="trophees-tete"><b>Mes trophées</b><span class="small muted">${gagnes.length} / ${tr.length}</span></div>
       <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
         <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}${t.ok ? `<button type="button" class="tr-partager" data-partager="${esc(t.id)}" aria-label="Partager le trophée ${esc(t.titre)}">Partager</button>` : ""}</li>`).join("")}</ul>`;
@@ -1275,7 +1322,7 @@
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
   let tutoDemo = {}, avisDemo = null, rappelsDemo = null;
   let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, createur: true, membres: [
-    { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, regularite: 0.92 },
+    { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, regularite: 0.92, maj_le: new Date().toISOString() },
     { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, regularite: 0.8 },
     { pseudo: "Koffi A.", moi: false, serie: 3, unite: "jour", record: 7, jours_mois: 9, regularite: 0.6 },
     { pseudo: "Mariam S.", moi: false, serie: 0, unite: "semaine", record: 4, jours_mois: 3, regularite: 0.5 }] }];
@@ -1309,6 +1356,7 @@
       h += ep ? carteEpargne(ep) : `<div class="card"><h2>Mon épargne</h2><p>Fixez un rythme d'épargne pour suivre votre régularité et gagner vos premiers trophées.</p>
         <div class="actions"><button type="button" class="btn primary" data-coffre="plan">Choisir mon rythme d'épargne</button></div></div>`;
       v.innerHTML = h + `<div class="pf-ancre-cercles"></div>`;
+      animerEpargne(v);
       v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
       return;
     }
@@ -1362,13 +1410,16 @@
       const c = S.prop?.contenu, fresh = S.prop && S.seance && S.prop.date === S.seance.date;
       const changed = !fresh || journalChanged(L, c);
       const lignes = changed ? (L.positions.length || L.cash > 0 ? instantOrders(L).cible : []) : c?.proposition?.lignes || [];
-      if (lignes?.length)
+      if (lignes?.length && !acces(1)) h += `<div class="card cible">${verrou(1, "Votre portefeuille cible et sa répartition")}</div>`;
+      else if (lignes?.length)
         h += `<div class="card cible"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
           <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}
           Profil ${esc(PROFILS[S.profil?.profil]?.t || "")}.</p></div>`;
     }
     h += `<details class="card journal journal-pli"${S.ui.journalOuvert ? " open" : ""}><summary><h2>Journal des opérations${S.ops.length ? ` <span class="h-n">${S.ops.length}</span>` : ""}</h2>
       <span class="op-r">${S.ops.length ? `Voir mes ${S.ops.length} opération${S.ops.length > 1 ? "s" : ""}` : "Aucune opération"}</span></summary>`;
+    if (S.ops.length) h += acces(1) ? `<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-export-journal>Exporter mon journal (CSV)</button></div>`
+      : verrou(1, "L'export du journal en CSV ou Excel");
     if (!S.ops.length) h += `<p class="muted">Aucune opération enregistrée.</p>`;
     else {
       h += `<ul class="list">`;
@@ -1670,8 +1721,9 @@
       if (u.mkTab === "actions") {
         px = `${spark(r.courbe)}<div>${F(r.cours)} <span class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</span></div>`;
         det = `<p>Prix repère ${F(r.limite_achat)} · plancher ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
-          + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>` + (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "")
-          + analyse(r.analyse);
+          + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>`
+          + (acces(1) ? (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "") + analyse(r.analyse)
+                      : verrou(1, "Le pourquoi de la note et du signal (familles, indicateurs)"));
       } else if (u.mkTab === "obligations") {
         px = `${P(r.rendement_actuariel, false)}<div class="sub">${F(r.prix)}</div>`;
         det = `${esc(r.emetteur || "")} · échéance ${D(r.echeance)} · duration ${ok(r.duration) ? nf1.format(r.duration) + " ans" : "–"} · coupon ${P(r.taux_coupon, false)}`;
@@ -2238,6 +2290,7 @@
   }
 
   function vPerformance() {
+    if (!acces(1) && S.ui.perf === 0) S.ui.perf = 63;          // Découverte : les 3 derniers mois
     const v = $("#v-performance");
     const secours = !(S.prop?.contenu?.historique || []).length && S.histSecours;
     const hist = ((secours ? S.histSecours.historique : S.prop?.contenu?.historique) || []).filter((r) => r.date);
@@ -2258,7 +2311,9 @@
     const idx = (k) => cumul(rows.map((r) => ix[k]?.get(r.date)?.variation));
     const b30 = idx("BRVM30"), bc = idx("BRVMC");
     const per = n === 1 ? `la séance du ${D(last.date)}` : `${D(rows[0].date)} → ${D(last.date)}`;
-    h += `<div class="seg scroll" role="group" aria-label="Période">${PERIODES.map(([k, t]) => `<button type="button" data-perf="${k}" aria-pressed="${S.ui.perf === k}">${t}</button>`).join("")}</div>
+    h += `<div class="seg scroll" role="group" aria-label="Période">${PERIODES.map(([k, t]) => !acces(1) && k === 0
+      ? `<button type="button" data-formules aria-label="${t} : disponible avec Essentiel">🔒 ${t}</button>`
+      : `<button type="button" data-perf="${k}" aria-pressed="${S.ui.perf === k}">${t}</button>`).join("")}</div>
       <div class="card"><p class="small muted">Sur ${per}</p>
         <div class="kpi"><div class="lbl">Gain ou perte du portefeuille</div>
           <div class="val num ${cls(gain)}">${gain > 0 ? "+" : ""}${F(gain)}</div></div>
@@ -2631,6 +2686,8 @@
     const b = ev.target.closest("button");
     if (!b) return;
     if (b.hasAttribute("data-recap")) return ouvrirRecap();
+    if (b.hasAttribute("data-formules")) return voirFormules();
+    if (b.hasAttribute("data-export-journal")) return exporterJournal();
     if (b.id === "bravo-partager") return partagerTrophee(S.bravoTrophee);
     if (b.dataset.partager) return partagerTrophee(trophees(epargne()).find((x) => x.id === b.dataset.partager));
     if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => { const f = $("#f-plan"); f?.closest("details")?.setAttribute("open", ""); f?.scrollIntoView({ block: "start" }); }, 120); }
@@ -2714,10 +2771,41 @@
   window.addEventListener("hashchange", () => { if (S.user) render(); });
 
   // ---------------------------------------------------------------- démarrage
+  // Formule de l'utilisateur (abonnements.sql). Sans le fichier SQL, S.abo reste vide et tout est accessible, comme avant.
+  async function chargerFormule() {
+    try { S.abo = await api.maFormule(); } catch (e) { S.abo = null; return; }
+    let code = null;
+    try { code = localStorage.getItem("brvm-parrain"); } catch (e) { /* rien */ }
+    if (code && !DEMO) { try { await api.definirParrain(code); localStorage.removeItem("brvm-parrain"); } catch (e) { /* réessayé plus tard */ } }
+  }
+  const NIVEAU = { decouverte: 0, essentiel: 1, investisseur: 2 };
+  const NOM_FORMULE = { decouverte: "Découverte", essentiel: "Essentiel", investisseur: "Investisseur" };
+  const acces = (min) => !S.abo || (NIVEAU[S.abo.formule] ?? 0) >= min;
+  // Encart « disponible avec … » : il dit ce que l'on gagnerait, et mène aux formules
+  const verrou = (min, quoi) => `<div class="verrou"><span class="vr-ic" aria-hidden="true">🔒</span><span>${esc(quoi)} :
+    disponible avec la formule <b>${min >= 2 ? "Investisseur" : "Essentiel"}</b>.</span><button type="button" class="btn link small" data-formules>Voir les formules</button></div>`;
+
+  function voirFormules() {
+    try { sessionStorage.setItem("brvm-rubrique", "abo"); } catch (e) { /* rien */ }
+    document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+    if (location.hash === "#profil") window.dispatchEvent(new Event("brvm:maj")); else location.hash = "profil";
+    setTimeout(() => { const d = $('#v-profil details[data-rub="abo"]'); if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: "smooth" }); } }, 400);
+  }
+  function exporterJournal() {
+    const cols = ["date", "type", "ticker", "quantite", "prix", "frais", "montant", "note"];
+    const cel = (v) => { const t = v == null ? "" : String(v); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const csv = "\ufeff" + [cols.join(";"), ...S.ops.map((o) => cols.map((c) => cel(o[c])).join(";"))].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `bafibourse-journal-${today()}.csv`; document.body.append(a); a.click(); a.remove();
+    toast("Journal exporté.", { detail: "Le fichier s'ouvre dans Excel, LibreOffice ou Google Sheets." });
+  }
+
   async function loadAll() {
     const uid = S.user.id;
     await chargerMode();
     try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
+    await chargerFormule();
     if (S.coffre) chargerFetes();   // épargne : absente si epargne.sql n'est pas installé
     try { const [sg, ge] = await Promise.all([api.sgi(), api.gestionnaires()]); S.univ = { sgi: (sg || []).map((x) => x.nom), paysSgi: new Map((sg || []).map((x) => [x.nom, x.pays || ""])), gest: ge || [] }; }
     catch (e) { S.univ = null; }     // univers.sql pas encore installé
@@ -2833,6 +2921,14 @@
                         cercles: () => api.cercles(), creerCercle: (n, o) => api.creerCercle(n, o), apercuCercle: (c) => api.apercuCercle(c),
                         rejoindreCercle: (c) => api.rejoindreCercle(c), quitterCercle: (id) => api.quitterCercle(id),
                         publierRegularite: (x) => api.publierRegularite(x),
+                        // abonnements (abonnement.js, assistant.js, import.js, rappels.js, cercles.js)
+                        abo: () => S.abo, acces: (n) => acces(n), nomFormule: (f) => NOM_FORMULE[f] || f, voirFormules: () => voirFormules(),
+                        rechargerFormule: async () => { await chargerFormule(); window.dispatchEvent(new Event("brvm:formule")); },
+                        noterUsage: (k, n = 1) => { if (S.abo?.usage) { const q = S.abo.quotas?.[k] ?? 0, u = S.abo.usage[k] ?? 0;
+                          if (u + n <= q) S.abo.usage[k] = u + n; else if (k !== "approfondies" && S.abo.credits) S.abo.credits[k] = Math.max(0, (S.abo.credits[k] || 0) - n); } },
+                        demanderAbonnement: (d) => api.demanderAbonnement(d),
+                        profil: () => S.profil, email: () => S.user?.email || "",
+                        saveProfil: async (p) => { await api.saveProfil(S.user.id, p); Object.assign(S.profil, p); window.dispatchEvent(new Event("brvm:profil")); },
                         regularite: () => {
                           const ep = epargne(); if (!ep?.plan?.montant) return null;
                           const mois = today().slice(0, 7);
@@ -2844,6 +2940,8 @@
                         // état d'une rubrique du Profil, en une phrase (sommaire.js)
                         etatRubrique: (k) => {
                           const p = S.profil || {}, pl = S.coffre?.plan || {};
+                          if (k === "abo" && S.abo) { const a = S.abo, j = a.fin ? Math.max(0, Math.ceil((new Date(a.fin) - Date.now()) / 864e5)) : 0;
+                            return `${NOM_FORMULE[a.formule]}${a.essai ? ` · essai, encore ${j} jour${j > 1 ? "s" : ""}` : a.formule !== "decouverte" && a.fin ? ` · jusqu'au ${D(a.fin)}` : " · gratuite"}`; }
                           if (k === "plan") return +pl.montant > 0 ? `${F(pl.montant)} ${RYTHMES[pl.rythme]?.[0] || ""}${+pl.objectif > 0 ? ` · objectif ${F(pl.objectif)}` : ""}` : "Pas encore de rythme choisi";
                           if (k === "invest") return `Profil ${PROFILS[p.profil]?.t || "équilibré"} · montant ${p.budget_mode === "auto" ? "automatique" : p.budget ? F(p.budget) : "à saisir"}`;
                           if (k === "coord") return [p.prenom, p.nom].filter(Boolean).join(" ") || "Prénom, nom, téléphone";

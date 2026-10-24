@@ -10,15 +10,15 @@
   <meta name="theme-color" content="#0f5c4d">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
-  <script src="charte.js?v=20261024b"></script>
-  <link rel="stylesheet" href="styles.css?v=20261024b">
-  <link rel="stylesheet" href="vitrine.css?v=20261024b">
-  <link rel="stylesheet" href="charte-indigo.css?v=20261024b">
-  <script src="boot.js?v=20261024b"></script>
-  <script src="config.js?v=20261024b" defer></script>
-  <script src="vendor/gsap.min.js?v=20261024b" defer></script>
-  <script src="vendor/ScrollTrigger.min.js?v=20261024b" defer></script>
-  <script src="vitrine.js?v=20261024b" defer></script>
+  <script src="charte.js?v=20261024c"></script>
+  <link rel="stylesheet" href="styles.css?v=20261024c">
+  <link rel="stylesheet" href="vitrine.css?v=20261024c">
+  <link rel="stylesheet" href="charte-indigo.css?v=20261024c">
+  <script src="boot.js?v=20261024c"></script>
+  <script src="config.js?v=20261024c" defer></script>
+  <script src="vendor/gsap.min.js?v=20261024c" defer></script>
+  <script src="vendor/ScrollTrigger.min.js?v=20261024c" defer></script>
+  <script src="vitrine.js?v=20261024c" defer></script>
 </head>
 <body class="vitrine">
   <a class="skip" href="#main">Aller au contenu</a>
@@ -26,7 +26,7 @@
   <header class="v-top">
     <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
     <nav class="v-nav" aria-label="Sections">
-      <a href="#epargne">Épargne</a><a href="#cercles">Cercles</a><a href="#bafibot">BafiBot</a><a href="#import">Import</a><a href="#avis" data-avis-lien hidden>Avis</a><a href="#confiance">Confiance</a>
+      <a href="#epargne">Épargne</a><a href="#cercles">Cercles</a><a href="#bafibot">BafiBot</a><a href="#import">Import</a><a href="#tarifs">Tarifs</a><a href="#avis" data-avis-lien hidden>Avis</a>
     </nav>
     <a class="btn primary small" href="app/#connexion" data-espace>Se connecter</a>
   </header>
@@ -324,6 +324,31 @@
 
     </details>
 
+    <!-- Tarifs : les trois formules -->
+    <section id="tarifs" class="tarifs-v" aria-labelledby="tarifs-title">
+      <p class="eyebrow" data-reveal>Tarifs</p>
+      <h2 id="tarifs-title" class="display">Commencez gratuitement, évoluez à votre rythme.</h2>
+      <p class="lead" data-reveal>14 jours d'Essentiel offerts à l'inscription, sans carte ni engagement. Paiement par Wave ou Orange Money.</p>
+      <div class="tf-grille">
+        <div class="tf" data-reveal><b class="tf-nom">Découverte</b><span class="tf-prix">Gratuit</span><span class="tf-an">pour toujours</span>
+          <ul><li>Coffre, séries, trophées et point du soir</li><li>BafiBot : 20 questions la 1re semaine, puis 10 par mois</li>
+            <li>2 pages importées par mois</li><li>Score, santé financière et tendance de chaque action</li><li>1 cercle d'épargne</li></ul>
+          <a class="btn" href="app/#inscription">Commencer</a></div>
+        <div class="tf reco" data-reveal><span class="tf-badge">Le plus choisi</span><b class="tf-nom">Essentiel</b><span class="tf-prix">1 000 F<small> / mois</small></span>
+          <span class="tf-an">ou 10 000 F par an, 2 mois offerts</span>
+          <ul><li>BafiBot : 100 questions par mois</li><li>15 pages importées par mois</li><li>Le pourquoi des notes et des signaux</li>
+            <li>Performance complète, simulation, export</li><li>Cercles illimités, rappel WhatsApp</li></ul>
+          <a class="btn primary" href="app/#inscription">Essayer 14 jours</a></div>
+        <div class="tf" data-reveal><b class="tf-nom">Investisseur</b><span class="tf-prix">3 000 F<small> / mois</small></span>
+          <span class="tf-an">ou 30 000 F par an, 2 mois offerts</span>
+          <ul><li>BafiBot : 300 questions, dont 20 approfondies</li><li>40 pages importées par mois</li><li>Analyses financières complètes</li>
+            <li>Comparateurs obligations et OPCVM</li><li>Rapport mensuel, seuils d'alerte personnalisés</li></ul>
+          <a class="btn" href="app/#inscription">Commencer</a></div>
+      </div>
+      <p class="small muted" data-reveal>Packs à la demande : 50 questions à BafiBot ou 20 pages importées pour 500 F, valables 3 mois.
+        Les formules donnent accès à des outils et à de l'information, jamais à un conseil en investissement personnalisé.</p>
+    </section>
+
     <!-- Dernier appel -->
     <section id="commencer" class="commencer" aria-labelledby="commencer-title">
       <h2 id="commencer-title" class="display" data-reveal>Prêt à commencer ?</h2>
@@ -357,11 +382,34 @@
 
   </main>
 
-  <footer class="v-foot">
-    <p class="small"><strong>Avertissement.</strong> BafiBourse est un outil d'aide à la décision : il ne constitue pas un conseil en
+  <footer class="v-foot" aria-labelledby="pied-titre">
+    <div class="pied-haut">
+      <div class="pied-marque">
+        <a class="brand" href="./" aria-label="BafiBourse, accueil"><img src="icon.svg" alt="" width="32" height="32"><span class="marque"><b class="m-bafi">Bafi</b>Bourse</span></a>
+        <p id="pied-titre" class="pied-slogan">Épargner chaque jour, investir à la BRVM sans se perdre.</p>
+        <p class="small muted">Épargne et suivi de portefeuille · zone UEMOA</p>
+        <div class="pied-cta"><a class="btn primary small" href="app/#inscription">Créer mon compte</a><a class="btn small" href="app/?demo=1">Essayer la démo</a></div>
+      </div>
+      <nav class="pied-col" aria-labelledby="pc-produit"><h3 id="pc-produit">Produit</h3>
+        <a href="#epargne">Coffre d'épargne</a><a href="#cercles">Cercles d'épargne</a><a href="#bafibot">BafiBot, l'assistant</a>
+        <a href="#aujourdhui">Le point du soir</a><a href="#import">Import des avis</a><a href="#tarifs">Tarifs</a></nav>
+      <nav class="pied-col" aria-labelledby="pc-ressources"><h3 id="pc-ressources">Ressources</h3>
+        <a href="#curieux">La méthode de calcul</a><a href="#confiance">Confiance et sécurité</a><a href="#avis" data-avis-lien hidden>Avis des utilisateurs</a>
+        <a href="app/?demo=debut">Démo « premiers jours »</a></nav>
+      <nav class="pied-col" aria-labelledby="pc-compte"><h3 id="pc-compte">Mon compte</h3>
+        <a href="app/#inscription">Créer mon compte</a><a href="app/#connexion">Se connecter</a><a href="app/#profil">Mon abonnement</a><a href="app/#profil">Parrainer un proche</a></nav>
+      <div class="pied-col" aria-labelledby="pc-contact"><h3 id="pc-contact">Nous contacter</h3>
+        <div id="pied-contact"><p class="small muted">Écrivez-nous depuis l'application : BafiBot transmet vos questions.</p></div>
+        <h3 class="pied-suivre" id="pc-suivre" hidden>Nous suivre</h3><div id="pied-reseaux" class="pied-reseaux"></div></div>
+    </div>
+    <p class="small pied-avert"><strong>Avertissement.</strong> BafiBourse est un outil d'aide à la décision : il ne constitue pas un conseil en
       investissement personnalisé. Investir en bourse comporte un risque de perte en capital ; les performances passées ne préjugent pas des
       performances futures.</p>
-    <p class="small"><button type="button" class="btn link" id="voir-cgu" hidden></button> <a href="app/#connexion">Se connecter</a> · <a href="app/?demo=1">Démo</a></p>
+    <div class="pied-bas">
+      <span class="pied-langue">🌐 Français · F CFA</span>
+      <span class="pied-liens"><button type="button" class="btn link" id="voir-cgu" hidden></button><a href="#confiance">Confidentialité et sécurité</a>
+        <span>© 2026 BafiBourse</span></span>
+    </div>
   </footer>
 
   <dialog id="dlg-cgu" aria-labelledby="dlg-cgu-title">

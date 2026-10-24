@@ -7,6 +7,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   // [clé, titre, ordre, reconnaissance de la carte]
   const RUBRIQUES = [
+    ["abo", "Mon abonnement", 0, (c) => c.classList.contains("abo-carte")],
     ["plan", "Mon épargne", 1, (c) => c.id === "f-plan"],
     ["rappels", "Mes rappels du soir", 2, (c) => c.classList.contains("rp-carte")],
     ["invest", "Mon profil d'investisseur", 3, (c) => c.id === "f-profil"],
@@ -34,7 +35,8 @@
     const v = $("#v-profil");
     if (!v || v.hidden) return;
     let som = $(".sommaire", v);
-    if (!som) { som = document.createElement("div"); som.className = "sommaire"; $("h1", v)?.after(som); }
+    if (!som) { som = document.createElement("div"); som.className = "sommaire"; ($(".profil-tete", v) || $("h1", v))?.after(som); }
+    else if ($(".profil-tete", v) && som.previousElementSibling !== $(".profil-tete", v)) $(".profil-tete", v).after(som);
     // une rubrique = une seule carte : une carte glissée par un autre module ressort, une rubrique vide disparaît
     som.querySelectorAll("details.rubrique").forEach((d) => {
       const cartes = [...d.querySelectorAll(":scope > .card")];

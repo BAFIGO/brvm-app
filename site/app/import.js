@@ -37,6 +37,7 @@
             Plusieurs fichiers peuvent être choisis à la fois.</p>
           <p class="small muted">Le document est lu puis oublié : seules les opérations que vous validez sont enregistrées.
             Vos nom, adresse et numéro de compte ne sont pas repris.</p>
+          <p class="imp-quota small" hidden></p>
           <div class="actions"><button type="button" class="btn" data-imp="fermer">Fermer</button></div>
         </section>
         <section class="imp-lecture" hidden aria-live="polite"><div class="imp-roue" aria-hidden="true"></div><p class="imp-etat"></p></section>
@@ -54,7 +55,20 @@
   const dlg = $("#dlg-import");
   const etape = (n) => ["choix", "lecture", "revue"].forEach((k) => ($(`.imp-${k}`, dlg).hidden = k !== n));
 
+  let quotaAtteint = false;
+  // Pages restantes ce mois-ci, affichées avant de choisir le fichier
+  function majQuotaImport() {
+    const a = window.BRVM_APP?.abo?.(), z = $(".imp-quota", dlg);
+    if (!z) return;
+    if (!a) { z.hidden = true; return; }
+    const reste = Math.max(0, (a.quotas?.pages || 0) - (a.usage?.pages || 0)) + (a.credits?.pages || 0);
+    z.hidden = false;
+    z.innerHTML = reste > 0 ? `Il vous reste <b>${reste} page${reste > 1 ? "s" : ""}</b> à importer ce mois-ci (formule ${esc(window.BRVM_APP.nomFormule(a.formule))}).`
+      : `Vous avez importé toutes vos pages de ce mois-ci. <button type="button" class="btn link small" data-formules>Voir les packs</button>`;
+  }
   function ouvrir() {
+    quotaAtteint = false;
+    setTimeout(majQuotaImport, 0);
     if (!app) return;
     app.fermerOperation?.();
     lignes = []; controles = []; erreurs = [];
@@ -93,10 +107,17 @@
         if (pdf && f.size > 6.5e6) throw new Error("PDF trop lourd (6 Mo au plus)");
         const { type, donnees } = pdf ? { type: "application/pdf", donnees: await versBase64(f) } : await reduire(f);
         docs.push({ nom: f.name || "Photo", res: await app.lireDocument(type, donnees) });
-      } catch (e) { erreurs.push(`${f.name || "Photo"} : ${e.message}`); }
+        app.noterUsage?.("pages", 1);
+      } catch (e) {
+        erreurs.push(`${f.name || "Photo"} : ${e.message}`);
+        if (e.quota) { quotaAtteint = true; break; }               // inutile de lire les fichiers suivants
+      }
     }
     preparer(docs);
     afficher();
+    if (quotaAtteint) $(".imp-docs", dlg).insertAdjacentHTML("beforeend", `<p class="small">Pour importer davantage ce mois-ci :
+      un pack de 20 pages (500 F) ou une formule supérieure. <button type="button" class="btn link small" data-formules>Voir les formules et les packs</button></p>`);
+    app.rechargerFormule?.();
     etape("revue");
   }
 

@@ -75,7 +75,9 @@
       <label class="switch"><input type="checkbox" data-rp="epargne"${r.epargne ? " checked" : ""}> Me rappeler mon épargne du jour si elle n'est pas faite</label>
       <h3>Sur ce téléphone ou cet ordinateur</h3>${etatPush}
       <h3>Sur WhatsApp</h3>
-      ${tel ? `<label class="switch"><input type="checkbox" data-rp="whatsapp"${r.whatsapp ? " checked" : ""}>
+      ${app.acces && !app.acces(1) ? `<div class="verrou"><span class="vr-ic" aria-hidden="true">🔒</span><span>Le rappel sur WhatsApp : disponible avec la formule <b>Essentiel</b>.</span>
+          <button type="button" class="btn link small" data-formules>Voir les formules</button></div>`
+      : tel ? `<label class="switch"><input type="checkbox" data-rp="whatsapp"${r.whatsapp ? " checked" : ""}>
           J'accepte de recevoir le rappel du soir sur WhatsApp au <b>${esc(tel)}</b>. Je peux l'arrêter à tout moment ici.</label>`
         : `<p class="small">Ajoutez votre numéro de téléphone ci-dessus (Pays et téléphone) pour recevoir le rappel sur WhatsApp.</p>`}
       <div class="actions"><button type="button" class="btn" data-rp="essai"${r.push || r.whatsapp ? "" : " disabled"}>M'envoyer un essai</button></div></div>`;

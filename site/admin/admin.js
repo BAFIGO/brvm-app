@@ -67,6 +67,8 @@
       tableau: () => rpc("admin_tableau_de_bord"),
       priseEnMain: (j) => rpc("admin_prise_en_main", { p_jours: j }),
       avis: (st) => rpc("admin_avis", { p_statut: st }),
+      abonnements: () => rpc("admin_abonnements"),
+      traiterDemande: (id, activer) => rpc("admin_traiter_demande", { p_id: id, p_activer: activer }),
       modererAvis: (id, dec, motif) => rpc("admin_moderer_avis", { p_id: id, p_decision: dec, p_motif: motif || null }),
       utilisateurs: (q) => rpc("admin_utilisateurs", { p_recherche: q || null }),
       portefeuille: (u, motif) => rpc("admin_portefeuille", { p_user: u, p_motif: motif }),
@@ -117,12 +119,12 @@
       ["market.correct", "Données", "Corriger une donnée de marché"], ["engine.params", "Moteur", "Modifier les paramètres du moteur"],
       ["batch.read", "Traitements", "Voir l'historique des traitements"], ["batch.run", "Traitements", "Relancer le traitement du soir"],
       ["comms.manage", "Communication", "Bannière, maintenance, modèles d'e-mail"], ["audit.read", "Audit", "Consulter et exporter le journal d'audit"],
-      ["compliance.manage", "Conformité", "Versions des CGU et des avertissements"], ["avis.moderate", "Communication", "Modérer les avis des utilisateurs"]].map(([code, module, libelle], i) => ({ code, module, libelle, ordre: i }));
+      ["compliance.manage", "Conformité", "Versions des CGU et des avertissements"], ["avis.moderate", "Communication", "Modérer les avis des utilisateurs"], ["abonnements.manage", "Utilisateurs", "Gérer les abonnements et les demandes de paiement"]].map(([code, module, libelle], i) => ({ code, module, libelle, ordre: i }));
     const M = { super_admin: perms.map((p) => p.code), admin: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.suspend", "users.delete", "users.export", "roles.read", "market.read", "engine.params", "batch.read", "batch.run", "comms.manage"],
       analyste: ["dashboard.read", "market.read", "market.correct", "engine.params", "batch.read", "batch.run"], support: ["dashboard.read", "users.read", "users.read_portfolio", "users.export"],
       conformite: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.export", "roles.read", "market.read", "batch.read", "audit.read", "compliance.manage"], observateur: ["dashboard.read"] };
     const attrib = [{ user_id: "f6", email: "admin@exemple.org", role: "super_admin", accorde_le: d(60), expire_le: null, accorde_par: null }];
-    M.admin.push("avis.moderate");
+    M.admin.push("avis.moderate", "abonnements.manage");
     const AV = [
       ["a1", "Awa D.", "Dakar", 5, "Enfin une application qui m'aide à épargner chaque mois sans me perdre dans les chiffres. Le coffre m'a donné une vraie discipline.", "publie", true, 12],
       ["a2", "Koffi A.", "Abidjan", 5, "Les explications sont claires, même pour un débutant. Je comprends enfin ce que je possède chez ma SGI.", "publie", false, 20],
@@ -168,6 +170,10 @@
       session: async () => ({ user: { id: "f6", email: "admin@exemple.org" } }), login: async () => {}, logout: async () => { location.href = location.pathname; },
       aal: async () => ({ currentLevel: "aal2", nextLevel: "aal2" }), factors: async () => ({ totp: [], all: [] }),
       moi: async () => ({ email: "admin@exemple.org", mfa: true, roles: [roles.find((r) => r.code === role).libelle], permissions: M[role] }),
+      abonnements: async () => ({ repartition: { decouverte: 412, essentiel: 38, investisseur: 9 }, essais: 57,
+        demandes: [{ id: 1, email: "awa.diop@exemple.sn", objet: "essentiel_an", moyen: "wave", reference: "TX24101893", cree_le: new Date(Date.now() - 36e5).toISOString() },
+                   { id: 2, email: "koffi.a@exemple.ci", objet: "pack_questions", moyen: "orange_money", reference: "OM5521", cree_le: new Date(Date.now() - 864e5).toISOString() }] }),
+      traiterDemande: async () => {},
       avis: async (st) => {
         need("avis.moderate");
         const rep = [1, 2, 3, 4, 5].map((n) => AV.filter((a) => a.note === n).length);
@@ -359,10 +365,53 @@
           <td>${s.modele_valide ? "validé" : "non validé"}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aucune séance.</td></tr>`}</tbody></table></div></div>
       <div class="card" id="pem" aria-labelledby="h-pem"><h2 id="h-pem">Prise en main des nouveaux utilisateurs</h2><p class="muted">Chargement…</p></div>`;
     afficherPriseEnMain(30);
+    if (S.can("abonnements.manage")) {
+      v.insertAdjacentHTML("beforeend", `<div class="card" id="abo-adm" aria-labelledby="h-abo"><h2 id="h-abo">Abonnements</h2><p class="muted">Chargement…</p></div>`);
+      afficherAbonnements();
+    }
     if (S.can("avis.moderate")) {
       v.insertAdjacentHTML("beforeend", `<div class="card" id="avis-adm" aria-labelledby="h-avis"><h2 id="h-avis">Avis des utilisateurs</h2><p class="muted">Chargement…</p></div>`);
       afficherAvis("en_attente");
     }
+  }
+
+  // ---------------------------------------------------------------- abonnements (abonnements.sql)
+  // En attendant l'agrégateur : l'utilisateur paie par Wave ou Orange Money et indique la référence ; on active après vérification.
+  const OBJ_ABO = { essentiel_mois: "Essentiel · 1 mois · 1 000 F", essentiel_3mois: "Essentiel · 3 mois · 2 700 F", essentiel_an: "Essentiel · 1 an · 10 000 F",
+    investisseur_mois: "Investisseur · 1 mois · 3 000 F", investisseur_an: "Investisseur · 1 an · 30 000 F",
+    pack_questions: "Pack 50 questions · 500 F", pack_pages: "Pack 20 pages · 500 F" };
+  const MOYEN = { wave: "Wave", orange_money: "Orange Money", autre: "Autre" };
+  async function afficherAbonnements() {
+    const c = $("#abo-adm");
+    if (!c) return;
+    const titre = `<h2 id="h-abo">Abonnements</h2>`;
+    let r;
+    try { r = await api.abonnements(); }
+    catch (e) { c.innerHTML = `${titre}<p class="small muted">Abonnements indisponibles : exécutez le fichier abonnements.sql dans Supabase. (${esc(e.message)})</p>`; return; }
+    const rp = r.repartition || {}, tot = (rp.decouverte || 0) + (rp.essentiel || 0) + (rp.investisseur || 0);
+    const revenu = (rp.essentiel || 0) * 1000 + (rp.investisseur || 0) * 3000;
+    c.innerHTML = `${titre}
+      <div class="tiles">
+        <div class="tile"><div class="lbl">Découverte</div><div class="val">${N(rp.decouverte || 0)}</div><div class="sub">gratuit</div></div>
+        <div class="tile"><div class="lbl">Essentiel</div><div class="val">${N(rp.essentiel || 0)}</div><div class="sub">dont ${N(r.essais || 0)} en essai de 14 jours</div></div>
+        <div class="tile"><div class="lbl">Investisseur</div><div class="val">${N(rp.investisseur || 0)}</div><div class="sub">${tot ? Math.round((100 * ((rp.essentiel || 0) + (rp.investisseur || 0))) / tot) : 0} % des comptes sur une formule payante ou en essai</div></div>
+        <div class="tile"><div class="lbl">Revenu mensuel indicatif</div><div class="val">${N(revenu)} F</div><div class="sub">au tarif mensuel, essais compris</div></div>
+      </div>
+      <h3>Demandes à traiter (${(r.demandes || []).length})</h3>
+      ${(r.demandes || []).length ? `<ul class="list">${r.demandes.map((d) => `<li><div class="main"><div class="name">${esc(OBJ_ABO[d.objet] || d.objet)}</div>
+          <div class="sub">${esc(d.email)} · ${esc(MOYEN[d.moyen] || "moyen non précisé")}${d.reference ? ` · référence <b>${esc(d.reference)}</b>` : ""} · ${DT(d.cree_le)}</div></div>
+          <div class="right"><button class="btn small primary" data-abo-act="${d.id}">Paiement reçu : activer</button>
+          <button class="btn small" data-abo-ref="${d.id}">Refuser</button></div></li>`).join("")}</ul>`
+        : `<p class="small muted">Aucune demande en attente.</p>`}
+      <p class="small muted">Vérifiez la réception du paiement (montant et référence) dans votre compte Wave ou Orange Money avant d'activer.
+        L'activation prolonge la formule en cours et, au premier abonnement payant d'un filleul, offre un mois d'Essentiel à son parrain.</p>`;
+    c.querySelectorAll("[data-abo-act], [data-abo-ref]").forEach((b) => b.addEventListener("click", async () => {
+      const activer = !!b.dataset.aboAct, id = +(b.dataset.aboAct || b.dataset.aboRef);
+      if (!activer && !confirm("Refuser cette demande ? L'utilisateur pourra en faire une nouvelle.")) return;
+      b.disabled = true;
+      try { await api.traiterDemande(id, activer); toast(activer ? "Formule activée." : "Demande refusée."); afficherAbonnements(); }
+      catch (e) { toast("Impossible : " + e.message); b.disabled = false; }
+    }));
   }
 
   // ---------------------------------------------------------------- modération des avis (avis.sql)
