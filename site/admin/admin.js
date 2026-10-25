@@ -9,8 +9,9 @@
   const QS = new URLSearchParams(location.search);
   const DEMO = QS.has("demo");
   // Écran → permission requise (doit refléter la matrice de supabase/admin.sql ; la base revérifie tout)
-  const NEED = { tableau: "dashboard.read", utilisateurs: "users.read", donnees: "market.read", traitements: "batch.read",
-    moteur: "engine.params", univers: "engine.params", communication: "comms.manage", conformite: "compliance.manage", habilitations: "roles.read", audit: "audit.read" };
+  const NEED = { tableau: "dashboard.read", utilisateurs: "users.read", abonnements: "abonnements.manage", avis: "avis.moderate",
+    donnees: "market.read", traitements: "batch.read", moteur: "engine.params", univers: "engine.params", communication: "comms.manage",
+    conformite: "compliance.manage", habilitations: "roles.read", audit: "audit.read" };
   const TABS = Object.keys(NEED);
   const ACTIONS = {
     "users.read_portfolio": "Consultation d'un portefeuille", "users.suspend": "Suspension d'un compte",
@@ -362,44 +363,74 @@
   }
 
   // ------------------------------------------------------------ vues
+  // Séance attendue : la BRVM publie du lundi au vendredi ; la séance du jour est attendue après 23 h (heure de Dakar, UTC).
+  // Le week-end, la dernière séance attendue est donc celle du vendredi : pas de fausse alerte le samedi et le dimanche.
+  function seanceAttendue(now = new Date()) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    if (now.getUTCHours() < 23) d.setUTCDate(d.getUTCDate() - 1);
+    while ([0, 6].includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+  const LIB_PROFIL = { prudent: "Prudent", equilibre: "Équilibré", dynamique: "Dynamique" };
+  // Compteurs des choses à faire (pour le tableau de bord et les pastilles du menu)
+  async function aTraiter() {
+    const r = { demandes: null, avis: null };
+    if (S.can("abonnements.manage")) try { const a = await api.abonnements(); r.demandes = (a.demandes || []).length; r.repartition = a.repartition; } catch (e) { /* SQL non installé */ }
+    if (S.can("avis.moderate")) try { const a = await api.avis("en_attente"); r.avis = a.stats?.en_attente ?? (a.avis || []).filter((x) => x.statut === "en_attente").length; } catch (e) { /* SQL non installé */ }
+    return r;
+  }
+  function pastilles(r) {
+    const mettre = (tab, n) => { const a = document.querySelector(`#nav [data-tab="${tab}"]`); if (!a) return;
+      a.querySelector(".nav-n")?.remove(); if (n > 0) a.insertAdjacentHTML("beforeend", `<span class="nav-n" aria-label="${n} à traiter">${n}</span>`); };
+    mettre("abonnements", r.demandes || 0); mettre("avis", r.avis || 0);
+  }
+
   async function vTableau() {
     const v = $("#v-tableau");
     v.innerHTML = `<h1 id="h-tableau">Tableau de bord</h1><p class="muted">Chargement…</p>`;
-    const t = await api.tableau();
-    const age = t.publie_le ? (Date.now() - new Date(t.publie_le)) / 36e5 : Infinity;
-    const actifs = t.utilisateurs - t.suspendus;
-    const etat = !t.derniere_seance ? ["ko", "Aucune séance publiée"]
-      : age > 30 ? ["ko", `Dernière publication ${ago(t.publie_le)} : le traitement du soir a peut-être échoué`]
-      : t.propositions_seance < actifs ? ["att", `${t.propositions_seance} propositions pour ${actifs} comptes actifs`]
-      : ["ok", "Données à jour, toutes les propositions calculées"];
+    const [t, at] = await Promise.all([api.tableau(), aTraiter()]);
+    pastilles(at);
+    const actifs = t.utilisateurs - t.suspendus, attendue = seanceAttendue();
+    const enRetard = !t.derniere_seance || t.derniere_seance < attendue;
+    const manquantes = !enRetard && t.propositions_seance < actifs ? actifs - t.propositions_seance : 0;
+    // ---- À traiter : uniquement ce qui demande une action, avec le bouton qui y mène
+    const taches = [];
+    if (enRetard) taches.push(["ko", "⚠", t.derniere_seance ? `Séance du ${D(attendue)} non publiée` : "Aucune séance publiée",
+      `Dernière publication : séance du ${D(t.derniere_seance)}, ${DT(t.publie_le)}. Vérifiez le traitement du soir.`, "#traitements", "Voir les traitements"]);
+    if (manquantes) taches.push(["att", "!", `${N(manquantes)} proposition${manquantes > 1 ? "s" : ""} non calculée${manquantes > 1 ? "s" : ""}`,
+      `${N(t.propositions_seance)} propositions pour ${N(actifs)} comptes actifs sur la dernière séance.`, "#traitements", "Voir les traitements"]);
+    if (at.demandes) taches.push(["att", "F", `${N(at.demandes)} demande${at.demandes > 1 ? "s" : ""} d'abonnement`,
+      "Vérifiez le paiement reçu, puis activez.", "#abonnements", "Traiter"]);
+    if (at.avis) taches.push(["att", "★", `${N(at.avis)} avis à modérer`, "Publiez ou refusez les avis en attente.", "#avis", "Modérer"]);
+    const prof = Object.entries(t.profils || {}).map(([k, n]) => `${esc(LIB_PROFIL[k] || k)} ${N(n)}`).join(" · ") || "–";
+    const rp = at.repartition || null, payants = rp ? (rp.essentiel || 0) + (rp.investisseur || 0) : null;
     const tile = (lbl, val, sub = "") => `<div class="tile"><div class="lbl">${lbl}</div><div class="val">${val}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
-    const prof = Object.entries(t.profils || {}).map(([k, n]) => `${esc(k)} ${N(n)}`).join(" · ") || "–";
+    const seances = t.seances || [];
+    const ligneSeance = (s) => `<tr><td>${D(s.date)}</td><td>${DT(s.publie_le)}</td><td class="num">${N(s.nb_actions)}</td>
+      <td class="num">${N(s.nb_obligations)}</td><td class="num">${N(s.nb_opcvm)}</td><td class="num">${N(s.propositions)}</td>
+      <td>${s.modele_valide ? `<span class="chip ok">validé</span>` : `<span class="chip neutre">non validé</span>`}</td></tr>`;
     v.innerHTML = `<h1 id="h-tableau">Tableau de bord</h1>
-      <div class="card"><span class="status ${etat[0]}">${esc(etat[1])}</span>
-        <p class="small muted">Dernière séance : ${D(t.derniere_seance)} · publiée ${DT(t.publie_le)}</p></div>
-      <div class="tiles">
-        ${tile("Utilisateurs", N(t.utilisateurs), `+${N(t.nouveaux_7j)} cette semaine`)}
-        ${tile("Actifs 7 jours", N(t.actifs_7j), `${N(t.actifs_30j)} sur 30 jours`)}
-        ${tile("Avec un portefeuille", N(t.avec_portefeuille), `${N(t.operations)} opérations`)}
-        ${tile("Budget déclaré", F(t.budget_total), prof)}
-        ${tile("E-mail du soir", N(t.email_soir), "abonnés actifs")}
-        ${tile("Comptes suspendus", N(t.suspendus))}
-      </div>
+      <section class="bloc-actions" aria-labelledby="h-a-traiter"><h2 id="h-a-traiter">À traiter${taches.length ? ` <span class="h-n">${taches.length}</span>` : ""}</h2>
+        ${taches.length ? `<ul class="taches">${taches.map(([niv, ic, titre, sous, lien, cta]) => `<li class="tache ${niv}"><span class="t-ic" aria-hidden="true">${ic}</span>
+            <div class="t-txt"><b>${esc(titre)}</b><span>${esc(sous)}</span></div><a class="btn small${niv === "ko" ? " primary" : ""}" href="${lien}">${cta}</a></li>`).join("")}</ul>`
+          : `<p class="rien">✓ Rien à traiter. ${t.derniere_seance ? `Séance du ${D(t.derniere_seance)} publiée ${DT(t.publie_le)} ; prochaine attendue ${new Date().getUTCDay() >= 5 || new Date().getUTCDay() === 0 ? "lundi soir" : "ce soir"}.` : ""}</p>`}
+      </section>
+      <section aria-labelledby="h-indic"><h2 id="h-indic" class="section-t">Indicateurs</h2>
+        <div class="tiles tiles-4">
+          ${tile("Utilisateurs", N(t.utilisateurs), `+${N(t.nouveaux_7j)} cette semaine${t.suspendus ? ` · ${N(t.suspendus)} suspendu${t.suspendus > 1 ? "s" : ""}` : ""}`)}
+          ${tile("Actifs sur 7 jours", N(t.actifs_7j), `${N(t.actifs_30j)} sur 30 jours`)}
+          ${tile("Avec un portefeuille", N(t.avec_portefeuille), `${N(t.operations)} opérations enregistrées`)}
+          ${payants != null ? tile("Formules payantes ou essai", N(payants), `Essentiel ${N(rp.essentiel || 0)} · Investisseur ${N(rp.investisseur || 0)}`)
+            : tile("E-mail du soir", N(t.email_soir), "abonnés actifs")}
+        </div>
+        <p class="small muted indic-plus">Budget déclaré : <b>${F(t.budget_total)}</b> (${prof}) · E-mail du soir : <b>${N(t.email_soir)}</b> abonnés.</p>
+      </section>
       <div class="card"><h2>Séances publiées</h2><div class="scroll-x"><table class="dtable">
         <thead><tr><th>Séance</th><th>Publiée le</th><th class="num">Actions</th><th class="num">Obligations</th><th class="num">OPCVM</th><th class="num">Propositions</th><th>Modèle prédictif</th></tr></thead>
-        <tbody>${(t.seances || []).map((s) => `<tr><td>${D(s.date)}</td><td>${DT(s.publie_le)}</td><td class="num">${N(s.nb_actions)}</td>
-          <td class="num">${N(s.nb_obligations)}</td><td class="num">${N(s.nb_opcvm)}</td><td class="num">${N(s.propositions)}</td>
-          <td>${s.modele_valide ? "validé" : "non validé"}</td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aucune séance.</td></tr>`}</tbody></table></div></div>
+        <tbody>${seances.slice(0, 5).map(ligneSeance).join("") || `<tr><td colspan="7" class="muted">Aucune séance.</td></tr>`}</tbody></table></div>
+        ${seances.length > 5 ? `<details class="plus"><summary>Voir les ${seances.length - 5} séances précédentes</summary><div class="scroll-x"><table class="dtable"><tbody>${seances.slice(5).map(ligneSeance).join("")}</tbody></table></div></details>` : ""}</div>
       <div class="card" id="pem" aria-labelledby="h-pem"><h2 id="h-pem">Prise en main des nouveaux utilisateurs</h2><p class="muted">Chargement…</p></div>`;
     afficherPriseEnMain(30);
-    if (S.can("abonnements.manage")) {
-      v.insertAdjacentHTML("beforeend", `<div class="card" id="abo-adm" aria-labelledby="h-abo"><h2 id="h-abo">Abonnements</h2><p class="muted">Chargement…</p></div>`);
-      afficherAbonnements();
-    }
-    if (S.can("avis.moderate")) {
-      v.insertAdjacentHTML("beforeend", `<div class="card" id="avis-adm" aria-labelledby="h-avis"><h2 id="h-avis">Avis des utilisateurs</h2><p class="muted">Chargement…</p></div>`);
-      afficherAvis("en_attente");
-    }
   }
 
   // ---------------------------------------------------------------- abonnements (abonnements.sql)
@@ -440,7 +471,7 @@
       const activer = !!b.dataset.aboAct, id = +(b.dataset.aboAct || b.dataset.aboRef);
       if (!activer && !confirm("Refuser cette demande ? L'utilisateur pourra en faire une nouvelle.")) return;
       b.disabled = true;
-      try { await api.traiterDemande(id, activer); toast(activer ? "Formule activée." : "Demande refusée."); afficherAbonnements(); }
+      try { await api.traiterDemande(id, activer); toast(activer ? "Formule activée." : "Demande refusée."); afficherAbonnements(); aTraiter().then(pastilles); }
       catch (e) { toast("Impossible : " + e.message); b.disabled = false; }
     }));
   }
@@ -1108,7 +1139,19 @@
       try { const n = await api.publierDocument(f.type.value, titre, texte, r.motif); toast(`Version ${n} publiée.`); vConformite(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
     });
   }
-  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
+  async function vAbonnements() {
+    $("#v-abonnements").innerHTML = `<h1 id="h-abonnements">Abonnements</h1>
+      <p class="muted page-intro">Activez les demandes après vérification du paiement, gérez les abonnés, ajustez les tarifs et les quotas.</p>
+      <div class="card" id="abo-adm" aria-labelledby="h-abo"><h2 id="h-abo">Demandes et abonnés</h2><p class="muted">Chargement…</p></div>`;
+    await afficherAbonnements();
+  }
+  async function vAvis() {
+    $("#v-avis").innerHTML = `<h1 id="h-avis-p">Avis des utilisateurs</h1>
+      <p class="muted page-intro">Publiez ou refusez les avis en attente ; les meilleurs défilent sur la vitrine.</p>
+      <div class="card" id="avis-adm" aria-labelledby="h-avis"><h2 id="h-avis">Avis</h2><p class="muted">Chargement…</p></div>`;
+    await afficherAvis("en_attente");
+  }
+  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, abonnements: vAbonnements, avis: vAvis, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
     communication: vCommunication, conformite: vConformite, habilitations: vHabilitations, audit: vAudit };
 
   // ------------------------------------------------------------ navigation
@@ -1188,6 +1231,9 @@
     S.can = (p) => perms.has(p);
     $("#gate").hidden = true;
     document.querySelectorAll("#nav [data-perm]").forEach((a) => (a.hidden = !S.can(a.dataset.perm)));
+    document.querySelectorAll("#nav .nav-groupe").forEach((g) => { let n = g.nextElementSibling, vis = false;
+      while (n && !n.classList.contains("nav-groupe")) { if (!n.hidden) vis = true; n = n.nextElementSibling; } g.hidden = !vis; });
+    aTraiter().then(pastilles).catch(() => {});
     $("#nav").hidden = false;
     render();
   }

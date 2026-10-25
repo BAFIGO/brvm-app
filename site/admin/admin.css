@@ -81,3 +81,48 @@ dialog .actions .btn:not(.link) { min-height: 46px; }
 /* boutons d'une barre d'actions : aucune marge héritée, même bordure, même ligne */
 .actions .btn, dialog .actions .btn { margin: 0 !important; }
 .btn.primary { border: 1.5px solid transparent; }
+
+/* =====================================================================================
+ * Console v2 : menu groupé, « À traiter » séparé des indicateurs, finitions
+ * ===================================================================================== */
+/* menu : quatre familles, et une pastille sur ce qui attend une action */
+.nav-groupe { display: block; margin: 14px 12px 4px; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); opacity: .75; }
+.nav-groupe:first-child { margin-top: 0; }
+.admin-nav a { display: flex; align-items: center; justify-content: space-between; gap: 8px; transition: background-color .15s, color .15s; }
+.admin-nav a:hover { background: var(--surface-2); color: var(--text); }
+.admin-nav a[aria-current="page"] { font-weight: 700; box-shadow: inset 3px 0 0 var(--accent); }
+.nav-n { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center; font-size: .72rem; font-weight: 800;
+  background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+@media (max-width: 900px) { .nav-groupe { display: none; } }
+.page-intro { margin: -6px 0 16px; }
+/* À traiter : seulement les actions, chacune avec son bouton */
+.bloc-actions { margin: 0 0 22px; }
+.bloc-actions h2 { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; margin: 0 0 10px; }
+.h-n { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; background: hsl(35 92% 55%); color: hsl(232 34% 12%); font-size: .78rem; }
+.taches { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tache { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: inset 4px 0 0 hsl(35 92% 55%); }
+.tache.ko { box-shadow: inset 4px 0 0 var(--bad); background: color-mix(in srgb, var(--bad) 5%, var(--surface)); }
+.t-ic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; font-weight: 800; background: hsl(35 92% 55% / .18); color: hsl(30 80% 35%); }
+.tache.ko .t-ic { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.t-txt { display: grid; gap: 2px; }
+.t-txt span { font-size: .88rem; color: var(--muted); }
+.rien { margin: 0; padding: 14px 16px; border-radius: 14px; background: color-mix(in srgb, var(--good) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--good) 25%, var(--border)); color: var(--text); }
+/* Indicateurs : lecture seule, présentation plus calme */
+.section-t { font-size: 1.1rem; margin: 0 0 10px; }
+.tiles-4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important; }
+.tile { border-radius: 14px; }
+.tile .lbl { font-size: .8rem; font-weight: 700; color: var(--muted); }
+.tile .val { font-variant-numeric: tabular-nums; }
+.indic-plus { margin: 8px 2px 22px; }
+.chip.neutre { background: var(--surface-2); color: var(--muted); font-weight: 600; }
+.chip.ok { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+details.plus > summary { cursor: pointer; margin-top: 10px; font-weight: 600; color: var(--accent); }
+.dtable tbody tr:hover { background: var(--surface-2); }
+/* boutons-liens de l'en-tête et champs : mêmes finitions que l'application */
+a.btn { text-decoration: none !important; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea {
+  border: 1.5px solid var(--border); border-radius: 12px; min-height: 44px; padding: 8px 12px; transition: border-color .18s, box-shadow .18s; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus, select:focus, textarea:focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
