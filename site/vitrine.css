@@ -496,3 +496,34 @@ html { overflow-x: clip; }
 .v-foot :focus-visible { outline: 2px solid hsl(35 92% 55%); outline-offset: 2px; }
 html .v-foot .marque, html[data-charte] .v-foot .marque { color: #fff !important; }
 html .v-foot .marque .m-bafi { color: hsl(35 92% 55%) !important; }
+
+/* =====================================================================================
+ * Boutons de la vitrine : mêmes finitions que dans l'application
+ * ===================================================================================== */
+.btn:not(.link) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 0 22px; border-radius: 14px;
+  font-weight: 700; line-height: 1.2; text-decoration: none !important; transition: transform .12s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease, filter .2s ease; }
+.btn.small:not(.link) { min-height: 38px; padding: 0 14px; border-radius: 10px; }
+.btn.primary { border: 1.5px solid transparent; color: #fff !important; background: linear-gradient(180deg, hsl(230 55% 40%), hsl(232 52% 29%));
+  box-shadow: 0 12px 24px -14px hsl(230 55% 28% / .9), inset 0 1px 0 rgb(255 255 255 / .14); }
+.btn.primary:hover { filter: brightness(1.08); box-shadow: 0 16px 30px -14px hsl(230 55% 28% / .9), inset 0 1px 0 rgb(255 255 255 / .14); }
+.btn:not(.primary):not(.link) { background: var(--surface); color: var(--text); border: 1.5px solid var(--border); }
+.btn:not(.primary):not(.link):hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); }
+.btn:not(.link):active { transform: translateY(1px) scale(.985); }
+.btn:not(.link):focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.v-foot .btn.primary { background: linear-gradient(180deg, hsl(38 95% 60%), hsl(32 92% 50%)); color: hsl(232 34% 12%) !important; }
+
+/* cartes des tarifs, au niveau de celles de « Mon abonnement » */
+.tf { padding: 24px 22px; gap: 6px; transition: transform .2s ease, box-shadow .2s ease; }
+.tf:hover { transform: translateY(-3px); box-shadow: 0 22px 44px -30px rgba(20, 26, 70, .5); }
+.tf.reco { background: var(--accent-soft); }
+.tf-ic { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--surface-2); color: var(--accent); margin-bottom: 6px; }
+.tf-ic svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tf.reco .tf-ic { background: var(--accent); color: var(--accent-text, #fff); }
+.tf-or .tf-ic { background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+.tf-pour { margin: 6px 0 0; font-weight: 600; font-size: .95rem; }
+.tf ul { list-style: none; padding: 0; display: grid; gap: 8px; }
+.tf ul li { position: relative; padding-left: 26px; }
+.tf ul li::before { content: "✓"; position: absolute; left: 0; top: .15em; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font-size: .66rem; font-weight: 800; background: hsl(35 92% 55% / .22); color: hsl(30 80% 35%); }
+.tf .btn { width: 100%; justify-self: stretch; margin-top: auto; }
+.tf-badge { left: auto; right: 22px; }

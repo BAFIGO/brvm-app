@@ -30,7 +30,7 @@
     dynamique: { t: "Dynamique", d: "Jusqu'à 70 % en actions et fonds actions. Plus de rendement attendu, plus de variations." },
   };
   const CLASSES = { actions: "Actions", obligations: "Obligations", opcvm_actions: "OPCVM actions", opcvm_taux: "OPCVM taux" };
-  const COLORS = { actions: "#2f8a72", obligations: "#c48a1a", opcvm_actions: "#5b73c4", opcvm_taux: "#a86aa6" };
+  const COLORS = { actions: "#2f8a72", obligations: "#c48a1a", opcvm_actions: "#5b73c4", opcvm_taux: "#a86aa6", liquidites: "#9aa0b4" };
   const BUY = ["ACHAT", "ACHAT FORT", "SOUSCRIRE"];
 
   // ---------------------------------------------------------------- utilitaires
@@ -653,10 +653,10 @@
     let all = 0;
     for (const l of lines) { tot[l.classe] = (tot[l.classe] || 0) + (+l.montant || 0); all += +l.montant || 0; }
     if (!all) return "";
-    const keys = Object.keys(CLASSES).filter((k) => tot[k] > 0);
-    return `<div class="bar" role="img" aria-label="${esc(keys.map((k) => `${CLASSES[k]} ${Math.round((tot[k] / all) * 100)} %`).join(", "))}">
+    const NOMS = { ...CLASSES, liquidites: "Disponible" }, keys = Object.keys(NOMS).filter((k) => tot[k] > 0);
+    return `<div class="bar" role="img" aria-label="${esc(keys.map((k) => `${NOMS[k]} ${Math.round((tot[k] / all) * 100)} %`).join(", "))}">
       ${keys.map((k) => `<span style="width:${(tot[k] / all) * 100}%;background:${COLORS[k]}"></span>`).join("")}</div>
-      <div class="legend">${keys.map((k) => `<span><i style="background:${COLORS[k]}"></i>${CLASSES[k]} ${Math.round((tot[k] / all) * 100)} %</span>`).join("")}</div>`;
+      <div class="legend">${keys.map((k) => `<span><i style="background:${COLORS[k]}"></i>${NOMS[k]} ${Math.round((tot[k] / all) * 100)} %</span>`).join("")}</div>`;
   }
 
 
@@ -969,7 +969,7 @@
         <div class="syn-lbl">Total chez ma SGI</div>
         <div class="syn-val num" data-count="${L.valeur ?? ""}" data-unite="1">${montantHtml(L.valeur)}</div>
         ${jour ? `<div class="syn-jour ${cls(jour.gain)}"><b class="num">${jour.gain > 0 ? "+" : ""}${F(jour.gain)}${ok(jour.pct) ? ` (${P(jour.pct)})` : ""}</b> sur la séance du ${D(jour.date).slice(0, 5)}${ok(vm) ? `<span class="syn-mkt"> · marché ${P(vm)}</span>` : ""}</div>` : ""}
-        <button type="button" class="syn-recap${recapVu ? " vu" : ""}" data-recap><span aria-hidden="true">🌙</span>
+        <button type="button" class="syn-recap${recapVu ? " vu" : ""}" data-recap><span class="syn-recap-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><path d="M17 3.5v3M15.5 5h3"/></svg></span>
           <span>${recapVu ? "Revoir le récap du soir" : `<b>Votre récap du soir est prêt</b> · 30 secondes`}</span><span class="syn-recap-f" aria-hidden="true">›</span></button>
         <details class="syn-detail"><summary>Voir le détail</summary>
           <div class="syn-grid">
@@ -1131,7 +1131,7 @@
             style="stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${(C * (1 - pc / 100)).toFixed(1)}" data-offset="${(C * (1 - pc / 100)).toFixed(1)}" data-c="${C.toFixed(1)}"/></svg>
           <div class="ea-centre"><b class="ep-compte" data-val="${ep.solde}">${F(ep.solde)}</b><span>mis de côté</span>
             ${ep.objectif ? `<small>${Math.round(pc)} % de l'objectif</small>` : ""}</div></div>
-        <div class="ep-serie${ep.serie > 0 ? " vive" : ""}"><span class="ep-flamme" aria-hidden="true">🔥</span>
+        <div class="ep-serie${ep.serie > 0 ? " vive" : ""}"><span class="ep-flamme" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22c4.2 0 7-2.8 7-6.6 0-3.6-2.4-5.6-3.6-8.4-.4 1.8-1.2 3-2.4 3.6.2-3.4-1.2-6-4-8.6.2 3.4-1.8 5.4-3.4 7.6C4.6 11.2 5 12.8 5 15.4 5 19.2 7.8 22 12 22z"/></svg></span>
           <b>${pluriel(ep.serie, ep.unite)}</b><span>série en cours · record ${pluriel(Math.max(ep.record, ep.serie), ep.unite)}</span>
           <span class="ep-prochain ${ep.aFaire ? "a-faire" : "ok"}">${ep.aFaire ? `À faire ${RYTHMES[r][1]}` : "À jour ✓"}</span></div>
       </div>
@@ -1419,11 +1419,26 @@
       const c = S.prop?.contenu, fresh = S.prop && S.seance && S.prop.date === S.seance.date;
       const changed = !fresh || journalChanged(L, c);
       const lignes = changed ? (L.positions.length || L.cash > 0 ? instantOrders(L).cible : []) : c?.proposition?.lignes || [];
-      if (lignes?.length && !acces(1)) h += `<div class="card cible">${verrou(1, "Votre portefeuille cible et sa répartition")}</div>`;
-      else if (lignes?.length)
-        h += `<div class="card cible"><h2>${SIM() ? "Cible calculée selon vos réglages" : "Votre portefeuille cible"}</h2>${classBar(lignes)}
-          <p class="small muted">${changed ? "Répartition visée pour " + F(L.valeur) + "." : `Rendement attendu ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}
-          Profil ${esc(PROFILS[S.profil?.profil]?.t || "")}.</p></div>`;
+      // Ma répartition : d'abord celle d'aujourd'hui (positions réelles), puis la cible du profil, et les écarts principaux
+      const actuel = L.positions.filter((p) => p.valeur > 0 && CLASSES[p.classe]).map((p) => ({ classe: p.classe, montant: p.valeur }));
+      if (L.cash > 0) actuel.push({ classe: "liquidites", montant: L.cash });
+      const parClasse = (ls) => { const t = {}, tot = ls.reduce((a, l) => a + (+l.montant || 0), 0) || 1;
+        ls.forEach((l) => (t[l.classe] = (t[l.classe] || 0) + (+l.montant || 0) / tot)); return t; };
+      if (lignes?.length && !acces(1)) h += `<div class="card cible"><h2>Ma répartition</h2>${actuel.length ? `<p class="rep-lbl">Aujourd'hui</p>${classBar(actuel)}` : ""}
+        ${verrou(1, "La comparaison avec la répartition visée par votre profil")}</div>`;
+      else if (lignes?.length) {
+        const pa = parClasse(actuel), pc = parClasse(lignes);
+        const ecarts = [...new Set([...Object.keys(pa), ...Object.keys(pc)])].filter((k) => k !== "liquidites")
+          .map((k) => ({ k, d: (pc[k] || 0) - (pa[k] || 0) })).filter((x) => Math.abs(x.d) >= 0.05).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 2);
+        h += `<div class="card cible"><h2>Ma répartition</h2>
+          ${actuel.length ? `<p class="rep-lbl">Aujourd'hui</p>${classBar(actuel)}` : ""}
+          <p class="rep-lbl">Visée par votre profil ${esc(PROFILS[S.profil?.profil]?.t || "")}</p>${classBar(lignes)}
+          ${ecarts.length ? `<ul class="rep-ecarts">${ecarts.map((x) => `<li><span class="dot" style="background:${COLORS[x.k] || "#999"}"></span>${esc(CLASSES[x.k] || x.k)} :
+            ${x.d > 0 ? "en dessous" : "au-dessus"} de la cible de <b>${Math.round(Math.abs(x.d) * 100)} points</b> (environ ${F(Math.abs(x.d) * L.valeur)})</li>`).join("")}</ul>`
+            : `<p class="small rep-ok">✓ Votre répartition est proche de la cible.</p>`}
+          <p class="small muted">${changed ? `Cible calculée pour ${F(L.valeur)}.` : `Rendement attendu de la cible ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}
+          Un repère pour équilibrer vos placements, pas une recommandation.</p></div>`;
+      }
     }
     h += `<details class="card journal journal-pli"${S.ui.journalOuvert ? " open" : ""}><summary><h2>Journal des opérations${S.ops.length ? ` <span class="h-n">${S.ops.length}</span>` : ""}</h2>
       <span class="op-r">${S.ops.length ? `Voir mes ${S.ops.length} opération${S.ops.length > 1 ? "s" : ""}` : "Aucune opération"}</span></summary>`;
@@ -2490,7 +2505,7 @@
     const px = r ? prixDe(r, cat) : null, held = replay(S.ops).positions.find((p) => p.code === code)?.quantite || 0;
     const parts = [];
     if (ok(px)) parts.push(`${cat === "opcvm" ? "Valeur liquidative" : cat === "obligations" ? "Prix (coupon couru compris)" : "Cours"} de la séance du ${D(S.seance?.date)} : ${F(px)}`);
-    if (r?.decision) parts.push(`analyse : ${r.decision}`);
+    if (r?.decision) parts.push(`appréciation : ${libDecision(r.decision).toLowerCase()}`);
     if (held) parts.push(`vous en détenez ${N(held)}`);
     info.textContent = parts.join(" · ");
     if (prefill && ok(px) && (t === "ACHAT" || t === "VENTE") && (!fop.prix.value || fop.dataset.prixAuto === "1")) { fop.prix.value = px; fop.dataset.prixAuto = "1"; }

@@ -600,7 +600,6 @@ details.rubrique[open] { box-shadow: 0 6px 20px -14px rgba(0, 0, 0, .35); }
 .ep-palier { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: .9rem; }
 @media (prefers-reduced-motion: no-preference) {
   .epargne.anime .ep-cal .ec { animation: ec-pop .35s ease-out backwards; animation-delay: calc(var(--i) * 35ms); }
-  .ep-serie.vive .ep-flamme { animation: flamme 1.6s ease-in-out infinite; transform-origin: 50% 90%; }
   .ec.encours { animation: encours 1.4s ease-in-out infinite; }
 }
 @keyframes ec-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -760,12 +759,12 @@ dialog .actions .btn:not(.link) { min-height: 48px; }
 .ab-pack-plus .ab-svg { width: 18px; height: 18px; }
 .ab-parrainage { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; margin: 16px 0 10px; padding: 16px; border-radius: 18px;
   background: linear-gradient(135deg, hsl(35 95% 94%), hsl(35 92% 86%)); color: hsl(232 34% 14%); }
-.ab-parrainage .small { color: hsl(232 20% 28%); }
+.ab-parrainage p.small { color: hsl(232 20% 28%); }
 .ab-cadeau { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
-.ab-parr-txt b { font-size: 1.05rem; }
+.ab-parr-txt > b { font-size: 1.05rem; }
 .ab-parrain code { background: #fff; color: hsl(232 34% 14%); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ab-parrainage { background: linear-gradient(135deg, hsl(35 40% 18%), hsl(32 45% 24%)); color: #fff; }
-  :root:not([data-theme="light"]) .ab-parrainage .small { color: hsl(35 30% 85%); } }
+  :root:not([data-theme="light"]) .ab-parrainage p.small { color: hsl(35 30% 85%); } }
 :root[data-theme="dark"] .ab-parrainage { background: linear-gradient(135deg, hsl(35 40% 18%), hsl(32 45% 24%)); color: #fff; }
 
 /* =====================================================================================
@@ -817,3 +816,46 @@ dialog .actions .btn:not(.link) { white-space: nowrap; padding: 0 16px; }
 /* boutons d'une barre d'actions : aucune marge héritée, même bordure, même ligne */
 .actions .btn, dialog .actions .btn { margin: 0 !important; }
 .btn.primary { border: 1.5px solid transparent; }
+
+/* =====================================================================================
+ * Finitions (25/10) : champs de saisie, boutons flottants harmonisés, récap, flamme, répartition
+ * ===================================================================================== */
+/* le texte d'un bouton principal reste blanc, quel que soit son conteneur */
+.btn.primary, .btn.primary.small { color: #fff !important; }
+/* champs de saisie : un seul trait fin, un halo doux au focus (plus de double contour) */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea {
+  border: 1.5px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); min-height: 48px; padding: 10px 14px;
+  font: inherit; box-shadow: inset 0 1px 2px rgb(20 26 70 / .04); transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
+textarea { min-height: 96px; line-height: 1.5; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):hover, select:hover, textarea:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus, select:focus, textarea:focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--muted) 75%, transparent); }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 14%, transparent); }
+label { font-weight: 600; }
+/* boutons flottants : même forme (carré arrondi), même taille, même ombre */
+.fab-ia, #fab-coffre { width: 58px !important; height: 58px !important; border-radius: 18px !important; box-shadow: 0 12px 26px -12px rgb(20 26 70 / .55) !important; }
+.fab-ia { border-width: 2px !important; }
+/* récap : petite tuile bleu nuit avec la lune, comme dans le récap */
+.syn-recap-ic { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 9px;
+  background: linear-gradient(135deg, hsl(240 40% 18%), hsl(250 45% 34%)); color: hsl(45 95% 75%); }
+.syn-recap-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.syn-recap:not(.vu) .syn-recap-ic { background: rgb(255 255 255 / .16); }
+/* Mon épargne : flamme fixe, dessinée */
+.ep-flamme { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface-2); color: var(--muted); animation: none !important; }
+.ep-flamme svg { width: 20px; height: 20px; fill: currentColor; }
+.ep-serie.vive .ep-flamme { background: hsl(25 95% 55% / .16); color: hsl(20 90% 50%); filter: none; opacity: 1; }
+/* Ma répartition */
+.rep-lbl { margin: 12px 0 4px; font-size: .78rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.rep-ecarts { list-style: none; margin: 12px 0 6px; padding: 0; display: grid; gap: 6px; font-size: .9rem; }
+.rep-ecarts li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.rep-ecarts .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; transform: translateY(1px); }
+.rep-ok { color: var(--good); font-weight: 600; margin: 10px 0 4px; }
+/* champs intégrés dans un cadre déjà bordé : pas de second contour */
+.tel input { border: 0 !important; box-shadow: none !important; min-height: 0 !important; background: transparent !important; }
+.ia-saisie textarea { min-height: 44px; border-radius: 22px; }
+.tel:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+.rep-ecarts li { display: block; position: relative; padding-left: 18px; line-height: 1.45; }
+.rep-ecarts .dot { position: absolute; left: 0; top: .45em; }
