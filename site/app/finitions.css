@@ -859,3 +859,39 @@ label { font-weight: 600; }
 
 .rep-ecarts li { display: block; position: relative; padding-left: 18px; line-height: 1.45; }
 .rep-ecarts .dot { position: absolute; left: 0; top: .45em; }
+
+/* =====================================================================================
+ * Réel et simulation : un code visuel constant
+ * Le réel en traits pleins ; tout ce qui est simulé porte la pastille violette « Simulation » et un cadre en pointillés.
+ * ===================================================================================== */
+:root { --sim: hsl(268 55% 52%); --sim-doux: hsl(268 60% 96%); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sim: hsl(268 70% 72%); --sim-doux: hsl(268 30% 18%); } }
+:root[data-theme="dark"] { --sim: hsl(268 70% 72%); --sim-doux: hsl(268 30% 18%); }
+.sim-pastille { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: .7rem; font-weight: 800;
+  letter-spacing: .04em; text-transform: uppercase; background: var(--sim-doux); color: var(--sim); vertical-align: middle; }
+.sim-pastille::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px dashed currentColor; }
+.card.sim-zone { border: 1.5px dashed color-mix(in srgb, var(--sim) 55%, var(--border)); background: linear-gradient(180deg, var(--sim-doux), var(--surface) 140px); }
+.card.sim-zone > .sim-pastille:first-child { margin-bottom: 8px; }
+.card.sim-zone h2 { margin-top: 4px; }
+.sim-barre .bar { outline: 2px dashed color-mix(in srgb, var(--sim) 60%, transparent); outline-offset: 3px; }
+.sim-lien { margin-top: 8px; }
+.sim-lien .sim-pastille { padding: 2px 8px; }
+.sim-reglages { display: grid; gap: 12px; margin-top: 10px; }
+.sim-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.puce { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font-size: .82rem; font-weight: 700; border: 1.5px solid var(--border); background: var(--surface); }
+.puce.on, .puce:hover { border-color: var(--sim); color: var(--sim); background: var(--sim-doux); }
+.puce:focus-visible { outline: 3px solid color-mix(in srgb, var(--sim) 40%, transparent); outline-offset: 2px; }
+.sim-profil { display: grid; gap: 6px; }
+.sim-profil .seg button[aria-pressed="true"] { background: var(--sim); border-color: var(--sim); color: #fff; }
+.sim-comp tr.on td { background: var(--sim-doux); }
+.pf-onglets button { font-size: .92rem; }
+@media (max-width: 420px) { .pf-onglets button { font-size: .82rem; padding-left: 6px; padding-right: 6px; } }
+.scroll-x { max-width: 100%; overflow-x: auto; }
+.sim-comp { width: 100%; min-width: 0 !important; font-size: .86rem; }
+.sim-comp th, .sim-comp td { white-space: normal; padding: 8px 6px; }
+.sim-comp td:first-child { min-width: 92px; }
+.sim-profil .seg { display: flex; flex-wrap: wrap; width: 100%; }
+.sim-profil .seg button { flex: 1 1 auto; }
+@media (max-width: 380px) { .sim-comp { font-size: .78rem; } .sim-comp td:first-child { min-width: 70px; } .sim-comp th, .sim-comp td { padding: 6px 4px; } }
+@media (max-width: 360px) { .topbar .moi-nom { display: none; } .topbar .moi { padding-right: 3px; } }
+@media (max-width: 460px) { .sim-comp .c-opcvm { display: none; } }

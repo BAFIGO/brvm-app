@@ -35,15 +35,16 @@
     const d = q.decouverte, e = q.essentiel, i = q.investisseur;
     return [
       { k: "decouverte", nom: "Découverte", mois: 0, an: 0, pour: "Pour découvrir et prendre l'habitude",
-        points: ["Coffre, séries, trophées, point du soir",
+        points: ["Suivi réel de vos placements, coffre, séries, point du soir",
                  d.questions_debut > d.questions ? `BafiBot : ${n(d.questions_debut)} questions la 1re semaine, puis ${n(d.questions)} par mois` : `BafiBot : ${n(d.questions)} questions par mois`,
                  `${n(d.pages)} page${d.pages > 1 ? "s" : ""} importée${d.pages > 1 ? "s" : ""} par mois`, "Score, santé financière et tendance de chaque action", "1 cercle d'épargne"] },
       { k: "essentiel", nom: "Essentiel", mois: o.essentiel_mois?.[1], an: o.essentiel_an?.[1], pour: "Pour épargner et investir sereinement", reco: true,
         points: [`BafiBot : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`, "Ce qui fait la note de chaque action",
-                 "Performance complète, simulation, export du journal", "Cercles illimités, rappel WhatsApp"] },
+                 "Simulateur : la répartition de votre profil", "Performance complète, export, cercles illimités, WhatsApp"] },
       { k: "investisseur", nom: "Investisseur", mois: o.investisseur_mois?.[1], an: o.investisseur_an?.[1], pour: "Pour suivre plusieurs lignes en détail",
         points: [`BafiBot : ${n(i.questions)} questions${i.approfondies ? `, dont ${n(i.approfondies)} approfondies` : ""}`, `${n(i.pages)} pages importées par mois`,
-                 "Analyses financières complètes : ratios, états financiers", "Comparateurs obligations et OPCVM", "Rapport mensuel, seuils d'alerte personnalisés"] },
+                 "Analyses financières complètes : ratios, états financiers", "Simulateur avancé : comparer les profils, tester un montant",
+                 "Comparateurs, rapport mensuel, seuils d'alerte personnalisés"] },
     ].filter((f) => f.k === "decouverte" || f.mois != null);
   }
   const libObjet = (k) => offres()[k]?.[0] || k;

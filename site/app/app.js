@@ -556,11 +556,11 @@
     return P.marque(P.de(x[0], x[1], S.paysTitres, S.paysGest), nomPays);
   }
 
-  function estimate(budget, detenus) {
+  function estimate(budget, detenus, ciblesProfil = S.cibles) {
     // Même principe que le calcul du soir : chaque poche garde ses meilleures lignes de façon qu'aucune
     // ne descende sous MIN_LINE, puis nombre entier de titres au prix limite (frais compris).
     const byClass = {};
-    const cibles = S.cibles.filter((c) => ok(c.prix) && +c.prix > 0 && permis(c.classe, c.code, detenus));
+    const cibles = ciblesProfil.filter((c) => ok(c.prix) && +c.prix > 0 && permis(c.classe, c.code, detenus));
     const total = cibles.reduce((s, c) => s + +c.poids, 0) || 1;   // part retirée par les choix : répartie sur le reste
     for (const c of cibles) (byClass[c.classe] ||= []).push(c);
     const lines = [];
@@ -615,10 +615,12 @@
   // cible du profil appliquée à la valeur actuelle, moins ce qui est déjà détenu ; ventes d'abord,
   // achats limités à la trésorerie disponible ; écarts < 2 % de la valeur ignorés (frais).
   const KEEP = ["CONSERVER", "ACHAT", "ACHAT FORT", "SOUSCRIRE"];
-  function instantOrders(L) {
-    const value = L.valeur;
-    if (!(value > 0)) return { ordres: [], cible: [] };
-    const cible = estimate(value, new Set(L.positions.map((p) => p.code))).lines;
+  // opts.montant : tester un autre montant (l'écart avec la valeur actuelle est traité comme un apport ou un retrait) ;
+  // opts.cibles : les cibles d'un autre profil (simulateur). Rien n'est enregistré.
+  function instantOrders(L, opts = {}) {
+    const value = opts.montant ?? L.valeur;
+    if (!(value > 0)) return { ordres: [], cible: [], rdt: null };
+    const est = estimate(value, new Set(L.positions.map((p) => p.code)), opts.cibles || S.cibles), cible = est.lines;
     const want = new Map(cible.map((l) => [l.code, l]));
     const held = new Map(L.positions.map((p) => [p.code, p]));
     const minTrade = 0.02 * value;
@@ -634,7 +636,7 @@
         sells.push({ sens: "VENTE", code: p.code, libelle: w.libelle, quantite: p.quantite - w.quantite, prix_limite: px, motif: "alléger" });
       }
     }
-    let cash = L.cash + sells.reduce((s, o) => s + o.quantite * o.prix_limite * (1 - FEES), 0);
+    let cash = L.cash + (value - L.valeur) + sells.reduce((s, o) => s + o.quantite * o.prix_limite * (1 - FEES), 0);
     const gaps = cible.map((l) => ({ l, q: l.quantite - (held.get(l.code)?.quantite || 0) }))
       .filter((g) => g.q > 0 && (g.q * g.l.prix >= minTrade || !held.has(g.l.code)))
       .sort((a, b) => b.q * b.l.prix - a.q * a.l.prix);
@@ -645,7 +647,7 @@
       buys.push({ sens: "ACHAT", code: l.code, libelle: l.libelle, quantite: n, prix_limite: l.prix,
                   motif: held.has(l.code) ? "renforcer" : "nouvelle ligne" });
     }
-    return { ordres: [...sells, ...buys], cible };
+    return { ordres: [...sells, ...buys], cible, rdt: est.rdt };
   }
 
   function classBar(lines) {
@@ -982,12 +984,12 @@
       const ordres = changed ? inst.ordres : c?.ordres || [];
       S.ordres = ordres;
       const investi = L.valeur > 0 ? (L.valeur - L.cash) / L.valeur : 0;
-      if (!acces(1)) h += `<div class="card ordres">${verrou(1, "La simulation des ajustements de votre portefeuille")}</div>`;
+      if (!acces(1)) h += `<div class="card ordres sim-zone"><span class="sim-pastille">Simulation</span>${verrou(1, "Le simulateur : la répartition visée par votre profil et les ajustements")}</div>`;
       else {
       const nV = ordres.filter((o) => o.sens === "VENTE").length, nA = ordres.length - nV;
       const resume = !ordres.length ? "Rien à faire pour l'instant"
         : [nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ") + (SIM() ? " simulés" : " proposés") + " ce soir";
-      h += `<details class="card ordres ordres-pli"${S.ui.ordresOuverts ? " open" : ""}><summary><span class="op-t">${SIM() ? "Ajustements simulés" : "Ordres proposés"}</span>
+      h += `<details class="card ordres ordres-pli sim-zone"${S.ui.ordresOuverts ? " open" : ""}><summary><span class="op-t"><span class="sim-pastille">Simulation</span> ${SIM() ? "Ajustements simulés" : "Ordres proposés"}</span>
         <span class="op-r">${resume}</span></summary>`;
       if (!ordres.length) {
         h += investi < 0.5 && L.cash > MIN_LINE
@@ -1014,7 +1016,7 @@
       h += changed
         ? `<p class="small muted">Recalculés à l'instant avec votre journal à jour (estimation). Le calcul détaillé, qui tient compte de la liquidité de chaque titre, est refait ce soir après la séance.</p>`
         : `<p class="small muted">Calculés avec votre journal au soir du ${D(S.prop.date)}.</p>`;
-      h += `</details>`;
+      h += `<p><button type="button" class="btn small" data-ouvrir-sim>Ouvrir le simulateur</button></p></details>`;
       }
       // la cible du profil est un réglage, pas un suivi du soir : elle est affichée dans Portefeuille
     } else {
@@ -1023,7 +1025,7 @@
       const nightly = fresh && c?.proposition && !c.positions?.length && Math.round(c.proposition.base) === Math.round(budget)
         && c.profil === S.profil?.profil ? c.proposition : null;
       const e = nightly ? { lines: nightly.lignes, reliquat: nightly.reliquat, rdt: nightly.rendement_attendu } : estimate(budget);
-      h += `<div class="card ordres"><h2>${SIM() ? "Simulation de portefeuille" : "Votre portefeuille proposé"}</h2>
+      h += `<div class="card ordres sim-zone"><span class="sim-pastille">Simulation</span><h2>${SIM() ? "Simulation de portefeuille" : "Votre portefeuille proposé"}</h2>
         <form id="f-budget" class="grid2" novalidate>
           ${auto ? `<div><div class="lbl small muted" style="font-weight:600">Montant à investir (automatique)</div><div class="val num" style="font-size:1.2rem;font-weight:700;margin-top:10px">${F(budget)}</div>
             <a class="small" href="#profil">Changer de mode</a></div>`
@@ -1355,11 +1357,18 @@
     const ep = epargne(), cote = ep ? Math.max(0, ep.solde) : 0;
     const total = cote + Math.max(0, L.cash) + L.investi;
     const seg = (v, col) => (total > 0 && v > 0 ? `<i style="width:${(100 * v / total).toFixed(2)}%;background:${col}"></i>` : "");
-    const onglet = S.coffre ? (S.ui.pfOnglet || "placements") : "placements";
+    const onglet = S.ui.pfOnglet || "placements";
     let h = `<h1 id="h-pf">Portefeuille</h1>`;
-    if (S.coffre) h += `<div class="seg pf-onglets" role="tablist" aria-label="Rubriques du portefeuille">
+    h += `<div class="seg pf-onglets" role="tablist" aria-label="Rubriques du portefeuille">
         <button type="button" role="tab" data-pfo="placements" aria-selected="${onglet === "placements"}" aria-pressed="${onglet === "placements"}">Mes placements</button>
-        <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Mon épargne${ep?.serie > 0 ? ` · 🔥 ${ep.serie}` : ""}</button></div>`;
+        <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Mon épargne${ep?.serie > 0 ? ` · 🔥 ${ep.serie}` : ""}</button>
+        <button type="button" role="tab" data-pfo="simulateur" aria-selected="${onglet === "simulateur"}" aria-pressed="${onglet === "simulateur"}">Simulateur</button></div>`;
+    if (onglet === "simulateur") {
+      v.innerHTML = h + simulateurHtml(L);
+      lierSimulateur(v, L);
+      v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
+      return;
+    }
     if (onglet === "epargne") {
       // l'épargne au quotidien : coffre, série, trophées, cercles (cercles.js s'insère avant l'ancre)
       h += ep ? carteEpargne(ep) : `<div class="card"><h2>Mon épargne</h2><p>Fixez un rythme d'épargne pour suivre votre régularité et gagner vos premiers trophées.</p>
@@ -1424,21 +1433,9 @@
       if (L.cash > 0) actuel.push({ classe: "liquidites", montant: L.cash });
       const parClasse = (ls) => { const t = {}, tot = ls.reduce((a, l) => a + (+l.montant || 0), 0) || 1;
         ls.forEach((l) => (t[l.classe] = (t[l.classe] || 0) + (+l.montant || 0) / tot)); return t; };
-      if (lignes?.length && !acces(1)) h += `<div class="card cible"><h2>Ma répartition</h2>${actuel.length ? `<p class="rep-lbl">Aujourd'hui</p>${classBar(actuel)}` : ""}
-        ${verrou(1, "La comparaison avec la répartition visée par votre profil")}</div>`;
-      else if (lignes?.length) {
-        const pa = parClasse(actuel), pc = parClasse(lignes);
-        const ecarts = [...new Set([...Object.keys(pa), ...Object.keys(pc)])].filter((k) => k !== "liquidites")
-          .map((k) => ({ k, d: (pc[k] || 0) - (pa[k] || 0) })).filter((x) => Math.abs(x.d) >= 0.05).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 2);
-        h += `<div class="card cible"><h2>Ma répartition</h2>
-          ${actuel.length ? `<p class="rep-lbl">Aujourd'hui</p>${classBar(actuel)}` : ""}
-          <p class="rep-lbl">Visée par votre profil ${esc(PROFILS[S.profil?.profil]?.t || "")}</p>${classBar(lignes)}
-          ${ecarts.length ? `<ul class="rep-ecarts">${ecarts.map((x) => `<li><span class="dot" style="background:${COLORS[x.k] || "#999"}"></span>${esc(CLASSES[x.k] || x.k)} :
-            ${x.d > 0 ? "en dessous" : "au-dessus"} de la cible de <b>${Math.round(Math.abs(x.d) * 100)} points</b> (environ ${F(Math.abs(x.d) * L.valeur)})</li>`).join("")}</ul>`
-            : `<p class="small rep-ok">✓ Votre répartition est proche de la cible.</p>`}
-          <p class="small muted">${changed ? `Cible calculée pour ${F(L.valeur)}.` : `Rendement attendu de la cible ${P(c.proposition.rendement_attendu, false)} par an, volatilité ${P(c.proposition.volatilite, false)}.`}
-          Un repère pour équilibrer vos placements, pas une recommandation.</p></div>`;
-      }
+      if (actuel.length) h += `<div class="card cible"><h2>Ma répartition</h2>${classBar(actuel)}
+        <p class="small muted">La répartition de vos placements réels au cours de la séance.</p>
+        <button type="button" class="btn small sim-lien" data-pfo-aller="simulateur"><span class="sim-pastille">Simulation</span> Comparer à mon profil</button></div>`;
     }
     h += `<details class="card journal journal-pli"${S.ui.journalOuvert ? " open" : ""}><summary><h2>Journal des opérations${S.ops.length ? ` <span class="h-n">${S.ops.length}</span>` : ""}</h2>
       <span class="op-r">${S.ops.length ? `Voir mes ${S.ops.length} opération${S.ops.length > 1 ? "s" : ""}` : "Aucune opération"}</span></summary>`;
@@ -1459,6 +1456,80 @@
     $("#gain-aide", v).addEventListener("click", aideGain);
     $(".journal-pli", v)?.addEventListener("toggle", (ev) => (S.ui.journalOuvert = ev.target.open));
     v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
+    v.querySelectorAll("[data-pfo-aller]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfoAller; vPortefeuille(); scrollTo({ top: 0, behavior: "smooth" }); window.dispatchEvent(new Event("brvm:maj")); }));
+  }
+
+  // ---------------------------------------------------------------- Simulateur
+  // Une hypothèse, jamais un fait : le réel vient du journal, le simulateur calcule ce que donnerait un profil avec un montant.
+  // Rien n'est enregistré ; les ordres se passent chez la SGI, puis l'avis s'importe dans le journal.
+  const PART = (lignes, classe) => { const t = lignes.reduce((a, l) => a + (+l.montant || 0), 0) || 1;
+    return lignes.filter((l) => (classe === "opcvm" ? /^opcvm/.test(l.classe) : l.classe === classe)).reduce((a, l) => a + (+l.montant || 0), 0) / t; };
+  function simulateurHtml(L) {
+    const badge = `<span class="sim-pastille">Simulation</span>`;
+    if (!acces(1)) return `<div class="card sim-zone">${badge}<h2>Simulateur</h2>
+      <p>Voyez ce que donnerait votre profil d'investisseur avec votre argent : la répartition visée, les écarts avec vos placements réels, et les ajustements possibles.</p>
+      ${verrou(1, "Le simulateur")}</div>`;
+    const reel = L.valeur > 0 ? Math.round(L.valeur) : 0;
+    const u = S.ui.sim ||= { montant: reel || budgetActuel() || 500000, profil: S.profil?.profil || "equilibre" };
+    if (!acces(2)) u.profil = S.profil?.profil || "equilibre";
+    const ciblesP = u.profil === S.profil?.profil ? S.cibles : S.ciblesPar?.[u.profil];
+    const r = ciblesP ? instantOrders(L.valeur > 0 ? L : { valeur: 0, cash: 0, positions: [] }, { montant: u.montant, cibles: ciblesP }) : null;
+    const nA = r ? r.ordres.filter((o) => o.sens !== "VENTE").length : 0, nV = r ? r.ordres.length - nA : 0;
+    const ecart = u.montant - reel;
+    let h = `<div class="card sim-zone">${badge}<h2>Simulateur</h2>
+      <p class="small">Ce que donnerait un profil d'investisseur avec un montant donné. <b>Rien n'est acheté ni enregistré</b> : vos ordres se passent chez votre SGI.</p>
+      <div class="sim-reglages">
+        <label>Montant simulé (F)<input type="number" min="0" step="10000" inputmode="numeric" id="sim-montant" value="${u.montant}"></label>
+        <div class="sim-puces">${reel ? `<button type="button" class="puce${u.montant === reel ? " on" : ""}" data-sim-m="${reel}">Mon portefeuille (${F(reel)})</button>` : ""}
+          ${[100000, 500000].map((x) => `<button type="button" class="puce" data-sim-m="${(reel || 0) + x}">${reel ? "+" : ""}${F(x)}</button>`).join("")}</div>
+        <div class="sim-profil"><span class="small muted">Profil simulé</span>
+          ${acces(2) ? `<div class="seg" role="group" aria-label="Profil simulé">${Object.entries(PROFILS).map(([k, p]) =>
+            `<button type="button" data-sim-p="${k}" aria-pressed="${u.profil === k}"${k === S.profil?.profil ? ` aria-label="${p.t}, mon profil"` : ""}>${p.t}${k === S.profil?.profil ? " ★" : ""}</button>`).join("")}</div>`
+            : `<b>${esc(PROFILS[u.profil]?.t || "")}</b> <span class="small muted">(votre profil)</span>`}</div>
+      </div></div>`;
+    if (!r) return h + `<div class="card sim-zone"><p class="muted">Chargement des cibles du profil…</p></div>`;
+    // répartition : le réel en trait plein, la simulation en pointillés
+    h += `<div class="card sim-zone">${badge}<h2>Répartition</h2>
+      ${reel ? `<p class="rep-lbl">Aujourd'hui (réel)</p>${classBar(L.positions.filter((p) => p.valeur > 0 && CLASSES[p.classe]).map((p) => ({ classe: p.classe, montant: p.valeur })).concat(L.cash > 0 ? [{ classe: "liquidites", montant: L.cash }] : []))}` : ""}
+      <p class="rep-lbl">Simulée · profil ${esc(PROFILS[u.profil]?.t || "")}${ecart ? ` · ${ecart > 0 ? "avec un apport de" : "avec un retrait de"} ${F(Math.abs(ecart))}` : ""}</p>
+      <div class="sim-barre">${classBar(r.cible)}</div>
+      <p class="small">${ok(r.rdt) ? `Rendement attendu estimé : <b>${P(r.rdt, false)}</b> par an · ` : ""}${r.cible.length} ligne${r.cible.length > 1 ? "s" : ""}
+        · part en actions ${Math.round(PART(r.cible, "actions") * 100)} %</p></div>`;
+    // ajustements : un résumé et les principaux, sans bouton d'enregistrement (on n'enregistre que le réel)
+    const top = r.ordres.slice().sort((a, b) => b.quantite * b.prix_limite - a.quantite * a.prix_limite).slice(0, 6);
+    h += `<div class="card sim-zone">${badge}<h2>Ajustements simulés</h2>
+      ${r.ordres.length ? `<p>${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour se rapprocher de cette répartition :</p>
+        <ul class="list">${top.map((o) => `<li><div class="main"><div class="name">${o.sens === "VENTE" ? "Vente" : "Achat"} · ${esc(nomLisible(o.libelle || o.code))}</div>
+          <div class="sub">${esc(o.motif || "")}</div></div><div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">vers ${F(o.prix_limite)}</div></div></li>`).join("")}</ul>
+        ${r.ordres.length > top.length ? `<p class="small muted">et ${r.ordres.length - top.length} autre${r.ordres.length - top.length > 1 ? "s" : ""}, plus petit${r.ordres.length - top.length > 1 ? "s" : ""}.</p>` : ""}`
+      : `<p>Rien à ajuster : vos placements sont déjà proches de cette répartition.</p>`}
+      <p class="small muted">Une estimation pour éclairer vos décisions, pas une recommandation. Si vous passez un ordre chez votre SGI, importez ensuite l'avis :
+        votre portefeuille réel se met à jour.</p></div>`;
+    // Investisseur : les trois profils côte à côte
+    if (acces(2)) {
+      const lignes = Object.keys(PROFILS).map((k) => { const c = k === S.profil?.profil ? S.cibles : S.ciblesPar?.[k];
+        return [k, c ? instantOrders(L.valeur > 0 ? L : { valeur: 0, cash: 0, positions: [] }, { montant: u.montant, cibles: c }) : null]; });
+      h += `<div class="card sim-zone">${badge}<h2>Comparer les profils</h2><p class="small muted">Pour ${F(u.montant)}, avec les cibles de ce soir.</p>
+        <div class="scroll-x"><table class="dtable sim-comp"><thead><tr><th>Profil</th><th class="num">Actions</th><th class="num">Oblig.</th><th class="num c-opcvm">OPCVM</th><th class="num" title="Rendement attendu par an">Rend.</th></tr></thead>
+        <tbody>${lignes.map(([k, x]) => `<tr class="${k === u.profil ? "on" : ""}"><td><b>${esc(PROFILS[k].t)}</b>${k === S.profil?.profil ? ` <span aria-label="mon profil">★</span>` : ""}</td>
+          ${x ? `<td class="num">${Math.round(PART(x.cible, "actions") * 100)} %</td><td class="num">${Math.round(PART(x.cible, "obligations") * 100)} %</td>
+          <td class="num c-opcvm">${Math.round(PART(x.cible, "opcvm") * 100)} %</td><td class="num">${ok(x.rdt) ? P(x.rdt, false) : "–"}</td>` : `<td colspan="4" class="muted">…</td>`}</tr>`).join("")}</tbody></table></div>
+        <p class="small muted">★ : votre profil. Plus de part en actions : un rendement attendu plus élevé, mais des variations plus fortes. Pour changer de profil : Profil › Mon profil d'investisseur.</p></div>`;
+    } else h += `<div class="card sim-zone">${badge}<h2>Comparer les profils</h2>${verrou(2, "La comparaison des trois profils et la simulation d'un autre profil")}</div>`;
+    return h;
+  }
+  async function lierSimulateur(v, L) {
+    const u = S.ui.sim, refaire = () => { vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); };
+    // cibles des autres profils, chargées à la demande (Investisseur)
+    if (acces(2) && S.seance) {
+      S.ciblesPar ||= {};
+      const manquants = Object.keys(PROFILS).filter((k) => k !== S.profil?.profil && !S.ciblesPar[k]);
+      if (manquants.length) { for (const k of manquants) { try { S.ciblesPar[k] = await ciblesLisibles(S.seance.date, k); } catch (e) { S.ciblesPar[k] = []; } } return refaire(); }
+    }
+    const m = $("#sim-montant", v);
+    m?.addEventListener("change", () => { const x = Math.max(0, Math.round(+m.value || 0)); if (x !== u.montant) { u.montant = x; refaire(); } });
+    v.querySelectorAll("[data-sim-m]").forEach((b) => b.addEventListener("click", () => { u.montant = +b.dataset.simM; refaire(); }));
+    v.querySelectorAll("[data-sim-p]").forEach((b) => b.addEventListener("click", () => { u.profil = b.dataset.simP; refaire(); }));
   }
 
   // ---------------------------------------------------------------- tendance du marché : BRVM Composite et BRVM 30
@@ -2050,6 +2121,7 @@
         if (e.n === 4) return lireUnivers(f);
         const upd = { recevoir_email: f.recevoir_email.checked };
         if (!p.profil) upd.profil = "equilibre";                // profil par défaut, en attendant les 3 questions
+        if (!p.budget_mode && S.coffre) upd.budget_mode = "auto";      // la simulation part de l'argent réel
         if (f.felicitations) upd.felicitations = f.felicitations.checked;
         if (!p.onboarding_fini_le) upd.onboarding_fini_le = new Date().toISOString();
         return upd;
@@ -2761,6 +2833,7 @@
     if (!b) return;
     if (b.hasAttribute("data-recap")) return ouvrirRecap();
     if (b.hasAttribute("data-formules")) return voirFormules();
+    if (b.hasAttribute("data-ouvrir-sim")) { S.ui.pfOnglet = "simulateur"; location.hash = "portefeuille"; return; }
     if (b.hasAttribute("data-export-journal")) return exporterJournal();
     if (b.id === "bravo-partager") return partagerTrophee(S.bravoTrophee);
     if (b.dataset.partager) return partagerTrophee(trophees(epargne()).find((x) => x.id === b.dataset.partager));
