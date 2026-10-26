@@ -115,12 +115,11 @@
         ${t ? `<span class="rp-val t-${t.k}">${t.fl} ${t.lib} <small>${t.conf ? `confiance ${t.conf} %` : `${P(t.ch)} sur 3 mois`}</small></span>` : `<span class="rp-val muted">–</span>`}</div>
       <div class="rp-tuile"><span class="rp-lbl">Score BafiBourse</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chip(r.decision)}</span></div>
     </div>
-    ${note && t ? `<p class="rp-phrase">${esc(phraseReperes(note, t))}</p>
-    <details class="rp-grille"><summary>Comprendre en quatre cases</summary><div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
+    ${note && t ? `<div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
       <span></span><span class="q-tete">Cours en hausse</span><span class="q-tete">Cours en baisse</span>
       <span class="q-cote">Solide (A, B)</span><span class="q-case${caseActive("sol", "h")}">Solide et porteuse</span><span class="q-case${caseActive("sol", "b")}">Solide, le marché hésite</span>
       <span class="q-cote">Fragile (D, E)</span><span class="q-case${caseActive("fra", "h")}">Le cours monte, prudence</span><span class="q-case${caseActive("fra", "b")}">Fragile et délaissée</span>
-    </div><p class="small muted">Le score résume les deux, avec le dividende, la valorisation et la liquidité.</p></details>` : ""}`;
+    </div><p class="rp-phrase">${esc(phraseReperes(note, t))} <span class="muted">Le score résume les deux, avec le dividende, la valorisation et la liquidité.</span></p>` : ""}`;
   }
   function spark(c, w = 96, h = 30) {
     const pts = c?.points;
