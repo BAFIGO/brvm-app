@@ -218,8 +218,9 @@
       // Secours : dernier historique de performance non vide (si le calcul du soir n'en a pas produit)
       historiqueSecours: async (uid) => (r(await sb.from("propositions").select("date,historique:contenu->historique,performance:contenu->performance")
         .eq("user_id", uid).order("date", { ascending: false }).limit(15)) || []).find((x) => Array.isArray(x.historique) && x.historique.length) || null,
-      operations: async () => r(await sb.from("operations").select("id,date,type,ticker,quantite,prix,frais,montant,note")
-        .order("date").order("id")),
+      operations: async () => ajusterFractionnements(r(await sb.from("operations").select("id,date,type,ticker,quantite,prix,frais,montant,note")
+        .order("date").order("id"))),
+      fractionnements: async () => { const { data, error } = await sb.from("fractionnements").select("ticker,date,facteur"); if (error) throw error; return data || []; },
       addOperation: async (op) => r(await sb.from("operations").insert(op)),
       // Import d'un document de la SGI : plusieurs opérations en une seule écriture (tout ou rien)
       addOperations: async (ops) => (r(await sb.from("operations").insert(ops).select("id")) || []).map((x) => x.id),
@@ -1447,7 +1448,9 @@
       for (const o of [...S.ops].reverse()) {
         const what = ["ACHAT", "VENTE"].includes(o.type) ? `${N(o.quantite)} × ${F(o.prix)}` : F(o.montant);
         h += `<li data-op-row="${esc(o.id)}"><div class="main"><div class="name">${esc(TYPES_OP[o.type] || o.type)} ${esc(o.ticker ? (S.names.get(o.ticker) || o.ticker) : "")}</div>
-          <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div></div>
+          <div class="sub">${D(o.date)}${o.note ? " · " + esc(o.note) : ""}</div>
+          ${o._fract ? `<div class="sub fract">Ajusté du fractionnement du ${D(o._fract.date)} : ${N(o.quantite / o._fract.f)} titres à ${F(o.prix * o._fract.f)}
+            deviennent ${N(o.quantite)} titres à ${F(o.prix)}, même montant.</div>` : ""}</div>
           <div class="right num">${what}<div><button class="btn link small del" data-del="${esc(o.id)}" aria-label="Supprimer l'opération du ${D(o.date)}">Supprimer</button></div></div></li>`;
       }
       h += `</ul><p class="small muted">Une erreur de saisie se corrige en supprimant la ligne, jamais par une opération inverse.</p>`;
@@ -2920,6 +2923,18 @@
   window.addEventListener("hashchange", () => { if (S.user) render(); });
 
   // ---------------------------------------------------------------- démarrage
+  // Fractionnements d'actions (ex. Sonatel) : les cours passés sont ajustés par le moteur ; le journal l'est ici de la même façon,
+  // pour les opérations antérieures : quantité × facteur, prix ÷ facteur. Le montant investi ne change pas, ni la base.
+  function ajusterFractionnements(ops) {
+    if (!Array.isArray(ops) || !S.fract?.length) return ops;
+    return ops.map((o) => {
+      if (!o.ticker || !["ACHAT", "VENTE", "DIVIDENDE"].includes(o.type)) return o;
+      const f = S.fract.filter((x) => x.ticker === o.ticker && String(o.date) < String(x.date)).reduce((a, x) => a * +x.facteur, 1);
+      return f === 1 ? o : { ...o, quantite: o.quantite != null ? +o.quantite * f : o.quantite, prix: o.prix != null ? +o.prix / f : o.prix,
+        _fract: { f, date: S.fract.find((x) => x.ticker === o.ticker && String(o.date) < String(x.date)).date } };
+    });
+  }
+
   // Formule de l'utilisateur (abonnements.sql). Sans le fichier SQL, S.abo reste vide et tout est accessible, comme avant.
   async function chargerFormule() {
     try { S.abo = await api.maFormule(); } catch (e) { S.abo = null; return; }
@@ -2953,6 +2968,7 @@
 
   async function loadAll() {
     const uid = S.user.id;
+    try { S.fract = api.fractionnements ? await api.fractionnements() : []; } catch (e) { S.fract = []; }   // fractionnements.sql absent
     await chargerMode();
     try { S.coffre = api.coffre ? await api.coffre(uid) : null; } catch (e) { S.coffre = null; }
     await chargerFormule();

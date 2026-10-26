@@ -895,3 +895,4 @@ label { font-weight: 600; }
 @media (max-width: 380px) { .sim-comp { font-size: .78rem; } .sim-comp td:first-child { min-width: 70px; } .sim-comp th, .sim-comp td { padding: 6px 4px; } }
 @media (max-width: 360px) { .topbar .moi-nom { display: none; } .topbar .moi { padding-right: 3px; } }
 @media (max-width: 460px) { .sim-comp .c-opcvm { display: none; } }
+.sub.fract { margin-top: 2px; color: var(--accent); font-size: .78rem; }
