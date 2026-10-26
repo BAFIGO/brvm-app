@@ -819,7 +819,7 @@
   // ---------------------------------------------------------------- partager un trophée (image, sans aucun montant)
   const METAUX = { bronze: ["#d08a4a", "#7a4a1f"], argent: ["#eef1f5", "#8e96a3"], or: ["#ffd75e", "#b8860b"], platine: ["#f2f2f0", "#9aa3ad"],
     diamant: ["#c8f4ff", "#3fa6cf"], legende: ["#d9a3ff", "#6a1b9a"], emeraude: ["#6be39a", "#1e7a4f"], saphir: ["#8fa2ff", "#1b2a8a"], rubis: ["#ff6f9b", "#8b0a3a"] };
-  const URL_SITE = "https://bafigo.github.io/brvm-app/";
+  const URL_SITE = location.origin + location.pathname.replace(/(app|admin)\/.*$/, "");   // l'adresse du site, quel que soit le domaine
   const phraseTrophee = (t) => /^serie-/.test(t.id || "") ? `J'ai épargné ${String(t.titre).toLowerCase()} avec BafiBourse !`
     : t.id === "premier" ? "J'ai mis de côté mes premiers francs avec BafiBourse !"
     : t.id === "sgi" ? "J'ai investi mon épargne à la BRVM avec BafiBourse !"
@@ -2496,7 +2496,9 @@
       <tbody>${tab.map((r) => { const a = ix.BRVM30?.get(r.date)?.variation, c2 = ix.BRVMC?.get(r.date)?.variation;
         return `<tr><th scope="row">${Dc(r.date)}</th><td class="${cls(r.gain)}">${ok(r.gain) ? (r.gain > 0 ? "+" : "") + N(r.gain) : "–"}</td><td class="${cls(r.pct)}">${P2(r.pct)}</td><td>${P2(a)}</td><td>${P2(c2)}</td></tr>`; }).join("")}</tbody></table></div>
       ${hist.length > nTab ? `<div class="actions"><button class="btn small" id="perf-more">Afficher plus de séances</button></div>` : ""}
-      <p class="small muted">Calculé chaque soir avec votre journal ; une opération enregistrée aujourd'hui apparaît après le calcul du soir.</p></div>`;
+      ${typeof S.prop?.contenu?.historique_recalcule === "string" ? `<div class="notice small">Les séances depuis le <b>${D(S.prop.contenu.historique_recalcule)}</b>
+        ont été recalculées ce soir : une opération de cette date a été ajoutée, modifiée ou supprimée dans votre journal. Les séances antérieures n'ont pas changé.</div>` : ""}
+      <p class="small muted">Chaque séance publiée reste figée. Elle n'est recalculée que si vous ajoutez, modifiez ou supprimez une opération de cette date ou d'avant.</p></div>`;
     v.innerHTML = h;
     v.querySelectorAll("[data-perf]").forEach((b) => b.addEventListener("click", () => { S.ui.perf = +b.dataset.perf; vPerformance(); }));
     $("#perf-more", v)?.addEventListener("click", () => { S.ui.perfRows = (S.ui.perfRows || 10) + 20; vPerformance(); });

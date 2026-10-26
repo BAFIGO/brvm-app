@@ -29,3 +29,20 @@
     });
   });
 })();
+
+// Bandeau d'environnement : visible sur toutes les pages d'une version de test, jamais en production
+(function () {
+  // config.js est chargé après ce fichier : on attend que la page soit prête pour lire l'environnement
+  const poser = () => {
+    const env = (window.BRVM_CONFIG || {}).environnement;
+    if (!env || env === "production" || document.getElementById("bandeau-env")) return;
+    const b = document.createElement("div");
+    b.id = "bandeau-env"; b.setAttribute("role", "status");
+    b.textContent = env === "test" ? "Version de test · base de test : vos essais n'affectent pas la production"
+      : "Version de test branchée sur la base de PRODUCTION : utilisez la démo, ou renseignez la base de test dans config.js";
+    Object.assign(b.style, { position: "sticky", top: "0", zIndex: "50", padding: "6px 12px", textAlign: "center", fontWeight: "700",
+      fontSize: ".82rem", color: env === "test" ? "#fff" : "#141729", background: env === "test" ? "hsl(268 55% 52%)" : "hsl(35 92% 55%)" });
+    document.body.prepend(b);
+  };
+  if (document.readyState !== "loading") poser(); else document.addEventListener("DOMContentLoaded", poser);
+})();

@@ -141,7 +141,7 @@
 
   // Partage de l'application (sans montant) : menu de partage du téléphone, sinon WhatsApp
   async function recommander() {
-    const url = "https://bafigo.github.io/brvm-app/";
+    const url = location.origin + location.pathname.replace(/(app|admin)\/.*$/, "");
     const texte = "J'utilise BafiBourse pour épargner chaque jour et suivre mes placements à la BRVM. Essaie, c'est gratuit : " + url;
     try { if (navigator.share) return await navigator.share({ text: texte }); } catch (e) { if (e.name === "AbortError") return; }
     window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener");
