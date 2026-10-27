@@ -896,3 +896,27 @@ label { font-weight: 600; }
 @media (max-width: 360px) { .topbar .moi-nom { display: none; } .topbar .moi { padding-right: 3px; } }
 @media (max-width: 460px) { .sim-comp .c-opcvm { display: none; } }
 .sub.fract { margin-top: 2px; color: var(--accent); font-size: .78rem; }
+
+/* Historique boursier sur 5 ans (fiche d'une action ou d'un OPCVM) */
+.ha { margin: 6px 0 14px; padding: 14px; border-radius: 14px; background: var(--surface-2); }
+.ha h4 { margin: 0 0 4px; font-size: .95rem; }
+.ha-resume { margin: 0 0 8px; }
+.ha-t { width: 100%; min-width: 0 !important; font-size: .86rem; }
+.ha-t th, .ha-t td { padding: 7px 6px; white-space: nowrap; }
+.ha-barre { width: 70px; }
+.ha-barre span { display: block; height: 8px; border-radius: 4px; }
+.ha-barre .pos { background: var(--good); } .ha-barre .neg { background: var(--bad); }
+@media (max-width: 460px) { .ha-barre { display: none; } .ha-t th, .ha-t td { padding: 6px 4px; font-size: .8rem; } }
+.ha-t th:first-child, .ha-t td:first-child { text-align: left; }
+.ha-t tbody th { font-weight: 700; }
+@media (max-width: 460px) { .ha-t .c-div { display: none; } }
+@media (max-width: 460px) { .ha { padding: 12px 10px; } .ha-t th, .ha-t td { padding: 6px 3px; font-size: .78rem; } }
+
+/* démo : sortie vers les offres ; inscription : la formule choisie */
+.demo-act { display: flex; align-items: center; gap: 10px; }
+.demo-quitter { font-size: .82rem; font-weight: 600; color: var(--muted); }
+.offre-choisie { display: grid; gap: 2px; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.offre-choisie span { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+.offre-choisie b { font-size: 1.15rem; }
+.offre-choisie small { color: var(--muted); }

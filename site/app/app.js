@@ -79,6 +79,30 @@
     return t.charAt(0) + t.slice(1).toLowerCase();
   }
   // Les trois repères d'une action : santé financière (A à E), tendance du cours, score BafiBourse
+  // Historique boursier sur 5 ans : des faits passés (cours ajustés des fractionnements, dividendes), jamais une prévision
+  function histoAnnuel(h, type = "action") {
+    if (!h?.annees?.length) return "";
+    const act = type === "action";
+    const resume = h.moyenne_annuelle != null
+      ? `<p class="ha-resume">Sur ${h.nb_annees} an${h.nb_annees > 1 ? "s" : ""} : <b class="${cls(h.moyenne_annuelle)}">${P(h.moyenne_annuelle)}</b> par an en moyenne${act ? ", dividendes compris" : ""}
+          · pire année : ${h.pire_annee} (<span class="${cls(h.pire_total)}">${P(h.pire_total)}</span>)</p>`
+      : `<p class="ha-resume small muted">Historique trop court pour une moyenne sur plusieurs années.</p>`;
+    const max = Math.max(0.05, ...h.annees.map((l) => Math.abs(l.total ?? l.variation ?? 0)));
+    const lignes = h.annees.slice().reverse().map((l) => {
+      const t = act ? l.total : l.variation;
+      return `<tr><th scope="row">${l.annee}${l.en_cours ? `<span class="small muted" title="année en cours, depuis le 1er janvier">*</span>` : ""}</th>
+        <td class="num">${F(l.cours)}</td><td class="num ${cls(l.variation)}">${P(l.variation)}</td>
+        ${act ? `<td class="num c-div">${l.dividende ? `${F(l.dividende)}<span class="small muted"> · ${P(l.rendement_dividende, false)}</span>` : "–"}</td>` : ""}
+        <td class="num ${cls(t)}"><b>${P(t)}</b></td>
+        <td class="ha-barre" aria-hidden="true"><span class="${t >= 0 ? "pos" : "neg"}" style="width:${Math.min(100, (Math.abs(t || 0) / max) * 100)}%"></span></td></tr>`;
+    }).join("");
+    return `<div class="ha"><h4>Sur ${h.annees.length > 5 ? 5 : h.annees.filter((l) => !l.en_cours).length} ans en bourse</h4>${resume}
+      ${acces(1) ? `<div class="scroll-x"><table class="dtable ha-t"><thead><tr><th>Année</th><th class="num">${act ? "Cours 31/12" : "VL 31/12"}</th><th class="num">Var.</th>
+          ${act ? `<th class="num c-div">Dividende</th>` : ""}<th class="num">${act ? "Total" : "Perf."}</th><th class="ha-barre"></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+        : verrou(1, "Le détail année par année")}
+      <p class="small muted">${acces(1) && act ? "Total = variation du cours + dividende. " : ""}* année en cours, depuis le 1er janvier.
+        Performances passées${act ? ", ajustées des fractionnements" : ""} : elles ne préjugent pas des performances futures.</p></div>`;
+  }
   const SANTE = { A: "Très solide", B: "Solide", C: "Correcte", D: "Fragile", E: "Très fragile" };
   function tendanceCours(c, raisons) {
     const m = /Tech\.\s*(Hausse|Baisse|Neutre|Stable)\s*\((\d+)\s*%\)/i.exec(raisons || "");
@@ -334,6 +358,13 @@
     const load = async () => (data ??= debutDemo(await (await fetch("demo.json")).json()));
     // Démo « mes premiers jours » : le même marché, mais un compte qui démarre (un versement, un premier achat)
     const debutDemo = (d) => {
+      (d.actions || []).forEach((r, i) => { if (r.historique_annuel || !r.cours) return;
+        const an = new Date().getFullYear(), vars = [0.15, 0.12, -0.08, 0.13, 0.06, 0.04].map((v, k) => v + ((i * 7 + k * 3) % 9 - 4) / 100);
+        let c = +r.cours / vars.slice(-1).reduce((a, v) => a * (1 + v), 1) / vars.slice(0, 5).reduce((a, v) => a * (1 + v), 1);
+        const annees = vars.map((v, k) => { const prec = c; c = prec * (1 + v); const dv = Math.round(prec * 0.06);
+          return { annee: an - 5 + k, cours: Math.round(c), variation: v, dividende: dv, rendement_dividende: dv / prec, total: v + dv / prec, en_cours: k === 5 }; });
+        const comp = annees.filter((l) => !l.en_cours), prod = comp.reduce((a, l) => a * (1 + l.total), 1), pire = comp.reduce((m, l) => (l.total < m.total ? l : m));
+        r.historique_annuel = { annees, moyenne_annuelle: prod ** (1 / comp.length) - 1, nb_annees: comp.length, pire_annee: pire.annee, pire_total: pire.total }; });
       if (!DEMO_DEBUT) return d;
       const jour = (n) => { const x = new Date(); x.setDate(x.getDate() - n); while ([0, 6].includes(x.getDay())) x.setDate(x.getDate() - 1); return x.toISOString().slice(0, 10); };
       const snts = (d.actions || []).find((r) => r.code === "SNTS");
@@ -1868,7 +1899,7 @@
         const essentiel = `<p class="small">Dividende ${P(r.rendement_div, false)}${ok(r.per) ? ` · PER ${nf1.format(r.per)}` : ""}</p>`;
         det = !acces(1) ? verrou(1, "Le pourquoi de la note : croissance, rentabilité, solidité, dividende")
           : !acces(2) ? essentiel + analyse(r.analyse)
-          : `<p>Prix repère ${F(r.limite_achat)} · plancher ${F(r.stop)} · objectif ${F(r.objectif)} · dividende ${P(r.rendement_div, false)}`
+          : `<p>Prix repère ${F(r.limite_achat)} · plancher ${F(r.stop)} · dividende ${P(r.rendement_div, false)}`
             + (ok(r.per) ? ` · PER ${nf1.format(r.per)}` : "") + `</p>`
             + (r.raisons ? `<p class="small muted">Signal du jour : ${esc(r.raisons)}</p>` : "") + analyse(r.analyse);
       } else if (u.mkTab === "obligations") {
@@ -1885,7 +1916,8 @@
       h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}</div>
           <div class="sub">${chip(r.decision)}</div></div>
           <div class="right num">${pxCourt}</div></summary>
-          <div class="why">${u.mkTab === "actions" ? reperes(r) : `<p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100</p>`}
+          <div class="why">${u.mkTab === "actions" ? reperes(r) + histoAnnuel(r.historique_annuel, "action") : `<p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100</p>`}
+            ${u.mkTab === "opcvm" ? histoAnnuel(r.historique_annuel, "opcvm") : ""}
             ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}<span class="small muted">${esc(r.code)} · 3 derniers mois</span></div>` : ""}${det}</div></details></li>`;
     }
     h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
@@ -3278,7 +3310,14 @@
   function demoAccueil() {
     if (!DEMO) return;
     $("main")?.insertAdjacentHTML("afterbegin", `<div class="demo-barre" role="note"><span>Démonstration · données fictives${DEMO_DEBUT ? " · premiers jours" : ""}</span>
-      <a class="btn small primary" href="./#inscription">Créer mon compte</a></div>`);
+      <span class="demo-act"><a class="btn small primary" href="../#tarifs">Voir les offres</a><a class="demo-quitter" href="../">Quitter</a></span></div>`);
+    // au bout de 3 minutes d'exploration : une seule invitation, si rien d'autre n'est affiché
+    setTimeout(() => {
+      if (window.BafiCalme && !window.BafiCalme.autorise("demo")) return;
+      window.BafiCalme?.consomme("demo");
+      toast("Ce portefeuille pourrait être le vôtre", { detail: "Gratuit pour commencer, 14 jours d'Essentiel offerts, sans carte bancaire.",
+        actions: [{ label: "Voir les offres", fn: () => (location.href = "../#tarifs") }] });
+    }, 180000);
     let vu = false;
     try { vu = !!sessionStorage.getItem("brvm-demo-porte"); sessionStorage.setItem("brvm-demo-porte", "1"); } catch (e) { vu = true; }
     if (vu || new URLSearchParams(location.search).get("demo") !== "1") return;

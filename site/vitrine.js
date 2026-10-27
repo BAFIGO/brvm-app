@@ -248,7 +248,7 @@
   }
   // Final : le bouton « Créer mon compte » appelle l'action (deux pulsations)
   function fete() {
-    const b = $(".commencer .cta .btn.primary");
+    const b = $(".tf.reco .btn.primary");
     if (!b || CALME) return;
     b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse");
   }
@@ -350,8 +350,8 @@
         onEnter: () => tli.restart(), onEnterBack: () => tli.restart(), onLeaveBack: () => tli.pause(0) });
     }
 
-    // Prêt à commencer : le bouton qui appelle
-    ScrollTrigger.create({ trigger: ".commencer", start: "top 70%", onEnter: fete, onEnterBack: () => {} });
+    // Les offres : la carte recommandée appelle doucement quand on y arrive
+    ScrollTrigger.create({ trigger: ".tf-grille", start: "top 70%", onEnter: fete, onEnterBack: () => {} });
 
     // Épargne : jauge et barre qui se remplissent (dans les deux sens)
     const fills = $$(".epargne-v .ev-jauge i, .epargne-v .ev-barre i");
@@ -385,8 +385,10 @@
     const cle = Object.keys(localStorage).find((k) => /^sb-.+-auth-token$/.test(k));
     const session = cle && JSON.parse(localStorage.getItem(cle));
     if (session?.expires_at && session.expires_at * 1000 > Date.now() - 7 * 864e5) {   // jeton renouvelable
+      // déjà inscrit : on l'emmène dans son espace, plus besoin de lui vendre une offre
       $("[data-espace]").textContent = "Mon espace";
-      $("[data-espace-cta]").textContent = "Ouvrir mon espace";
+      const o = $("[data-espace-offres]"); if (o) { o.innerHTML = '<span class="t-long">Ouvrir mon espace</span><span class="t-court">Mon espace</span>'; o.href = "app/"; }
+      const h = $("[data-espace-cta]"); if (h) { h.textContent = "Ouvrir mon espace"; h.href = "app/"; }
     }
   } catch (e) { /* stockage indisponible : affichage par défaut */ }
 

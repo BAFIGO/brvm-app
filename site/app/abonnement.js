@@ -9,6 +9,33 @@
   const F = (n) => nf.format(n).replace(/\u202f/g, " ") + " F";
   let app = null;
 
+  // Offre choisie sur la vitrine (?offre=…) : elle accompagne l'inscription, puis s'applique une fois le compte prêt
+  const NOMS_OFFRE = { decouverte: "Découverte", essentiel: "Essentiel", investisseur: "Investisseur" };
+  try {
+    const o = new URLSearchParams(location.search).get("offre");
+    if (o && NOMS_OFFRE[o]) { localStorage.setItem("brvm-offre", o); const u = new URL(location.href); u.searchParams.delete("offre"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
+  } catch (e) { /* stockage indisponible */ }
+  const offre = () => { try { return localStorage.getItem("brvm-offre"); } catch (e) { return null; } };
+  // Sur l'écran d'inscription : rappeler la formule choisie
+  document.addEventListener("DOMContentLoaded", () => {
+    const o = offre(), f = document.getElementById("f-login");
+    if (!o || !f || document.querySelector(".offre-choisie")) return;
+    f.insertAdjacentHTML("beforebegin", `<div class="offre-choisie"><span>Formule choisie</span><b>${NOMS_OFFRE[o]}</b>
+      <small>${o === "investisseur" ? "Créez votre compte : le paiement se règle juste après, en 2 minutes." : "Gratuit pour commencer · 14 jours d'Essentiel offerts · sans carte bancaire"}</small></div>`);
+  });
+  let offreAppliquee = false;
+  function appliquerOffre() {
+    const o = offre();
+    if (!o || offreAppliquee || !app || app.demo) return;
+    const ob = document.getElementById("v-onboarding");
+    if ((ob && !ob.hidden) || document.querySelector("dialog[open]")) return;     // après l'inscription et le portrait
+    offreAppliquee = true;
+    try { localStorage.removeItem("brvm-offre"); } catch (e) { /* rien */ }
+    if (o === "investisseur") { app.voirFormules(); setTimeout(() => ouvrir("investisseur"), 700); }
+    else app.toast(o === "essentiel" ? "Votre essai Essentiel de 14 jours a commencé" : "Bienvenue en formule Découverte",
+      { detail: o === "essentiel" ? "Profitez de tout l'Essentiel ; vous choisirez ensuite de continuer ou non." : "En cadeau de bienvenue : 14 jours d'Essentiel offerts." });
+  }
+
   // Lien de parrainage : le code attend la connexion ou l'inscription
   try {
     const c = new URLSearchParams(location.search).get("parrain");
@@ -165,6 +192,8 @@
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-abo], [data-abo-objet], [data-abo-partager]");
     if (!b || !app) return;
+    // en démonstration, choisir une formule mène à l'inscription avec cette formule
+    if (app.demo && (b.dataset.abo || b.dataset.aboObjet)) { location.href = `./?offre=${b.dataset.abo || "essentiel"}#inscription`; return; }
     if (b.dataset.abo) return ouvrir(b.dataset.abo);
     if (b.dataset.aboObjet) return ouvrir(null, b.dataset.aboObjet);
     const lien = b.dataset.aboPartager, texte = `Je mets de côté chaque jour et je suis mes placements à la BRVM avec BafiBourse. Inscris-toi avec mon lien : ${lien}`;
@@ -179,7 +208,7 @@
     const tete = v.querySelector(".profil-tete");
     if (tete) tete.insertAdjacentHTML("afterend", carteHtml(a)); else v.querySelector("h1")?.insertAdjacentHTML("afterend", carteHtml(a));
   }
-  window.addEventListener("brvm:maj", () => setTimeout(() => { if (app?.tab() === "profil") carte(); }, 40));
+  window.addEventListener("brvm:maj", () => setTimeout(() => { if (app?.tab() === "profil") carte(); appliquerOffre(); }, 40));
   window.addEventListener("brvm:formule", () => { if (app?.tab() === "profil") carte(); });
   window.addEventListener("brvm:pret", () => { app = window.BRVM_APP?.abo ? window.BRVM_APP : null; });
 })();
