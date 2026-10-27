@@ -126,3 +126,10 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus, select:focus, textarea:focus,
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* Avertissement d'inactivité */
+.inactif { position: fixed; z-index: 100; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(440px, calc(100% - 32px));
+  display: grid; gap: 10px; padding: 16px 18px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: 0 24px 48px -16px rgb(20 26 70 / .45), inset 4px 0 0 hsl(35 92% 55%); }
+.inactif p { margin: 0; }
+.inactif .btn { justify-self: start; }

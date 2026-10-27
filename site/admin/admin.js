@@ -58,6 +58,7 @@
       session: async () => (await sb.auth.getSession()).data.session,
       login: async (email) => { const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } }); if (error) throw error; },
       logout: async () => { await sb.auth.signOut(); location.hash = ""; location.reload(); },
+      logoutInactif: async () => { await sb.auth.signOut(); location.hash = ""; location.replace(location.pathname + "?inactif=1"); },
       aal: async () => { const { data, error } = await sb.auth.mfa.getAuthenticatorAssuranceLevel(); if (error) throw error; return data; },
       factors: async () => { const { data, error } = await sb.auth.mfa.listFactors(); if (error) throw error; return data; },
       unenroll: async (factorId) => sb.auth.mfa.unenroll({ factorId }),
@@ -363,6 +364,27 @@
   }
 
   // ------------------------------------------------------------ vues
+  // Inactivité : la console donne accès aux comptes de tous les utilisateurs ; un poste laissé ouvert se déconnecte
+  // après 30 minutes sans action, avec un avertissement une minute avant (et un bouton pour rester).
+  const INACTIF_MS = 30 * 60e3, AVERTIR_MS = 60e3;
+  let derniereAction = Date.now(), minuteurInactif = 0;
+  function surveillerInactivite() {
+    if (DEMO || minuteurInactif) return;
+    const actif = () => { derniereAction = Date.now(); const b = $("#inactif"); if (b) b.remove(); };
+    ["pointerdown", "keydown", "wheel", "touchstart"].forEach((t) => document.addEventListener(t, actif, { passive: true }));
+    minuteurInactif = setInterval(() => {
+      const ecoule = Date.now() - derniereAction;
+      if (ecoule >= INACTIF_MS) { clearInterval(minuteurInactif); api.logoutInactif(); return; }
+      if (ecoule >= INACTIF_MS - AVERTIR_MS && !$("#inactif")) {
+        document.body.insertAdjacentHTML("beforeend", `<div id="inactif" class="inactif" role="alertdialog" aria-live="assertive" aria-labelledby="inactif-t">
+          <p id="inactif-t"><b>Déconnexion dans une minute</b><br><span class="small">Sans action de votre part, la console se ferme pour protéger les données des utilisateurs.</span></p>
+          <button type="button" class="btn primary" id="inactif-ok">Rester connecté</button></div>`);
+        $("#inactif-ok").addEventListener("click", actif);
+        $("#inactif-ok").focus();
+      }
+    }, 15e3);
+  }
+
   // Séance attendue : la BRVM publie du lundi au vendredi ; la séance du jour est attendue après 23 h (heure de Dakar, UTC).
   // Le week-end, la dernière séance attendue est donc celle du vendredi : pas de fausse alerte le samedi et le dimanche.
   function seanceAttendue(now = new Date()) {
@@ -1166,7 +1188,8 @@
   window.addEventListener("hashchange", () => { if (S.moi) render(); });
 
   // ------------------------------------------------------------ porte d'entrée : connexion → droits → MFA
-  const gate = (html) => { $("#gate").hidden = false; $("#gate").innerHTML = html; };
+  const gate = (html) => { $("#gate").hidden = false;
+    $("#gate").innerHTML = (QS.has("inactif") ? `<p class="notice small" role="status">Vous avez été déconnecté après 30 minutes d'inactivité, pour protéger les données des utilisateurs. Reconnectez-vous pour continuer.</p>` : "") + html; };
 
   function loginScreen() {
     gate(`<div class="card narrow"><h1>Administration</h1><p>Connectez-vous avec l'adresse de votre compte administrateur.</p>
@@ -1234,6 +1257,7 @@
     document.querySelectorAll("#nav .nav-groupe").forEach((g) => { let n = g.nextElementSibling, vis = false;
       while (n && !n.classList.contains("nav-groupe")) { if (!n.hidden) vis = true; n = n.nextElementSibling; } g.hidden = !vis; });
     aTraiter().then(pastilles).catch(() => {});
+    surveillerInactivite();
     $("#nav").hidden = false;
     render();
   }

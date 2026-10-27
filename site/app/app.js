@@ -233,6 +233,9 @@
       login: async (email, creer) => r(await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: !!creer, emailRedirectTo: location.origin + location.pathname } })),
       verify: async (email, token) => r(await sb.auth.verifyOtp({ email, token, type: "email" })),
       logout: async () => { await sb.auth.signOut(); location.href = "../?deconnecte=1"; },   // retour à la page d'accueil
+      // tous les appareils : les jetons de renouvellement sont révoqués côté serveur (téléphone perdu, ordinateur partagé)
+      logoutPartout: async () => { await sb.auth.signOut({ scope: "global" }); location.href = "../?deconnecte=1"; },
+      seanceRecente: async () => { const { data } = await sb.from("seances").select("date").order("date", { ascending: false }).limit(1); return data?.[0]?.date || null; },
       profil: async (uid) => r(await sb.from("profils").select("*").eq("id", uid).maybeSingle()),
       saveProfil: async (uid, p) => r(await sb.from("profils").update(p).eq("id", uid)),
       seance: async () => r(await sb.from("seances").select("*").order("date", { ascending: false }).limit(1))[0] || null,
@@ -2358,7 +2361,9 @@
           pas des performances futures. Vos données (profil, journal) ne sont visibles que par vous.</p>`}
         ${S.docs?.cgu ? `<p class="small"><button class="btn link" type="button" id="voir-cgu">${esc(S.docs.cgu.titre)} (version ${esc(S.docs.cgu.version)})</button>
           ${p.cgu_acceptee_le ? `<span class="muted">acceptée le ${new Date(p.cgu_acceptee_le).toLocaleDateString("fr-FR")}</span>` : ""}</p>` : ""}
-        <div class="actions"><button class="btn" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button></div>
+        <div class="actions"><button class="btn" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button>
+          ${DEMO ? "" : `<button class="btn link small" id="logout-partout">Me déconnecter de tous mes appareils</button>`}</div>
+        ${DEMO ? "" : `<p class="small muted">Téléphone perdu, ordinateur partagé : « tous mes appareils » ferme aussi les sessions ouvertes ailleurs, en moins d'une heure.</p>`}
       </div>`;
     const f = $("#f-profil", v);
     f.addEventListener("submit", async (ev) => {
@@ -2403,6 +2408,10 @@
       } catch (err) { fin(); toast("Enregistrement impossible : " + err.message); }
     });
     $("#logout", v).addEventListener("click", () => api.logout());
+    $("#logout-partout", v)?.addEventListener("click", async () => {
+      if (!confirm("Vous déconnecter de tous vos appareils ?\n\nTéléphone, ordinateur, tablette : il faudra vous reconnecter partout avec votre adresse e-mail.")) return;
+      try { await api.logoutPartout(); } catch (e) { toast("Déconnexion impossible : " + e.message); }
+    });
     $("#voir-cgu", v)?.addEventListener("click", () => showCgu(S.docs.cgu, false));
     v.querySelectorAll("[data-essai]").forEach((b) => b.addEventListener("click", () => {
       const tr = trophees(epargne()), e = b.dataset.essai;
@@ -2996,6 +3005,27 @@
     a.download = `bafibourse-journal-${today()}.csv`; document.body.append(a); a.click(); a.remove();
     toast("Journal exporté.", { detail: "Le fichier s'ouvre dans Excel, LibreOffice ou Google Sheets." });
   }
+
+  // Un onglet laissé ouvert ne recharge rien de lui-même (aucune interrogation régulière du serveur). Au retour, après
+  // 30 minutes cachées : une seule petite requête « quelle est la dernière séance ? » ; nouvelle séance ou plus de 6 h
+  // d'absence (le journal a pu changer sur un autre appareil) → rechargement, annoncé à l'utilisateur.
+  let cacheDepuis = 0, rafraichit = false;
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden) { cacheDepuis = Date.now(); return; }
+    const absent = cacheDepuis ? Date.now() - cacheDepuis : 0;
+    cacheDepuis = 0;
+    if (DEMO || !S.user || rafraichit || absent < 30 * 60e3 || !api.seanceRecente) return;
+    rafraichit = true;
+    try {
+      const d = await api.seanceRecente();
+      const nouvelle = d && S.seance?.date && d > S.seance.date;
+      if (nouvelle || absent > 6 * 3600e3) {
+        await loadAll(); render();
+        if (nouvelle) toast(`Nouvelle séance du ${D(d)}`, { detail: "Vos chiffres sont à jour." });
+      }
+    } catch (e) { /* hors connexion : on réessaiera au prochain retour */ }
+    rafraichit = false;
+  });
 
   async function loadAll() {
     const uid = S.user.id;
