@@ -8,7 +8,7 @@ self.addEventListener("push", (e) => {
   try { m = e.data ? e.data.json() : {}; } catch (err) { m = { texte: e.data ? e.data.text() : "" }; }
   e.waitUntil(self.registration.showNotification(m.titre || "BafiBourse", {
     body: m.texte || "Votre récap du soir est prêt.",
-    icon: "../icon-192.png", badge: "../icon-192.png", lang: "fr",
+    icon: "../icon-192.png?v=carapace1", badge: "../icon-192.png?v=carapace1", lang: "fr",
     tag: "recap-du-soir", renotify: true,                  // un seul rappel affiché à la fois
     data: { url: m.url || "./#aujourdhui" },
   }));

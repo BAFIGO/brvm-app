@@ -6,24 +6,26 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f7f7fb",
+  "background_color": "#1B286A",
   "theme_color": "#25347e",
   "icons": [
     {
-      "src": "../icon-192.png",
+      "src": "../icon-192.png?v=carapace1",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "../icon-512.png",
+      "src": "../icon-512.png?v=carapace1",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "../icon-indigo.svg",
+      "src": "../icon-indigo.svg?v=carapace1",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

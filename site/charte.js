@@ -24,8 +24,8 @@
   document.addEventListener("DOMContentLoaded", function () {
     var m = document.querySelector('meta[name="theme-color"]');
     if (m) m.setAttribute("content", CHARTES[choix]);
-    if (choix !== "vert") document.querySelectorAll('img[src$="icon.svg"]').forEach(function (img) {
-      img.src = img.getAttribute("src").replace(/icon\.svg$/, "icon-" + choix + ".svg");
+    if (choix !== "vert") document.querySelectorAll('img[src*="icon.svg"]').forEach(function (img) {
+      img.src = img.getAttribute("src").replace(/icon\.svg/, "icon-" + choix + ".svg");
     });
   });
 })();
