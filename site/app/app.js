@@ -306,6 +306,15 @@
       apercuCercle: async (code) => { const { data, error } = await sb.rpc("apercu_cercle", { p_code: code }); if (error) throw new Error(error.message); return data; },
       rejoindreCercle: async (code) => { const { data, error } = await sb.rpc("rejoindre_cercle", { p_code: code }); if (error) throw new Error(error.message); return data; },
       quitterCercle: async (id) => { const { error } = await sb.rpc("quitter_cercle", { p_cercle: id }); if (error) throw new Error(error.message); },
+      // cercles publics (cercles-publics.sql)
+      cerclesPublics: async (onglet, rythme, taille) => { const { data, error } = await sb.rpc("cercles_publics", { p_onglet: onglet, p_rythme: rythme || null, p_taille: taille || null }); if (error) throw new Error(error.message); return data; },
+      demanderAdhesion: async (id, message) => { const { error } = await sb.rpc("demander_adhesion", { p_cercle: id, p_message: message || null }); if (error) throw new Error(error.message); },
+      annulerDemande: async (id) => { const { error } = await sb.rpc("annuler_demande", { p_id: id }); if (error) throw new Error(error.message); },
+      mesDemandes: async () => { const { data, error } = await sb.rpc("mes_demandes"); if (error) throw new Error(error.message); return data || []; },
+      demandesRecues: async () => { const { data, error } = await sb.rpc("demandes_recues"); if (error) throw new Error(error.message); return data || []; },
+      repondreDemande: async (id, ok) => { const { error } = await sb.rpc("repondre_demande", { p_id: id, p_accepter: ok }); if (error) throw new Error(error.message); },
+      signalerCercle: async (id, motif) => { const { error } = await sb.rpc("signaler_cercle", { p_cercle: id, p_motif: motif || null }); if (error) throw new Error(error.message); },
+      publierCercle: async (id, pub, pres) => { const { data, error } = await sb.rpc("publier_cercle", { p_cercle: id, p_public: pub, p_presentation: pres || null }); if (error) throw new Error(error.message); return data; },
       publierRegularite: async (x) => { const { error } = await sb.from("epargne_publique").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }); if (error) throw error; },
       // Rappels du soir (rappels.sql)
       rappels: async () => r(await sb.from("rappels").select("push, whatsapp, heure, epargne").maybeSingle()),
@@ -480,6 +489,20 @@
       rejoindreCercle: async () => ({ nom: "Les amis de la fac", deja: false }),
       quitterCercle: async (id) => { cerclesDemo = cerclesDemo.filter((c) => c.id !== id); },
       publierRegularite: async () => {},
+      cerclesPublics: async (onglet) => {
+        const L = PUBLICS_DEMO.filter((c) => onglet === "top" ? c.membres >= 3 && !c.nouveau : c.places > 0)
+          .map((c) => ({ ...c, demande: DEMANDES_DEMO.has(c.id) })).sort((a, b) => b.regularite - a.regularite).slice(0, onglet === "top" ? 10 : 30);
+        return { cercles: L.map((c, i) => ({ ...c, rang: i + 1 })), filtres: new URLSearchParams(location.search).get("formule") === "investisseur" };
+      },
+      demanderAdhesion: async (id) => { DEMANDES_DEMO.add(id); },
+      annulerDemande: async (id) => { DEMANDES_DEMO.delete(id); },
+      mesDemandes: async () => PUBLICS_DEMO.filter((c) => DEMANDES_DEMO.has(c.id)).map((c) => ({ id: c.id, cercle_id: c.id, nom: c.nom })),
+      demandesRecues: async () => RECUES_DEMO,
+      repondreDemande: async (id, ok) => { const d = RECUES_DEMO.find((x) => x.id === id); RECUES_DEMO = RECUES_DEMO.filter((x) => x.id !== id);
+        const c = cerclesDemo.find((x) => x.id === d?.cercle_id); if (c) { c.demandes = RECUES_DEMO.length;
+          if (ok) c.membres.push({ pseudo: d.pseudo, moi: false, serie: 0, unite: "jour", record: 0, tenues: 0, attendues: 0 }); } },
+      signalerCercle: async () => {},
+      publierCercle: async (id, pub, pres) => { const c = cerclesDemo.find((x) => x.id === id); if (c) { c.public = pub; c.presentation = pres; c.capacite = pub ? 30 : 20; } return { public: pub }; },
       abonnerPush: async () => {}, desabonnerPush: async () => {}, essaiRappel: async () => ({ demo: true }),
       donnerAvis: async (a) => {
         const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
@@ -1366,7 +1389,25 @@
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
   let tutoDemo = {}, avisDemo = null, rappelsDemo = null;
-  let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, objectif_pct: 80, createur: true, membres: [
+  const PUBLICS_DEMO = [
+    ["p1", "Les épargnants de Dakar", "Un petit pas chaque jour, ensemble. Bienvenue à tous les rythmes.", 14, 30, 0.94, 18.2, "jour", false],
+    ["p2", "Famille et avenir", "Pour préparer les études des enfants.", 9, 20, 0.91, 9.4, "semaine", false],
+    ["p3", "Les fonctionnaires d'Abidjan", "Épargne mensuelle, fin de mois sereine.", 22, 50, 0.89, 4.1, "mois", false],
+    ["p4", "Jeunes investisseurs UEMOA", "On apprend la bourse en épargnant.", 27, 30, 0.86, 12.7, "jour", false],
+    ["p5", "Cercle des commerçantes", "Chaque vente, un peu de côté.", 11, 30, 0.83, 21.0, "jour", false],
+    ["p6", "Les matinaux", "On épargne avant le café.", 6, 20, 0.81, 7.3, "jour", false],
+    ["p7", "Objectif maison 2030", null, 18, 30, 0.79, 6.0, "semaine", false],
+    ["p8", "Bamako Épargne", "Patience et constance.", 5, 30, 0.76, 3.2, "mois", false],
+    ["p9", "Les tortues", "Lentement mais sûrement.", 8, 20, 0.74, 11.5, "jour", false],
+    ["p10", "Entre collègues", null, 4, 20, 0.72, 2.8, "semaine", false],
+    ["p11", "Premiers pas", "Nouveau cercle pour débutants : on démarre ensemble.", 2, 30, 1, 1.5, "jour", true],
+    ["p12", "Lomé Avenir", "Cercle tout juste créé.", 3, 30, 0.67, 2, "semaine", true],
+  ].map(([id, nom, presentation, membres, capacite, regularite, serie_moyenne, rythme, nouveau]) =>
+    ({ id, nom, presentation, membres, capacite, places: capacite - membres, regularite, serie_moyenne, rythme, nouveau, membre: false }));
+  const DEMANDES_DEMO = new Set();
+  let RECUES_DEMO = [{ id: 901, cercle_id: "c1", cercle: "Les amis de la fac", pseudo: "Aminata K.", message: "Je viens de la page des cercles, j'aimerais épargner avec vous !", cree_le: new Date().toISOString() }];
+  let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, objectif_pct: 80, createur: true, public: true,
+    presentation: "Anciens de la fac, tous les rythmes sont bienvenus.", capacite: 30, demandes: 1, membres: [
     { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, tenues: 16, attendues: 17, regularite: 0.92, maj_le: new Date().toISOString() },
     { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 },
     { pseudo: "Koffi A.", moi: false, serie: 2, unite: "semaine", record: 5, jours_mois: 2, tenues: 2, attendues: 3, regularite: 0.6 },
@@ -3148,6 +3189,10 @@
                         cercles: () => api.cercles(), creerCercle: (n, o) => api.creerCercle(n, o), apercuCercle: (c) => api.apercuCercle(c),
                         rejoindreCercle: (c) => api.rejoindreCercle(c), quitterCercle: (id) => api.quitterCercle(id),
                         publierRegularite: (x) => api.publierRegularite(x),
+                        cerclesPublics: (o, r, t) => api.cerclesPublics(o, r, t), demanderAdhesion: (i, m) => api.demanderAdhesion(i, m),
+                        annulerDemande: (i) => api.annulerDemande(i), mesDemandes: () => api.mesDemandes(), demandesRecues: () => api.demandesRecues(),
+                        repondreDemande: (i, ok) => api.repondreDemande(i, ok), signalerCercle: (i, m) => api.signalerCercle(i, m),
+                        publierCercle: (i, p, t) => api.publierCercle(i, p, t),
                         // abonnements (abonnement.js, assistant.js, import.js, rappels.js, cercles.js)
                         abo: () => S.abo, tarifs: () => S.tarifs, acces: (n) => acces(n), nomFormule: (f) => NOM_FORMULE[f] || f, voirFormules: () => voirFormules(),
                         rechargerFormule: async () => { await chargerFormule(); window.dispatchEvent(new Event("brvm:formule")); },

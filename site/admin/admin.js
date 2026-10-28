@@ -72,6 +72,8 @@
       abonnements: () => rpc("admin_abonnements"),
       traiterDemande: (id, activer) => rpc("admin_traiter_demande", { p_id: id, p_activer: activer }),
       tarifs: () => rpc("admin_tarifs"),
+      cerclesPublics: () => rpc("admin_cercles_publics"),
+      masquerCercle: (id, m) => rpc("admin_masquer_cercle", { p_cercle: id, p_masque: m }),
       formules: (ids) => rpc("admin_formules", { p_ids: ids }),
       abonnes: () => rpc("admin_abonnes"),
       abonnement: (u) => rpc("admin_abonnement", { p_user: u }),
@@ -136,6 +138,11 @@
       conformite: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.export", "roles.read", "market.read", "batch.read", "audit.read", "compliance.manage"], observateur: ["dashboard.read"] };
     const attrib = [{ user_id: "f6", email: "admin@exemple.org", role: "super_admin", accorde_le: d(60), expire_le: null, accorde_par: null }];
     M.admin.push("avis.moderate", "abonnements.manage");
+    const CERCLES_DEMO = [
+      { id: "p1", nom: "Les épargnants de Dakar", presentation: "Un petit pas chaque jour, ensemble.", createur: "awa.diop@exemple.sn", membres: 14, masque: false, signalements: 0, motifs: null, cree_le: "2026-08-02T10:00:00Z" },
+      { id: "p9", nom: "Gagnez 50 % par mois !!!", presentation: "Écrivez-moi sur WhatsApp pour un placement garanti", createur: "inconnu@exemple.com", membres: 3, masque: false, signalements: 4,
+        motifs: ["Promesse de gains, arnaque probable", "Publicité"], cree_le: "2026-10-20T10:00:00Z" },
+      { id: "p4", nom: "Jeunes investisseurs UEMOA", presentation: "On apprend la bourse en épargnant.", createur: "koffi.a@exemple.ci", membres: 27, masque: false, signalements: 0, motifs: null, cree_le: "2026-07-14T10:00:00Z" }];
     const TARIFS_DEMO = [["essentiel_mois", "Essentiel · 1 mois", 1000, 1], ["essentiel_3mois", "Essentiel · 3 mois", 2700, 3], ["essentiel_an", "Essentiel · 1 an", 10000, 12],
       ["investisseur_mois", "Investisseur · 1 mois", 3000, 1], ["investisseur_an", "Investisseur · 1 an", 30000, 12],
       ["pack_questions", "Pack BafiBot · 50 questions", 500, 0], ["pack_pages", "Pack import · 20 pages", 500, 0]].map(([objet, libelle, prix, duree_mois]) => ({ objet, libelle, prix, duree_mois, actif: true }));
@@ -191,6 +198,8 @@
                    { id: 2, email: "koffi.a@exemple.ci", objet: "pack_questions", moyen: "orange_money", reference: "OM5521", cree_le: new Date(Date.now() - 864e5).toISOString() }] }),
       traiterDemande: async () => {},
       tarifs: async () => ({ tarifs: TARIFS_DEMO, quotas: QUOTAS_DEMO }),
+      cerclesPublics: async () => CERCLES_DEMO,
+      masquerCercle: async (id, m) => { const c = CERCLES_DEMO.find((x) => x.id === id); if (c) c.masque = m; },
       formules: async (ids) => Object.fromEntries(ids.map((id, i) => [id, { formule: ["essentiel", "decouverte", "investisseur", "decouverte"][i % 4],
         fin: new Date(Date.now() + (20 - i) * 864e5).toISOString(), essai: i % 4 === 0 }])),
       abonnes: async () => [{ user_id: "a1", email: "awa.diop@exemple.sn", formule: "essentiel", effective: "essentiel", fin: new Date(Date.now() + 340 * 864e5).toISOString(), essai: false, source: "paiement" },
@@ -1167,11 +1176,35 @@
       <div class="card" id="abo-adm" aria-labelledby="h-abo"><h2 id="h-abo">Demandes et abonnés</h2><p class="muted">Chargement…</p></div>`;
     await afficherAbonnements();
   }
+  // Cercles publics : les plus signalés en premier ; masquer un cercle le retire du classement et refuse ses demandes en attente
+  async function afficherCerclesPublics() {
+    const z = $("#cercles-adm");
+    if (!z) return;
+    let L;
+    try { L = await api.cerclesPublics(); } catch (e) { z.innerHTML = `<h2 id="h-cpub">Cercles publics</h2><p class="small muted">Indisponible : exécutez cercles-publics.sql. (${esc(e.message)})</p>`; return; }
+    z.innerHTML = `<h2 id="h-cpub">Cercles publics (${L.length})</h2>
+      <p class="small muted">Nom, présentation et signalements. Masquez un cercle au nom ou au message inapproprié (promesse de gains, publicité, propos offensants) : il disparaît du classement, ses membres ne sont pas touchés.</p>
+      ${L.length ? `<ul class="list">${L.map((c) => `<li><div class="main"><div class="name">${esc(c.nom)}${c.masque ? ` <span class="status ko">masqué</span>` : ""}
+          ${c.signalements ? ` <span class="chip" style="background:hsl(0 70% 95%);color:hsl(0 60% 40%)">${N(c.signalements)} signalement${c.signalements > 1 ? "s" : ""}</span>` : ""}</div>
+          <div class="sub">${esc(c.presentation || "sans présentation")} · ${N(c.membres)} membres · créé par ${esc(c.createur)} le ${D(c.cree_le)}</div>
+          ${c.motifs?.length ? `<div class="sub">Motifs : ${c.motifs.map((m) => `« ${esc(m)} »`).join(" · ")}</div>` : ""}</div>
+          <div class="right"><button class="btn small${c.masque ? "" : " danger"}" data-masquer="${esc(c.id)}" data-m="${c.masque ? 0 : 1}">${c.masque ? "Afficher à nouveau" : "Masquer"}</button></div></li>`).join("")}</ul>`
+        : `<p class="small muted">Aucun cercle public pour l'instant.</p>`}`;
+    z.querySelectorAll("[data-masquer]").forEach((b) => b.addEventListener("click", async () => {
+      const m = b.dataset.m === "1";
+      if (m && !confirm("Masquer ce cercle ? Il disparaîtra du classement et ses demandes en attente seront refusées.")) return;
+      b.disabled = true;
+      try { await api.masquerCercle(b.dataset.masquer, m); toast(m ? "Cercle masqué." : "Cercle à nouveau visible."); afficherCerclesPublics(); }
+      catch (e) { toast("Impossible : " + msgErr(e)); b.disabled = false; }
+    }));
+  }
   async function vAvis() {
     $("#v-avis").innerHTML = `<h1 id="h-avis-p">Avis des utilisateurs</h1>
       <p class="muted page-intro">Publiez ou refusez les avis en attente ; les meilleurs défilent sur la vitrine.</p>
-      <div class="card" id="avis-adm" aria-labelledby="h-avis"><h2 id="h-avis">Avis</h2><p class="muted">Chargement…</p></div>`;
+      <div class="card" id="avis-adm" aria-labelledby="h-avis"><h2 id="h-avis">Avis</h2><p class="muted">Chargement…</p></div>
+      <div class="card" id="cercles-adm" aria-labelledby="h-cpub"><h2 id="h-cpub">Cercles publics</h2><p class="muted">Chargement…</p></div>`;
     await afficherAvis("en_attente");
+    afficherCerclesPublics();
   }
   const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, abonnements: vAbonnements, avis: vAvis, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
     communication: vCommunication, conformite: vConformite, habilitations: vHabilitations, audit: vAudit };
