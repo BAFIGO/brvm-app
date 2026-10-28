@@ -162,6 +162,9 @@
     const pc = (v) => (ok(v) ? nf1.format(v * 100) + " %" : "–");
     let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Santé financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
       <div><b>Santé financière : ${esc(SANTE[a.note] || "non notée")}</b><div class="sub">Note ${esc(a.note || "–")} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
+    // états financiers mal lus : la note est plafonnée et l'utilisateur est prévenu, dans toutes les formules
+    if (a.fiabilite === "partielle") h += `<div class="notice small">⚠ <b>Analyse partielle.</b> Certains chiffres des états financiers publiés semblent mal lus et ont été écartés :
+      à confirmer avec le rapport annuel de la société. Fiez-vous d'abord à la tendance du cours.</div>`;
     if (!acces(2)) {                                          // Essentiel : le pourquoi en un coup d'œil ; le détail est réservé à l'Investisseur
       if (a.familles?.length) h += `<ul class="fam-pastilles" aria-label="Ce qui fait la note">${a.familles.map((f) =>
         `<li class="fp-${/bon/i.test(f.appreciation || "") ? "bon" : /faible/i.test(f.appreciation || "") ? "faible" : "moyen"}">${esc(f.nom)}</li>`).join("")}</ul>

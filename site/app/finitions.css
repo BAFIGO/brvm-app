@@ -988,3 +988,17 @@ label { font-weight: 600; }
 .cer-entete h2 { min-width: 0; }
 .cer-gerer-bloc textarea { width: 100%; box-sizing: border-box; }
 .cer-gerer-bloc label.small { display: block; margin-bottom: 4px; }
+
+/* Aide au défilement de l'application : à GAUCHE, au-dessus de la barre d'onglets, pour laisser le coffre et BafiBot à droite */
+.defile { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 6;
+  display: grid; gap: 6px; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .25s ease, transform .25s ease, visibility 0s linear .25s; }
+@media (min-width: 900px) { .defile { bottom: 24px; } }
+.defile.on { opacity: 1; visibility: visible; transform: none; transition: opacity .25s ease, transform .25s ease; }
+.defile-b { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--surface) 82%, transparent); border: 1px solid var(--border); color: var(--text);
+  box-shadow: 0 8px 18px -10px rgb(20 26 70 / .45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.defile-b svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.defile-b:hover { color: var(--accent); border-color: var(--accent); }
+.defile-b:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.defile-b:disabled { opacity: .35; cursor: default; }
+dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
