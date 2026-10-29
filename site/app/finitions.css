@@ -1002,3 +1002,5 @@ label { font-weight: 600; }
 .defile-b:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 .defile-b:disabled { opacity: .35; cursor: default; }
 dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
+.abo-paydunya { display: grid; gap: 4px; margin: 8px 0; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.abo-paydunya span { font-size: .86rem; color: var(--muted); }

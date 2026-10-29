@@ -10,7 +10,7 @@
   const DEMO = QS.has("demo");
   // Écran → permission requise (doit refléter la matrice de supabase/admin.sql ; la base revérifie tout)
   const NEED = { tableau: "dashboard.read", utilisateurs: "users.read", abonnements: "abonnements.manage", avis: "avis.moderate",
-    donnees: "market.read", traitements: "batch.read", moteur: "engine.params", univers: "engine.params", communication: "comms.manage",
+    qualite: "qualite.read", donnees: "market.read", traitements: "batch.read", moteur: "engine.params", univers: "engine.params", communication: "comms.manage",
     conformite: "compliance.manage", habilitations: "roles.read", audit: "audit.read" };
   const TABS = Object.keys(NEED);
   const ACTIONS = {
@@ -73,6 +73,18 @@
       traiterDemande: (id, activer) => rpc("admin_traiter_demande", { p_id: id, p_activer: activer }),
       tarifs: () => rpc("admin_tarifs"),
       cerclesPublics: () => rpc("admin_cercles_publics"),
+      commandes: () => rpc("admin_commandes", { p_limite: 50 }),
+      qResume: () => rpc("admin_qualite_resume"),
+      qAnomalies: (d, st) => rpc("admin_anomalies", { p_domaine: d, p_statut: st }),
+      qTraiter: (id, st, note) => rpc("admin_traiter_anomalie", { p_id: id, p_statut: st, p_note: note || null }),
+      qEtats: (code) => rpc("admin_etats", { p_code: code }),
+      qCorriger: (code, ex, vals, motif) => rpc("admin_corriger_postes", { p_code: code, p_exercice: ex, p_valeurs: vals, p_motif: motif }),
+      qRelire: (code, ex) => rpc("admin_rescanner", { p_code: code, p_exercice: ex }),
+      qDividende: (code, ex, m, d, motif) => rpc("admin_corriger_dividende", { p_code: code, p_exercice: ex, p_montant: m, p_ex_date: d || null, p_motif: motif }),
+      qFract: () => rpc("admin_fractionnements"),
+      qDeclarer: (t, d, f, motif) => rpc("admin_declarer_fractionnement", { p_ticker: t, p_date: d, p_facteur: f, p_motif: motif }),
+      qDetecter: () => rpc("admin_detecter_fractionnements"),
+      qHistorique: () => rpc("admin_corrections_historique"),
       masquerCercle: (id, m) => rpc("admin_masquer_cercle", { p_cercle: id, p_masque: m }),
       formules: (ids) => rpc("admin_formules", { p_ids: ids }),
       abonnes: () => rpc("admin_abonnes"),
@@ -132,12 +144,20 @@
       ["market.correct", "Données", "Corriger une donnée de marché"], ["engine.params", "Moteur", "Modifier les paramètres du moteur"],
       ["batch.read", "Traitements", "Voir l'historique des traitements"], ["batch.run", "Traitements", "Relancer le traitement du soir"],
       ["comms.manage", "Communication", "Bannière, maintenance, modèles d'e-mail"], ["audit.read", "Audit", "Consulter et exporter le journal d'audit"],
-      ["compliance.manage", "Conformité", "Versions des CGU et des avertissements"], ["avis.moderate", "Communication", "Modérer les avis des utilisateurs"], ["abonnements.manage", "Utilisateurs", "Gérer les abonnements et les demandes de paiement"]].map(([code, module, libelle], i) => ({ code, module, libelle, ordre: i }));
+      ["compliance.manage", "Conformité", "Versions des CGU et des avertissements"], ["avis.moderate", "Communication", "Modérer les avis des utilisateurs"], ["abonnements.manage", "Utilisateurs", "Gérer les abonnements et les demandes de paiement"],
+      ["qualite.read", "Données", "Voir les anomalies de données"], ["qualite.corriger", "Données", "Corriger les données, demander une relecture"]].map(([code, module, libelle], i) => ({ code, module, libelle, ordre: i }));
     const M = { super_admin: perms.map((p) => p.code), admin: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.suspend", "users.delete", "users.export", "roles.read", "market.read", "engine.params", "batch.read", "batch.run", "comms.manage"],
       analyste: ["dashboard.read", "market.read", "market.correct", "engine.params", "batch.read", "batch.run"], support: ["dashboard.read", "users.read", "users.read_portfolio", "users.export"],
       conformite: ["dashboard.read", "users.read", "users.read_pii", "users.read_portfolio", "users.export", "roles.read", "market.read", "batch.read", "audit.read", "compliance.manage"], observateur: ["dashboard.read"] };
     const attrib = [{ user_id: "f6", email: "admin@exemple.org", role: "super_admin", accorde_le: d(60), expire_le: null, accorde_par: null }];
-    M.admin.push("avis.moderate", "abonnements.manage");
+    M.admin.push("avis.moderate", "abonnements.manage", "qualite.read", "qualite.corriger");
+    let QD = [
+      { id: 1, d: "financier", code: "ABJC", champ: "m_op", valeur: 0, detail: "Marge d'exploitation invraisemblable (0) : un poste des états financiers est probablement mal saisi ou mal reconnu.", gravite: "haute", ref: "2025", statut: "ouverte" },
+      { id: 2, d: "financier", code: "ABJC", champ: "autonomie", valeur: -0.00002, detail: "Autonomie financière invraisemblable (-2e-05) : un poste des états financiers est probablement mal saisi ou mal reconnu.", gravite: "haute", ref: "2025", statut: "ouverte" },
+      { id: 3, d: "financier", code: "SDSC", detail: "États financiers 2024 scannés : lecture automatique impossible.", gravite: "basse", ref: "2024", statut: "ouverte" },
+      { id: 4, d: "technique", code: "SIVC", champ: "variation", valeur: 0.243, detail: "Variation de +24,3 % le 15/10/2026 : au-delà de la limite de ±7,5 % par séance.", gravite: "moyenne", ref: "2026-10-15", statut: "ouverte" },
+      { id: 5, d: "dividendes", code: "SPHC", champ: "montant", valeur: 9000, detail: "Dividende de 9 000 F pour un cours de 8 000 F (rendement 112 %) : montant à vérifier.", gravite: "haute", ref: "2025", statut: "ouverte" },
+      { id: 6, d: "fractionnements", code: "SNTS", champ: "facteur", valeur: 10, detail: "Fractionnement détecté le 26/10/2026 (facteur 10) : à confirmer avec l'avis de la BRVM.", gravite: "basse", ref: "2026-10-26", statut: "ouverte" }];
     const CERCLES_DEMO = [
       { id: "p1", nom: "Les épargnants de Dakar", presentation: "Un petit pas chaque jour, ensemble.", createur: "awa.diop@exemple.sn", membres: 14, masque: false, signalements: 0, motifs: null, cree_le: "2026-08-02T10:00:00Z" },
       { id: "p9", nom: "Gagnez 50 % par mois !!!", presentation: "Écrivez-moi sur WhatsApp pour un placement garanti", createur: "inconnu@exemple.com", membres: 3, masque: false, signalements: 4,
@@ -199,6 +219,19 @@
       traiterDemande: async () => {},
       tarifs: async () => ({ tarifs: TARIFS_DEMO, quotas: QUOTAS_DEMO }),
       cerclesPublics: async () => CERCLES_DEMO,
+      qResume: async () => ({ ouvertes: { financier: QD.filter((a) => a.d === "financier" && a.statut === "ouverte").length, technique: QD.filter((a) => a.d === "technique" && a.statut === "ouverte").length,
+        dividendes: QD.filter((a) => a.d === "dividendes" && a.statut === "ouverte").length, fractionnements: QD.filter((a) => a.d === "fractionnements" && a.statut === "ouverte").length },
+        hautes: QD.filter((a) => a.gravite === "haute" && a.statut === "ouverte").length, corrigees_30j: 4, relectures: 1, derniere_analyse: new Date().toISOString() }),
+      qAnomalies: async (d, st) => QD.filter((a) => a.d === d && (st === "toutes" || a.statut === st)),
+      qTraiter: async (id, st, note) => { const a = QD.find((x) => x.id === id); if (a) { a.statut = st; a.note = note; } },
+      qEtats: async (code) => ({ postes: ["revenue", "net_income", "ebit", "equity", "total_assets", "debt", "current_assets", "current_liab"].flatMap((p, i) =>
+          [2025, 2024].map((ex) => ({ exercice: ex, poste: p, valeur: p === "ebit" && ex === 2025 ? 0 : [18200, 1240, 2600, 9100, 31000, 6200, 12100, 9800][i] * (ex === 2025 ? 1 : 0.94), statut: "verifie", url: "https://www.richbourse.com", corrige: null }))),
+        corrections: [], relectures: [{ exercice: 2025, statut: "traitee", resultat: "relu, non confirmé par recoupement · 24 postes lus", cree_le: new Date().toISOString() }] }),
+      qCorriger: async () => 1, qRelire: async () => {}, qDividende: async () => {}, qDeclarer: async () => {}, qDetecter: async () => 1,
+      qFract: async () => [{ ticker: "SNTS", date: "2026-10-26", facteur: 10, source: "moteur", motif: null }],
+      qHistorique: async () => [{ type: "Poste financier", code: "ABJC", quoi: "2025 · ebit : 0 → 412", motif: "Rapport annuel 2025, page 34", actif: true, cree_le: new Date().toISOString(), par: "analyste@bafibourse.com" }],
+      commandes: async () => [{ id: "k1", email: "awa.diop@exemple.sn", objet: "essentiel_an", montant: 20000, statut: "payee", mode: "live", cree_le: new Date(Date.now() - 3600e3).toISOString(), paye_le: new Date(Date.now() - 3500e3).toISOString(), recu_url: null },
+        { id: "k2", email: "koffi.a@exemple.ci", objet: "pack_questions", montant: 1000, statut: "annulee", mode: "live", cree_le: new Date(Date.now() - 86400e3).toISOString(), paye_le: null, recu_url: null }],
       masquerCercle: async (id, m) => { const c = CERCLES_DEMO.find((x) => x.id === id); if (c) c.masque = m; },
       formules: async (ids) => Object.fromEntries(ids.map((id, i) => [id, { formule: ["essentiel", "decouverte", "investisseur", "decouverte"][i % 4],
         fin: new Date(Date.now() + (20 - i) * 864e5).toISOString(), essai: i % 4 === 0 }])),
@@ -345,11 +378,12 @@
   const S = { moi: null, can: () => false, users: [], q: "" };
 
   // ------------------------------------------------------------ dialogue de confirmation (motif)
-  function ask({ title, body = "", motif = true, ok = "Confirmer", danger = false, validate }) {
+  function ask({ title, body = "", motif = true, ok = "Confirmer", danger = false, validate, onOpen }) {
     return new Promise((resolve) => {
       const dlg = $("#dlg"), f = $("#dlg-form");
       $("#dlg-title").textContent = title;
       $("#dlg-body").innerHTML = body;
+      setTimeout(() => onOpen?.(dlg), 0);
       $("#dlg-motif-l").hidden = !motif;
       f.motif.value = "";
       $(".msg", f).textContent = "";
@@ -1173,8 +1207,10 @@
   async function vAbonnements() {
     $("#v-abonnements").innerHTML = `<h1 id="h-abonnements">Abonnements</h1>
       <p class="muted page-intro">Activez les demandes après vérification du paiement, gérez les abonnés, ajustez les tarifs et les quotas.</p>
-      <div class="card" id="abo-adm" aria-labelledby="h-abo"><h2 id="h-abo">Demandes et abonnés</h2><p class="muted">Chargement…</p></div>`;
+      <div class="card" id="abo-adm" aria-labelledby="h-abo"><h2 id="h-abo">Demandes et abonnés</h2><p class="muted">Chargement…</p></div>
+      <div class="card" id="cmd-adm" aria-labelledby="h-cmd"><h2 id="h-cmd">Paiements en ligne (PayDunya)</h2><p class="muted">Chargement…</p></div>`;
     await afficherAbonnements();
+    afficherCommandes();
   }
   // Cercles publics : les plus signalés en premier ; masquer un cercle le retire du classement et refuse ses demandes en attente
   async function afficherCerclesPublics() {
@@ -1198,6 +1234,155 @@
       catch (e) { toast("Impossible : " + msgErr(e)); b.disabled = false; }
     }));
   }
+  // Paiements en ligne : lecture seule (l'activation est automatique, après vérification auprès de PayDunya)
+  async function afficherCommandes() {
+    const z = $("#cmd-adm");
+    if (!z) return;
+    let L;
+    try { L = await api.commandes(); } catch (e) { z.innerHTML = `<h2 id="h-cmd">Paiements en ligne (PayDunya)</h2><p class="small muted">Indisponible : exécutez paiements.sql. (${esc(e.message)})</p>`; return; }
+    const ST = { payee: ["ok", "payé"], creee: ["", "en cours"], annulee: ["", "annulé"], echouee: ["ko", "échec"] };
+    const total = L.filter((c) => c.statut === "payee" && c.mode === "live").reduce((a, c) => a + c.montant, 0);
+    z.innerHTML = `<h2 id="h-cmd">Paiements en ligne (PayDunya)</h2>
+      <p class="small muted">Les 50 derniers. Une formule s'active automatiquement dès que PayDunya confirme le paiement : rien à faire ici. Encaissé (réel) sur cette liste : <b>${N(total)} F</b>.</p>
+      ${L.length ? `<div class="scroll-x"><table class="dtable"><thead><tr><th>Date</th><th>Compte</th><th>Offre</th><th class="num">Montant</th><th>Statut</th><th>Mode</th></tr></thead>
+        <tbody>${L.map((c) => `<tr><td>${DT(c.cree_le)}</td><td>${esc(c.email)}</td><td>${esc(OBJ_ABO[c.objet] || c.objet)}</td><td class="num">${N(c.montant)} F</td>
+          <td><span class="status ${ST[c.statut]?.[0] || ""}">${ST[c.statut]?.[1] || esc(c.statut)}</span>${c.recu_url ? ` <a href="${esc(c.recu_url)}" target="_blank" rel="noopener">reçu</a>` : ""}</td>
+          <td class="small">${c.mode === "live" ? "réel" : "test"}</td></tr>`).join("")}</tbody></table></div>`
+        : `<p class="small muted">Aucun paiement en ligne pour l'instant.</p>`}`;
+  }
+  // ---------------------------------------------------------------- Qualité des données (qualite-donnees.sql)
+  // Simple : une liste d'anomalies par domaine ; chaque ligne propose l'action utile (corriger, relire, confirmer, ignorer).
+  const POSTES = { revenue: "Chiffre d'affaires", net_income: "Résultat net", ebit: "Résultat d'exploitation", ebe: "Excédent brut d'exploitation (EBE)",
+    va: "Valeur ajoutée", equity: "Capitaux propres", capital: "Capital social", total_assets: "Total du bilan", debt: "Dettes financières",
+    current_assets: "Actif circulant", current_liab: "Passif circulant", cash: "Trésorerie (actif)", cash_liab: "Trésorerie (passif)",
+    receivables: "Créances clients", fixed_assets: "Immobilisations", interest: "Frais financiers", cafg: "Capacité d'autofinancement",
+    cfo: "Flux de trésorerie d'exploitation", capex: "Investissements", stable_res: "Ressources stables",
+    pnb: "Produit net bancaire (PNB)", charges_gen: "Charges générales", cost_risk: "Coût du risque", loans: "Crédits à la clientèle",
+    deposits: "Dépôts de la clientèle", doubtful: "Créances en souffrance", solvency: "Ratio de solvabilité" };
+  const DOMAINES = [["financier", "Analyse financière"], ["technique", "Analyse technique"], ["dividendes", "Dividendes"], ["fractionnements", "Fractionnements"], ["historique", "Historique des corrections"]];
+  const GRAV = { haute: ["ko", "Haute"], moyenne: ["att", "Moyenne"], basse: ["", "Basse"] };
+  async function vQualite() {
+    const v = $("#v-qualite"), peut = S.can("qualite.corriger");
+    S.qDom ||= "financier"; S.qSt ||= "ouverte";
+    let r;
+    try { r = await api.qResume(); }
+    catch (e) { v.innerHTML = `<h1 id="h-qualite">Qualité des données</h1><p class="small muted">Indisponible : exécutez qualite-donnees.sql dans Supabase. (${esc(msgErr(e))})</p>`; return; }
+    const o = r.ouvertes || {};
+    v.innerHTML = `<h1 id="h-qualite">Qualité des données</h1>
+      <p class="muted page-intro">Les incohérences repérées chaque soir dans les données publiées. Corrigez à la source : les analyses sont recalculées au traitement suivant.
+        Dernière analyse : ${r.derniere_analyse ? DT(r.derniere_analyse) : "pas encore"}.</p>
+      <div class="tiles tiles-4">${DOMAINES.slice(0, 4).map(([k, t]) => `<button type="button" class="tile q-tile${S.qDom === k ? " on" : ""}" data-qdom="${k}">
+        <div class="lbl">${t}</div><div class="val">${N(o[k] || 0)}</div><div class="sub">à traiter</div></button>`).join("")}</div>
+      <p class="small muted">${N(r.hautes || 0)} de gravité haute · ${N(r.corrigees_30j || 0)} traitées sur 30 jours · ${N(r.relectures || 0)} relecture(s) prévue(s) au prochain traitement du soir.</p>
+      <div class="q-barre"><div class="seg" role="tablist">${DOMAINES.map(([k, t]) => `<button type="button" data-qdom="${k}" aria-pressed="${S.qDom === k}">${t}</button>`).join("")}</div>
+        ${S.qDom !== "historique" ? `<label class="small">Afficher <select id="q-st"><option value="ouverte"${S.qSt === "ouverte" ? " selected" : ""}>à traiter</option>
+          <option value="toutes"${S.qSt === "toutes" ? " selected" : ""}>toutes</option></select></label>` : ""}
+        ${S.qDom === "financier" && peut ? `<button type="button" class="btn small" id="q-societe">Ouvrir les états d'une société</button>` : ""}</div>
+      <div class="card" id="q-liste"><p class="muted">Chargement…</p></div>`;
+    v.querySelectorAll("[data-qdom]").forEach((b) => b.addEventListener("click", () => { S.qDom = b.dataset.qdom; vQualite(); }));
+    $("#q-st")?.addEventListener("change", (e) => { S.qSt = e.target.value; qListe(); });
+    $("#q-societe")?.addEventListener("click", async () => { const c = prompt("Code de la société (ex. SNTS, ABJC) :", ""); if (c) qEtatsDialog(c.trim().toUpperCase()); });
+    qListe();
+  }
+  async function qListe() {
+    const z = $("#q-liste"), peut = S.can("qualite.corriger"), d = S.qDom;
+    if (d === "historique") {
+      const L = await api.qHistorique();
+      z.innerHTML = L.length ? `<div class="scroll-x"><table class="dtable"><thead><tr><th>Date</th><th>Type</th><th>Société</th><th>Correction</th><th>Source indiquée</th><th>Par</th></tr></thead>
+        <tbody>${L.map((x) => `<tr><td>${DT(x.cree_le)}</td><td>${esc(x.type)}${x.actif ? "" : ` <span class="chip neutre">remplacée</span>`}</td><td><b>${esc(x.code)}</b></td>
+          <td>${esc(x.quoi)}</td><td class="small">${esc(x.motif || "–")}</td><td class="small">${esc(x.par || "–")}</td></tr>`).join("")}</tbody></table></div>`
+        : `<p class="small muted">Aucune correction pour l'instant.</p>`;
+      return;
+    }
+    let extra = "";
+    if (d === "fractionnements") {
+      const F = await api.qFract();
+      extra = `<h3>Fractionnements appliqués</h3><p class="small muted">Utilisés pour ajuster les cours passés, les journaux des utilisateurs et les alertes de plancher.</p>
+        <ul class="list">${F.map((f) => `<li><div class="main"><div class="name">${esc(f.ticker)} · une action devient ${N(f.facteur)}</div>
+          <div class="sub">depuis le ${D(f.date)} · ${esc({ moteur: "détecté par le moteur", base: "repéré dans l'historique", console: "déclaré dans la console" }[f.source] || f.source)}${f.motif ? " · " + esc(f.motif) : ""}</div></div></li>`).join("") || `<li class="muted">Aucun.</li>`}</ul>
+        ${peut ? `<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small primary" id="q-declarer">Déclarer un fractionnement</button>
+          <button type="button" class="btn small" id="q-detecter">Rechercher dans l'historique des cours</button></div>` : ""}<h3>Anomalies</h3>`;
+    }
+    const L = await api.qAnomalies(d, S.qSt);
+    z.innerHTML = extra + (L.length ? `<ul class="list q-l">${L.map((a) => `<li class="q-a ${a.statut}"><div class="main">
+        <div class="name"><b>${esc(a.code)}</b> <span class="status ${GRAV[a.gravite]?.[0] || ""}">${GRAV[a.gravite]?.[1] || ""}</span>${a.ref ? ` <span class="chip neutre">${esc(a.ref)}</span>` : ""}
+          ${a.statut !== "ouverte" ? ` <span class="chip ${a.statut === "ignoree" ? "neutre" : "ok"}">${esc({ corrigee: "corrigée", ignoree: "ignorée", resolue: "résolue" }[a.statut] || a.statut)}</span>` : ""}</div>
+        <div class="sub">${esc(a.detail)}</div>${a.note ? `<div class="sub">Note : ${esc(a.note)}${a.par ? ` (${esc(a.par)})` : ""}</div>` : ""}</div>
+        ${peut && a.statut === "ouverte" ? `<div class="right q-act">${d === "financier" ? `<button class="btn small primary" data-q="corriger" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Corriger les chiffres</button>
+            <button class="btn small" data-q="relire" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Relire le document</button>`
+          : d === "dividendes" ? `<button class="btn small primary" data-q="dividende" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Corriger</button>`
+          : d === "fractionnements" ? `<button class="btn small primary" data-q="confirmer-fract" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Confirmer</button>`
+          : `<button class="btn small" data-q="verifiee" data-id="${a.id}">Donnée vérifiée, juste</button>`}
+          <button class="btn link small" data-q="ignorer" data-id="${a.id}">Ignorer</button></div>` : ""}</li>`).join("")}</ul>`
+      : `<p class="small muted">${S.qSt === "ouverte" ? "✓ Rien à traiter dans ce domaine." : "Aucune anomalie."}</p>`);
+    $("#q-declarer")?.addEventListener("click", () => qDeclarer());
+    $("#q-detecter")?.addEventListener("click", async () => { try { const n = await api.qDetecter(); toast(n ? `${n} fractionnement(s) ajouté(s).` : "Aucun nouveau fractionnement trouvé."); qListe(); } catch (e) { toast("Impossible : " + msgErr(e)); } });
+    z.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", async () => {
+      const q = b.dataset.q;
+      try {
+        if (q === "corriger") return qEtatsDialog(b.dataset.code, +b.dataset.ref || null);
+        if (q === "relire") {
+          const ex = +(prompt(`Relire quel exercice des états financiers de ${b.dataset.code} ?`, b.dataset.ref || String(new Date().getFullYear() - 1)) || 0);
+          if (!ex) return;
+          await api.qRelire(b.dataset.code, ex); toast("Relecture demandée.", { detail: "Le document sera retéléchargé et réanalysé au prochain traitement du soir." }); return;
+        }
+        if (q === "dividende") return qDividende(b.dataset.code, +b.dataset.ref || null, b.dataset.val);
+        if (q === "confirmer-fract") return qDeclarer(b.dataset.code, b.dataset.ref, b.dataset.val);
+        if (q === "verifiee") { await api.qTraiter(+b.dataset.id, "ignoree", "Donnée vérifiée : elle est juste"); toast("Anomalie classée."); return vQualite(); }
+        if (q === "ignorer") { const n = prompt("Pourquoi ignorer cette anomalie ? (obligatoire)", ""); if (!n) return;
+          await api.qTraiter(+b.dataset.id, "ignoree", n); toast("Anomalie ignorée."); return vQualite(); }
+      } catch (e) { toast("Impossible : " + msgErr(e)); }
+    }));
+  }
+  // Les postes d'un exercice : valeur lue, valeur corrigée ; on ne saisit que ce qui est faux
+  async function qEtatsDialog(code, exercice) {
+    let r;
+    try { r = await api.qEtats(code); } catch (e) { return toast("Impossible : " + msgErr(e)); }
+    const exs = [...new Set(r.postes.map((p) => p.exercice))].sort((a, b) => b - a);
+    if (!exs.length) return toast(`Aucun poste lu pour ${code} : demandez une relecture du document.`);
+    const ex = exercice && exs.includes(exercice) ? exercice : exs[0];
+    const P = r.postes.filter((p) => p.exercice === ex), url = P.find((p) => p.url)?.url;
+    const fmt = (x) => (x == null ? "–" : N(x));
+    const res = await ask({ title: `${code} · états financiers ${ex}`, ok: "Enregistrer les corrections",
+      body: `<p class="small muted">Montants en millions de F CFA. Ne remplissez que les postes faux, en recopiant le chiffre du rapport annuel ;
+          les ratios sont recalculés au prochain traitement du soir.${url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">Ouvrir le document source</a>.` : ""}</p>
+        ${exs.length > 1 ? `<p class="small">Autres exercices : ${exs.filter((x) => x !== ex).map((x) => `<button type="button" class="btn link small" data-qex="${x}">${x}</button>`).join(" ")}</p>` : ""}
+        <div class="scroll-x"><table class="dtable q-postes"><thead><tr><th>Poste</th><th class="num">Lu dans le document</th><th class="num">Valeur corrigée</th></tr></thead><tbody>
+        ${P.map((p) => `<tr${p.valeur === 0 ? ' class="q-suspect"' : ""}><td>${esc(POSTES[p.poste] || p.poste)}</td><td class="num">${fmt(p.valeur)}</td>
+          <td class="num"><input type="number" step="any" name="p_${esc(p.poste)}" value="${p.corrige ?? ""}" placeholder="—" aria-label="Valeur corrigée : ${esc(POSTES[p.poste] || p.poste)}"></td></tr>`).join("")}</tbody></table></div>
+        ${r.relectures?.length ? `<p class="small muted">Dernière relecture : ${esc(r.relectures[0].exercice)} · ${esc(r.relectures[0].resultat || "en attente")}</p>` : ""}
+        <p class="small">Le motif ci-dessous est la <b>source</b> de vos chiffres (ex. « Rapport annuel 2025, page 34 »).</p>`,
+      validate: ({ form }) => [...form.querySelectorAll('input[name^="p_"]')].some((i) => i.value !== "") ? null : "Saisissez au moins une valeur corrigée." ,
+      onOpen: (dlg) => dlg.querySelectorAll("[data-qex]").forEach((b) => b.addEventListener("click", () => { dlg.close(); qEtatsDialog(code, +b.dataset.qex); })) });
+    if (!res) return;
+    const vals = {};
+    res.form.querySelectorAll('input[name^="p_"]').forEach((i) => { if (i.value !== "") vals[i.name.slice(2)] = +i.value; });
+    try { const n = await api.qCorriger(code, ex, vals, res.motif); toast(`${n} poste(s) corrigé(s).`, { detail: "Les ratios et l'appréciation seront recalculés ce soir." }); vQualite(); }
+    catch (e) { toast("Impossible : " + msgErr(e)); }
+  }
+  async function qDividende(code, exercice, val) {
+    const res = await ask({ title: `${code} · corriger un dividende`, ok: "Enregistrer",
+      body: `<div class="grid-role"><label>Exercice<input type="number" name="ex" value="${exercice || new Date().getFullYear() - 1}"></label>
+        <label>Montant net par action (F)<input type="number" step="any" name="m" value="${esc(val || "")}"></label>
+        <label>Date de détachement<input type="date" name="d"></label></div>
+        <p class="small">Le motif est la source (avis de paiement, site de la BRVM…).</p>`,
+      validate: ({ form }) => (form.m.value === "" ? "Indiquez le montant." : null) });
+    if (!res) return;
+    try { await api.qDividende(code, +res.form.ex.value, +res.form.m.value, res.form.d.value, res.motif); toast("Dividende corrigé.", { detail: "Rendements et historique recalculés ce soir." }); vQualite(); }
+    catch (e) { toast("Impossible : " + msgErr(e)); }
+  }
+  async function qDeclarer(code, date, facteur) {
+    const res = await ask({ title: "Déclarer un fractionnement", ok: "Enregistrer",
+      body: `<div class="grid-role"><label>Code du titre<input name="t" value="${esc(code || "")}" placeholder="SNTS"></label>
+        <label>Première séance au nouveau cours<input type="date" name="d" value="${esc(date || "")}"></label>
+        <label>Facteur (1 action devient…)<input type="number" step="any" name="f" value="${esc(facteur || "")}" placeholder="10"></label></div>
+        <p class="small muted">Appliqué aux cours passés, aux journaux des utilisateurs et aux alertes. Le motif est la source (avis de la BRVM…).</p>`,
+      validate: ({ form }) => (!form.t.value || !form.d.value || !(+form.f.value > 0) ? "Code, date et facteur sont obligatoires." : null) });
+    if (!res) return;
+    try { await api.qDeclarer(res.form.t.value.trim().toUpperCase(), res.form.d.value, +res.form.f.value, res.motif); toast("Fractionnement enregistré.", { detail: "Les alertes sont ajustées tout de suite ; les cours et journaux au prochain traitement." }); vQualite(); }
+    catch (e) { toast("Impossible : " + msgErr(e)); }
+  }
+
   async function vAvis() {
     $("#v-avis").innerHTML = `<h1 id="h-avis-p">Avis des utilisateurs</h1>
       <p class="muted page-intro">Publiez ou refusez les avis en attente ; les meilleurs défilent sur la vitrine.</p>
@@ -1206,7 +1391,7 @@
     await afficherAvis("en_attente");
     afficherCerclesPublics();
   }
-  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, abonnements: vAbonnements, avis: vAvis, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
+  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, abonnements: vAbonnements, avis: vAvis, qualite: vQualite, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
     communication: vCommunication, conformite: vConformite, habilitations: vHabilitations, audit: vAudit };
 
   // ------------------------------------------------------------ navigation

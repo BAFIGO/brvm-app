@@ -133,3 +133,16 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
   box-shadow: 0 24px 48px -16px rgb(20 26 70 / .45), inset 4px 0 0 hsl(35 92% 55%); }
 .inactif p { margin: 0; }
 .inactif .btn { justify-self: start; }
+
+/* Qualité des données */
+.q-tile { all: unset; box-sizing: border-box; cursor: pointer; display: block; text-align: left; }
+.q-tile.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.q-tile:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.q-barre { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 12px 0; }
+.q-barre .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text, #fff); }
+.q-l li { align-items: flex-start; }
+.q-act { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.q-a.ignoree, .q-a.resolue { opacity: .7; }
+.q-postes input { width: 9em; text-align: right; min-height: 36px; padding: 4px 8px; }
+.q-postes tr.q-suspect td:first-child::after { content: " · valeur nulle suspecte"; color: var(--bad); font-size: .78rem; }
+.status.att { background: hsl(35 92% 55% / .2); color: hsl(30 80% 35%); }

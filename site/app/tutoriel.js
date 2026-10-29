@@ -191,7 +191,7 @@
     app.render();
     if (fin === "fin" && app.demo) {
       await attendre(400);
-      const r = await derouler([{ titre: "Vous avez vu l'essentiel", texte: "Prêt à le faire avec votre propre argent ? Choisissez votre formule : gratuite pour commencer, 14 jours d'Essentiel offerts, sans carte bancaire." }],
+      const r = await derouler([{ titre: "Vous avez vu l'essentiel", texte: "Prêt à le faire avec votre propre argent ? Choisissez votre formule : gratuite pour commencer, 14 jours d'Essentiel offerts." }],
         { passer: "Continuer la démo", terminer: "Voir les offres" });
       if (r === "fin") location.href = "../#tarifs";
       return;

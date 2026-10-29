@@ -21,7 +21,7 @@
     const o = offre(), f = document.getElementById("f-login");
     if (!o || !f || document.querySelector(".offre-choisie")) return;
     f.insertAdjacentHTML("beforebegin", `<div class="offre-choisie"><span>Formule choisie</span><b>${NOMS_OFFRE[o]}</b>
-      <small>${o === "investisseur" ? "Créez votre compte : le paiement se règle juste après, en 2 minutes." : "Gratuit pour commencer · 14 jours d'Essentiel offerts · sans carte bancaire"}</small></div>`);
+      <small>${o === "investisseur" ? "Créez votre compte : le paiement se règle juste après, en 2 minutes." : "Gratuit pour commencer · 14 jours d'Essentiel offerts"}</small></div>`);
   });
   let offreAppliquee = false;
   function appliquerOffre() {
@@ -34,6 +34,34 @@
     if (o === "investisseur") { app.voirFormules(); setTimeout(() => ouvrir("investisseur"), 700); }
     else app.toast(o === "essentiel" ? "Votre essai Essentiel de 14 jours a commencé" : "Bienvenue en formule Découverte",
       { detail: o === "essentiel" ? "Profitez de tout l'Essentiel ; vous choisirez ensuite de continuer ou non." : "En cadeau de bienvenue : 14 jours d'Essentiel offerts." });
+  }
+
+  // Retour de PayDunya (?paiement=retour ou ?paiement=annule) : vérifier, activer, prévenir, puis nettoyer l'adresse
+  let retourPaiement = null;
+  try {
+    const q = new URLSearchParams(location.search), p = q.get("paiement");
+    if (p) {
+      retourPaiement = { etat: p, token: q.get("token") || localStorage.getItem("brvm-paiement") };
+      const u = new URL(location.href); u.searchParams.delete("paiement"); u.searchParams.delete("token");
+      history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+  } catch (e) { /* rien */ }
+  async function traiterRetourPaiement() {
+    const rp = retourPaiement; retourPaiement = null;
+    if (!rp || !app || app.demo) return;
+    try { localStorage.removeItem("brvm-paiement"); } catch (e) { /* rien */ }
+    if (rp.etat === "annule") return app.toast("Paiement annulé.", { detail: "Aucun montant n'a été prélevé. Vous pouvez réessayer quand vous voulez." });
+    if (!rp.token) return;
+    for (let essai = 0; essai < 4; essai++) {        // la confirmation peut prendre quelques secondes
+      try {
+        const r = await app.verifierPaiement(rp.token);
+        if (r.statut === "payee") { await app.rechargerFormule(); app.voirFormules?.();
+          return app.toast("Paiement confirmé : merci !", { detail: "Votre formule est active. Le reçu PayDunya vous a été envoyé." }); }
+        if (r.statut === "annulee") return app.toast("Paiement annulé.", { detail: "Aucun montant n'a été prélevé." });
+      } catch (e) { /* on réessaie */ }
+      await new Promise((ok) => setTimeout(ok, 4000));
+    }
+    app.toast("Paiement en cours de confirmation", { detail: "Votre formule s'activera automatiquement dès que PayDunya l'aura confirmé." });
   }
 
   // Lien de parrainage : le code attend la connexion ou l'inscription
@@ -149,8 +177,9 @@
     const mensuel = OBJETS[formule + "_mois"]?.[1];
     const meilleure = durees.length > 1 ? durees.reduce((m, d) => (OBJETS[d][2] && OBJETS[d][1] / OBJETS[d][2] < OBJETS[m][1] / OBJETS[m][2] ? d : m), durees[0]) : null;
     const MARQUES = { wave: ["#1dc3ff", "W"], orange_money: ["#ff7900", "OM"], autre: ["#6b7280", "…"] };
+    const enLigne = !!cfg.enLigne && !app.demo;
     $(".abo-corps", dlg).innerHTML = `
-      <ol class="abo-etapes" aria-label="Étapes"><li class="on">Choisir</li><li>Payer</li><li>Envoyer la référence</li></ol>
+      <ol class="abo-etapes" aria-label="Étapes"><li class="on">Choisir</li><li>Payer</li><li>${enLigne ? "C'est activé" : "Envoyer la référence"}</li></ol>
       <fieldset class="abo-durees"><legend class="sr-only">${objet?.startsWith("pack") ? "Pack" : "Durée"}</legend>${durees.map((d) => {
         const [lib, prix, mois] = OBJETS[d], parMois = mois ? Math.round(prix / mois) : 0, eco = mensuel && mois > 1 ? mensuel * mois - prix : 0;
         return `<label class="abo-d${d === meilleure ? " meilleure" : ""}">
@@ -160,7 +189,9 @@
             <span>${mois > 1 ? `soit ${F(parMois)} par mois` : mois === 1 ? "sans engagement" : "valable 3 mois"}${eco > 0 ? ` · <em>${F(eco)} d'économie</em>` : ""}</span></span>
           <span class="abo-d-prix">${F(prix)}</span>
           ${d === meilleure ? `<span class="abo-d-badge">Le plus avantageux</span>` : ""}</label>`; }).join("")}</fieldset>
-      ${moyens.length ? `<p class="abo-consigne">Payez le montant choisi, puis indiquez la référence de la transaction.</p>
+      ${enLigne ? `<div class="abo-paydunya"><b>Paiement sécurisé par PayDunya</b>
+          <span>Wave, Orange Money, Free Money, Moov Money ou carte bancaire. Votre formule est activée dès la confirmation du paiement, automatiquement.</span></div>`
+      : moyens.length ? `<p class="abo-consigne">Payez le montant choisi, puis indiquez la référence de la transaction.</p>
         <fieldset class="abo-moyens"><legend class="sr-only">Moyen de paiement</legend>${[...moyens, ["autre", "Autre", ""]].map(([k, n, num], i) =>
           `<label class="abo-m"><input type="radio" name="moyen" value="${k}"${i === 0 ? " checked" : ""}>
             <span class="abo-m-logo" style="--c:${MARQUES[k][0]}">${MARQUES[k][1]}</span><span class="abo-m-t"><b>${n}</b>${num ? `<span>${esc(num)}</span>` : "<span>autre moyen</span>"}</span></label>`).join("")}</fieldset>
@@ -170,7 +201,12 @@
       <p class="small muted">Activée dès réception du paiement, en général sous 24 h. Montants toutes taxes comprises.</p>`;
     // étapes : « Payer » s'allume quand une durée est choisie, « Envoyer » quand la référence est saisie
     const etapes = () => { const li = dlg.querySelectorAll(".abo-etapes li"); li[1]?.classList.toggle("on", !!f.objet?.value); li[2]?.classList.toggle("on", !!f.reference?.value.trim()); };
-    f.oninput = etapes; etapes();
+    f.oninput = () => { etapes(); libelleOk(); }; etapes();
+    // le bouton dit ce qui va se passer : « Payer 10 000 F » en ligne, « Envoyer ma demande » sinon
+    const libelleOk = () => { const b = f.querySelector('button[type="submit"]'), o = OBJETS[f.objet?.value];
+      b.textContent = enLigne && o ? `Payer ${F(o[1])}` : "Envoyer ma demande"; };
+    libelleOk();
+    dlg.dataset.enligne = enLigne ? "1" : "";
     $(".msg", dlg).textContent = "";
     dlg.showModal();
   }
@@ -180,6 +216,13 @@
     if (!objet) return;
     b.disabled = true;
     try {
+      if (dlg.dataset.enligne) {                       // paiement en ligne : direction la page PayDunya
+        const r = await app.payer(objet);
+        try { localStorage.setItem("brvm-paiement", r.token); } catch (e) { /* rien */ }
+        b.textContent = "Redirection vers le paiement…";
+        location.href = r.url;
+        return;
+      }
       await app.demanderAbonnement({ objet, moyen: f.moyen?.value || null, reference: f.reference?.value.trim() || null });
       dlg.close();
       await app.rechargerFormule();
@@ -210,5 +253,5 @@
   }
   window.addEventListener("brvm:maj", () => setTimeout(() => { if (app?.tab() === "profil") carte(); appliquerOffre(); }, 40));
   window.addEventListener("brvm:formule", () => { if (app?.tab() === "profil") carte(); });
-  window.addEventListener("brvm:pret", () => { app = window.BRVM_APP?.abo ? window.BRVM_APP : null; });
+  window.addEventListener("brvm:pret", () => { app = window.BRVM_APP?.abo ? window.BRVM_APP : null; setTimeout(traiterRetourPaiement, 600); });
 })();

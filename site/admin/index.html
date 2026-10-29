@@ -9,10 +9,10 @@
   <title>Administration – BafiBourse</title>
   <meta name="theme-color" content="#0f5c4d">
   <link rel="icon" href="../icon.svg?v=carapace1" type="image/svg+xml">
-  <script src="../charte.js?v=20261028d"></script>
-  <link rel="stylesheet" href="../styles.css?v=20261028d">
-  <link rel="stylesheet" href="admin.css?v=20261028d">
-  <link rel="stylesheet" href="../charte-indigo.css?v=20261028d">
+  <script src="../charte.js?v=20261029a"></script>
+  <link rel="stylesheet" href="../styles.css?v=20261029a">
+  <link rel="stylesheet" href="admin.css?v=20261029a">
+  <link rel="stylesheet" href="../charte-indigo.css?v=20261029a">
 </head>
 <body class="admin">
   <a class="skip" href="#main">Aller au contenu</a>
@@ -36,6 +36,7 @@
       <a href="#avis" data-tab="avis" data-perm="avis.moderate">Avis</a>
       <a href="#communication" data-tab="communication" data-perm="comms.manage">Communication</a>
       <span class="nav-groupe">Données et calculs</span>
+      <a href="#qualite" data-tab="qualite" data-perm="qualite.read">Qualité des données</a>
       <a href="#traitements" data-tab="traitements" data-perm="batch.read">Traitements</a>
       <a href="#donnees" data-tab="donnees" data-perm="market.read">Données de marché</a>
       <a href="#moteur" data-tab="moteur" data-perm="engine.params">Moteur</a>
@@ -51,6 +52,7 @@
       <section id="v-utilisateurs" class="view" hidden aria-labelledby="h-utilisateurs"></section>
       <section id="v-abonnements" class="view" hidden aria-labelledby="h-abonnements"></section>
       <section id="v-avis" class="view" hidden aria-labelledby="h-avis-p"></section>
+      <section id="v-qualite" class="view" hidden aria-labelledby="h-qualite"></section>
       <section id="v-donnees" class="view" hidden aria-labelledby="h-donnees"></section>
       <section id="v-traitements" class="view" hidden aria-labelledby="h-traitements"></section>
       <section id="v-moteur" class="view" hidden aria-labelledby="h-moteur"></section>
@@ -78,9 +80,9 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="../config.js?v=20261028d"></script>
-  <script src="../supabase.min.js?v=20261028d"></script>
-  <script src="../pays.js?v=20261028d"></script>
-  <script src="admin.js?v=20261028d"></script>
+  <script src="../config.js?v=20261029a"></script>
+  <script src="../supabase.min.js?v=20261029a"></script>
+  <script src="../pays.js?v=20261029a"></script>
+  <script src="admin.js?v=20261029a"></script>
 </body>
 </html>

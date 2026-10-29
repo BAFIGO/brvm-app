@@ -17,7 +17,9 @@ window.BRVM_CONFIG = {
   vapidPublique: "BMicomj2VSAFjpnSgPx3QX-Oj4H_fIv_7QCDXg06sCtQDrQ-C6hqgJsOcGxsvpzZ8Z-ALlNJLa0Uu4mgWNa5_kU",   // clé publique des notifications (rappels du soir)
   // Paiement des abonnements, en attendant l'agrégateur : numéros marchands affichés à l'utilisateur.
   // Laissez vide un moyen non utilisé : il n'est pas proposé.
-  paiement: { wave: "", orange_money: "", beneficiaire: "BafiBourse" },
+  // enLigne : true dès que PayDunya est configuré (secrets et fonctions « paiement » et « paiement-ipn » déployés).
+  // Sinon, l'application propose le paiement par Wave ou Orange Money aux numéros ci-dessous, activé depuis la console.
+  paiement: { enLigne: false, wave: "", orange_money: "", beneficiaire: "BafiBourse" },
   // Contact et réseaux sociaux (pied de page de la vitrine) : seuls les liens remplis s'affichent.
   contact: { email: "", whatsapp: "" },
   reseaux: { facebook: "", instagram: "", linkedin: "", tiktok: "", youtube: "", x: "" },

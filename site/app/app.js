@@ -163,8 +163,8 @@
     let h = `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Santé financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
       <div><b>Santé financière : ${esc(SANTE[a.note] || "non notée")}</b><div class="sub">Note ${esc(a.note || "–")} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
     // états financiers mal lus : la note est plafonnée et l'utilisateur est prévenu, dans toutes les formules
-    if (a.fiabilite === "partielle") h += `<div class="notice small">⚠ <b>Analyse partielle.</b> Certains chiffres des états financiers publiés semblent mal lus et ont été écartés :
-      à confirmer avec le rapport annuel de la société. Fiez-vous d'abord à la tendance du cours.</div>`;
+    if (a.fiabilite === "partielle") h += `<div class="notice small">ⓘ <b>Analyse partielle.</b> Certains indicateurs de cette société sont en cours de vérification par notre équipe :
+      l'appréciation sera complétée dès leur validation.</div>`;
     if (!acces(2)) {                                          // Essentiel : le pourquoi en un coup d'œil ; le détail est réservé à l'Investisseur
       if (a.familles?.length) h += `<ul class="fam-pastilles" aria-label="Ce qui fait la note">${a.familles.map((f) =>
         `<li class="fp-${/bon/i.test(f.appreciation || "") ? "bon" : /faible/i.test(f.appreciation || "") ? "faible" : "moyen"}">${esc(f.nom)}</li>`).join("")}</ul>
@@ -347,6 +347,11 @@
       // Abonnements (abonnements.sql) : formule, quotas, demandes, parrainage
       maFormule: async () => { const { data, error } = await sb.rpc("ma_formule"); if (error) throw error; return data; },
       demanderAbonnement: async (d) => r(await sb.from("abonnement_demandes").insert(d)),
+      // paiement en ligne PayDunya (fonction serveur « paiement ») : création de la facture, puis vérification au retour
+      payer: async (objet) => { const { data, error } = await sb.functions.invoke("paiement", { body: { objet } });
+        if (error) { let m = error.message; try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ } throw new Error(m); } return data; },
+      verifierPaiement: async (token) => { const { data, error } = await sb.functions.invoke("paiement", { body: { verifier: token } });
+        if (error) { let m = error.message; try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ } throw new Error(m); } return data; },
       tarifs: async () => {
         const [t, q] = await Promise.all([sb.from("tarifs").select("objet,libelle,prix,duree_mois,credit_questions,credit_pages,ordre").order("ordre"),
                                           sb.from("quotas_formules").select("formule,questions,questions_debut,approfondies,pages")]);
@@ -482,6 +487,8 @@
         fin: new Date(Date.now() + 9 * 864e5).toISOString(), quotas: { questions: 100, approfondies: 0, pages: 15 },
         usage: { questions: 37, approfondies: 0, pages: 4 }, credits: { questions: 0, pages: 0 }, code_parrain: "DEMO2026", filleuls: 1, demande: null }),
       demanderAbonnement: async () => {}, definirParrain: async () => true,
+      payer: async () => { throw new Error("En démonstration, le paiement n'est pas disponible : créez votre compte pour choisir votre formule."); },
+      verifierPaiement: async () => ({ statut: "en_attente" }),
       tarifs: async () => { throw new Error("démo : tarifs par défaut"); },
       creerCercle: async (nom, objectif) => {
         const c = { id: "c" + Date.now(), nom, code: Math.random().toString(16).slice(2, 10).toUpperCase(), objectif_pct: objectif, createur: true,
@@ -3201,7 +3208,7 @@
                         rechargerFormule: async () => { await chargerFormule(); window.dispatchEvent(new Event("brvm:formule")); },
                         noterUsage: (k, n = 1) => { if (S.abo?.usage) { const q = S.abo.quotas?.[k] ?? 0, u = S.abo.usage[k] ?? 0;
                           if (u + n <= q) S.abo.usage[k] = u + n; else if (k !== "approfondies" && S.abo.credits) S.abo.credits[k] = Math.max(0, (S.abo.credits[k] || 0) - n); } },
-                        demanderAbonnement: (d) => api.demanderAbonnement(d),
+                        demanderAbonnement: (d) => api.demanderAbonnement(d), payer: (o) => api.payer(o), verifierPaiement: (t) => api.verifierPaiement(t),
                         profil: () => S.profil, email: () => S.user?.email || "",
                         saveProfil: async (p) => { await api.saveProfil(S.user.id, p); Object.assign(S.profil, p); window.dispatchEvent(new Event("brvm:profil")); },
                         regularite: () => {
@@ -3393,7 +3400,7 @@
     setTimeout(() => {
       if (window.BafiCalme && !window.BafiCalme.autorise("demo")) return;
       window.BafiCalme?.consomme("demo");
-      toast("Ce portefeuille pourrait être le vôtre", { detail: "Gratuit pour commencer, 14 jours d'Essentiel offerts, sans carte bancaire.",
+      toast("Ce portefeuille pourrait être le vôtre", { detail: "Gratuit pour commencer, et 14 jours d'Essentiel offerts.",
         actions: [{ label: "Voir les offres", fn: () => (location.href = "../#tarifs") }] });
     }, 180000);
     let vu = false;
