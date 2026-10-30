@@ -7,7 +7,7 @@
  * app.js fournit window.BRVM_APP et émet « brvm:pret », puis « brvm:maj ». */
 (() => {
   "use strict";
-  const VERSION = "2026.10.30c";
+  const VERSION = "2026.10.30d";
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -57,8 +57,7 @@
         <div class="ti-bloc" data-bloc="recents" hidden><p class="ti-sous">Récents</p><ul class="ti-recents"></ul></div>
       </div>
       <div class="ti-pied">
-        <a href="#profil" class="ti-moi" data-ti="profil" aria-label="Profil et réglages"></a>
-        <button type="button" class="ti-nouvelle">${ic('<path d="M12 5v14M5 12h14"/>')}<span>Nouvelle opération</span></button>
+        <a href="#profil" class="ti-moi" data-ti="profil"></a>
       </div>
     </nav>
     <dialog id="dlg-parrainage" class="parrainage" aria-labelledby="parr-t"><div class="parr">
@@ -218,7 +217,6 @@
       return;
     }
     if (ev.target.closest(".ti-marque")) { fermer(false); return; }
-    if (ev.target.closest(".ti-nouvelle")) { fermer(false); app?.ouvrirOperation?.(); return; }
     const e = ev.target.closest("[data-epingle]");
     if (e) { ev.preventDefault(); fermer(false); if (e.dataset.epingle === "cercle") app?.allerPf?.("cercles"); else app?.allerPf?.("placements", e.dataset.code); }
   });
@@ -235,7 +233,7 @@
     tiroir.querySelectorAll("[data-ti]").forEach((a) => (a.dataset.ti === t ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     const moi = $(".ti-moi", tiroir), p = app.profil?.() || {};
     const prenom = p.prenom || (app.email?.() || "").split("@")[0] || "Mon profil";
-    moi.innerHTML = (window.BafiAvatar ? window.BafiAvatar(40) : `<span class="av-ini">${esc(prenom[0] || "?")}</span>`) + `<span class="ti-moi-nom">${esc(prenom)}</span>`;
+    moi.innerHTML = (window.BafiAvatar ? window.BafiAvatar(40) : `<span class="av-ini">${esc(prenom[0] || "?")}</span>`) + `<span class="ti-moi-nom">${esc(prenom)}<small>Profil et réglages</small></span>`;
     // récents
     const rec = app.recents?.() || [], bR = $('[data-bloc="recents"]', tiroir);
     bR.hidden = !rec.length;

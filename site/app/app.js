@@ -1444,7 +1444,7 @@
     const total = cote + Math.max(0, L.cash) + L.investi;
     const seg = (v, col) => (total > 0 && v > 0 ? `<i style="width:${(100 * v / total).toFixed(2)}%;background:${col}"></i>` : "");
     const onglet = S.ui.pfOnglet || "placements";
-    let h = `<h1 id="h-pf">Portefeuille</h1>`;
+    let h = `<h1 id="h-pf">${{ placements: "Mes placements", epargne: "Mon épargne", cercles: "Mes cercles", simulateur: "Simulateur" }[onglet] || "Portefeuille"}</h1>`;
     h += `<div class="seg pf-onglets" role="tablist" aria-label="Rubriques du portefeuille">
         <button type="button" role="tab" data-pfo="placements" aria-selected="${onglet === "placements"}" aria-pressed="${onglet === "placements"}">Placements</button>
         <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Épargne${ep?.serie > 0 ? ` · 🔥${ep.serie}` : ""}</button>
