@@ -1004,3 +1004,46 @@ label { font-weight: 600; }
 dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .abo-paydunya { display: grid; gap: 4px; margin: 8px 0; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); }
 .abo-paydunya span { font-size: .86rem; color: var(--muted); }
+
+/* ---------------------------------------------------------------- Mon épargne allégée (ep2) : 3 blocs visibles, le reste replié */
+.ep2 { display: flex; flex-direction: column; gap: 14px; }
+.ep2-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ep2-etat { margin: 0; font-size: 1.25rem; line-height: 1.3; font-weight: 700; color: var(--text); }
+.ep2-etat b { color: var(--brand); white-space: nowrap; }
+.ep2-ok { color: var(--good); }
+.ep2-plan { flex: none; cursor: pointer; border: 0; font: inherit; font-size: .8rem; font-weight: 700; min-height: 32px; }
+.ep2-objectif { display: grid; gap: 6px; }
+.ep2-chiffres { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: .95rem; }
+.ep2-chiffres > b { color: var(--brand); }
+.ep2-barre { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.ep2-barre i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, hsl(35 92% 55%), hsl(30 90% 50%)); }
+.ep2-objectif p { margin: 0; }
+.ep2-cta { width: 100%; min-height: 52px; font-size: 1.05rem; }
+@media (min-width: 640px) { .ep2-cta { width: auto; align-self: flex-start; padding-left: 32px; padding-right: 32px; } }
+.ep2-motiv { margin: 0; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); font-size: .95rem; line-height: 1.4; }
+.ep2-flamme { font-size: 1.2rem; flex: none; }
+.ep2-cote { display: grid; gap: 10px; padding: 14px; border-radius: 14px; border: 1px solid var(--border); }
+.ep2-cote > div:first-child { display: grid; gap: 2px; }
+.ep2-cote > div:first-child b { font-size: 1.3rem; }
+.ep2-cote.pret { border-color: var(--good); }
+.ep2-cote-act { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ep2-pli { border-top: 1px solid var(--border); padding-top: 12px; }
+.ep2-pli > summary { display: flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; list-style: none; }
+.ep2-pli > summary::-webkit-details-marker { display: none; }
+.ep2-pli > summary::after { content: "›"; margin-left: auto; font-size: 1.3rem; color: var(--muted); transition: transform .2s; }
+.ep2-pli[open] > summary::after { transform: rotate(90deg); }
+.ep2-pli > summary .small { margin-left: auto; }
+.ep2-pli > summary .small + ::after { margin-left: 8px; }
+.ep2-pli-t { font-weight: 700; }
+.ep2-pli > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.ep2-mini { display: inline-flex; }
+.ep2-mini-m { display: inline-flex; margin-left: -6px; } .ep2-mini-m:first-child { margin-left: 0; }
+.ep2-mini .medaille { width: 22px; height: 29px; filter: none; }
+.ep2-pli > .small { margin: 6px 0 0; }
+.ep2 .ep-cal { margin-top: 8px; }
+@media (max-width: 360px) { .ep2-tete { flex-direction: column; } .ep2-mini { display: none; } }
+.ep2-tete { flex-direction: column; gap: 4px; }
+.ep2-plan { margin: 0; font-size: .85rem; font-weight: 400; cursor: default; min-height: 0; }
+.ep2-plan .btn.link { padding: 0 2px; min-height: 32px; vertical-align: baseline; }
+.ep2-pli-t { white-space: nowrap; }
+.ep2-pli > summary .small { text-align: right; line-height: 1.3; }

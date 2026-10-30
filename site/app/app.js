@@ -1183,47 +1183,69 @@
       an.closest(".epargne")?.classList.add("anime");
     }, { threshold: 0.4 }).observe(an);
   }
+  // Mon épargne, allégée pour limiter la charge mentale : trois blocs visibles (où j'en suis + une action,
+  // une ligne de motivation, mes trophées), le reste seulement quand il sert ou replié.
   function carteEpargne(ep) {
     const pl = ep.plan, r = pl?.rythme;
-    let h = `<div class="card epargne" id="mon-epargne"><div class="ep-head"><h2>Mon épargne</h2>
-      ${pl?.montant ? `<span class="chip">${F(pl.montant)} ${RYTHMES[r][0]}</span>` : ""}</div>`;
     if (!pl?.montant) {
-      return h + `<p>Fixez-vous un rythme (par jour, par semaine ou par mois) : l'application vous aide à le tenir et vous dit quand investir.</p>
-        <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="plan">Créer mon plan d'épargne</button>
-        <button class="btn" data-coffre="verser">J'ai épargné</button></div></div>`;
+      return `<div class="card epargne ep2" id="mon-epargne"><h2 class="ep2-etat">Fixez-vous un rythme d'épargne</h2>
+        <p>Par jour, par semaine ou par mois : l'application vous aide à le tenir et vous dit quand investir.</p>
+        <button class="btn primary ep2-cta" data-coffre="plan">Créer mon plan d'épargne</button></div>`;
     }
-    const pc = ep.objectif ? Math.min(100, (100 * ep.verse) / ep.objectif) : Math.min(100, (100 * ep.serie) / Math.max(ep.record, 7));
-    const C = 2 * Math.PI * 52, tr0 = trophees(ep), suivant = tr0.find((t) => !t.ok && t.reste > 0);
-    const libCal = (c) => `${c.k.length === 7 ? c.k : D(c.k)} : ${c.fait ? "épargné" : c.joker ? "oubli couvert par le joker" : c.encours ? "à faire" : "manqué"}`;
-    h += `<div class="ep-hero">
-        <div class="ep-anneau" role="img" aria-label="${ep.objectif ? `${Math.round(pc)} % de l'objectif de ${F(ep.objectif)}` : `Série de ${pluriel(ep.serie, ep.unite)}`}">
-          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="ea-fond"/><circle cx="60" cy="60" r="52" class="ea-jauge"
-            style="stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${(C * (1 - pc / 100)).toFixed(1)}" data-offset="${(C * (1 - pc / 100)).toFixed(1)}" data-c="${C.toFixed(1)}"/></svg>
-          <div class="ea-centre"><b class="ep-compte" data-val="${ep.solde}">${F(ep.solde)}</b><span>mis de côté</span>
-            ${ep.objectif ? `<small>${Math.round(pc)} % de l'objectif</small>` : ""}</div></div>
-        <div class="ep-serie${ep.serie > 0 ? " vive" : ""}"><span class="ep-flamme" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22c4.2 0 7-2.8 7-6.6 0-3.6-2.4-5.6-3.6-8.4-.4 1.8-1.2 3-2.4 3.6.2-3.4-1.2-6-4-8.6.2 3.4-1.8 5.4-3.4 7.6C4.6 11.2 5 12.8 5 15.4 5 19.2 7.8 22 12 22z"/></svg></span>
-          <b>${pluriel(ep.serie, ep.unite)}</b><span>série en cours · record ${pluriel(Math.max(ep.record, ep.serie), ep.unite)}</span>
-          <span class="ep-prochain ${ep.aFaire ? "a-faire" : "ok"}">${ep.aFaire ? `À faire ${RYTHMES[r][1]}` : "À jour ✓"}</span></div>
-      </div>
-      ${ep.calendrier?.length ? `<div class="ep-cal" role="list" aria-label="Mes ${ep.calendrier.length} dernières périodes d'épargne">${ep.calendrier.map((c, i) =>
-        `<span role="listitem" class="ec ${c.fait ? "fait" : c.joker ? "joker" : c.encours ? "encours" : "manque"}" style="--i:${i}" title="${esc(libCal(c))}" aria-label="${esc(libCal(c))}"></span>`).join("")}</div>
-        <p class="ep-legende small muted"><span class="ec fait"></span> épargné <span class="ec joker"></span> joker <span class="ec manque"></span> manqué · régularité ${ep.tenus} sur ${pluriel(ep.total, ep.unite)}</p>` : ""}
-      ${suivant ? `<div class="ep-palier"><span>Prochain trophée : <b>${esc(suivant.titre)}</b></span><span class="small">encore ${pluriel(suivant.reste, suivant.unite)}</span></div>` : ""}
-      ${ep.objectif ? `<p class="small">${F(ep.verse)} épargnés sur ${F(ep.objectif)}${ep.objectifLe ? ` · objectif atteint vers le ${D(ep.objectifLe)} à ce rythme` : " · objectif atteint !"}</p>` : ""}
-      ${(ep.serie === 0 && ep.record > 1) || S.demoPerdue
-        ? `<p class="encourage">Une série s'arrête, une nouvelle commence. Votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre !</p>` : ""}
-      ${ep.joker && ep.serie > 0 ? `<p class="small muted">Joker utilisé : l'oubli du ${D(ep.joker.length === 7 ? ep.joker + "-01" : ep.joker)} n'a pas cassé votre série (un joker par mois).</p>` : ""}
-      <p class="small ${ep.solde >= seuil() ? "good" : "muted"}">${ep.solde >= seuil() ? `Prêt à investir : envoyez votre épargne à votre SGI.`
-        : `Investissement possible ${delai(ep.seuilDans)} à votre rythme (à partir de ${F(seuil())} mis de côté, pour limiter les frais).`}</p>
-      <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-coffre="verser">J'ai épargné</button>
-        <button class="btn" data-coffre="transfert"${ep.solde > 0 ? "" : " disabled"}>J'ai envoyé à ma SGI</button>
-        ${ep.solde > 0 ? `<button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button>` : ""}</div>`;
-    const tr = tr0, gagnes = tr.filter((t) => t.ok), prochains = tr.filter((t) => !t.ok).slice(0, 2);
-    h += `<div class="trophees-tete"><b>Mes trophées</b><span class="small muted">${gagnes.length} / ${tr.length}</span></div>
-      <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
-        <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}${t.ok ? `<button type="button" class="tr-partager" data-partager="${esc(t.id)}" aria-label="Partager le trophée ${esc(t.titre)}">Partager</button>` : ""}</li>`).join("")}</ul>`;
+    const tr = trophees(ep), gagnes = tr.filter((t) => !!t.ok), suivant = tr.find((t) => !t.ok && t.reste > 0);
+    const debutant = !(ep.verse > 0) && !gagnes.length;
+    const periode = RYTHMES[r][1];
+    const pc = ep.objectif ? Math.min(100, (100 * ep.verse) / ep.objectif) : 0;
+    let h = `<div class="card epargne ep2" id="mon-epargne">`;
+
+    // 1. Où j'en suis, et la seule action qui compte
+    h += `<div class="ep2-tete"><h2 class="ep2-etat">${ep.aFaire
+        ? `Mettez de côté <b>${F(pl.montant)}</b> ${periode}`
+        : `Vous êtes à jour ${periode} <span class="ep2-ok" aria-hidden="true">✓</span>`}</h2>
+      <p class="ep2-plan small muted">Mon plan : ${F(pl.montant)} ${RYTHMES[r][0]} · <button type="button" class="btn link small" data-coffre="plan">modifier</button></p></div>`;
+    if (ep.objectif) h += `<div class="ep2-objectif">
+        <div class="ep2-chiffres"><span><b class="num">${F(ep.verse)}</b> épargnés sur ${F(ep.objectif)}</span><b class="num">${Math.round(pc)} %</b></div>
+        <div class="ep2-barre" role="progressbar" aria-label="Progression vers l'objectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pc)}"><i style="width:${pc.toFixed(1)}%"></i></div>
+        <p class="small muted">${ep.objectifLe ? `Objectif atteint vers le ${D(ep.objectifLe)} à ce rythme` : "Objectif atteint, bravo !"}</p></div>`;
+    h += `<button class="btn primary ep2-cta" data-coffre="verser">J'ai épargné</button>`;
+
+    // 2. Une seule ligne de motivation (série, record et prochain trophée réunis)
+    if (debutant) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🏅</span><span>Votre premier trophée, <b>Premier pas</b>, dès votre premier versement.</span></p>`;
+    else if (ep.serie > 0) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🔥</span><span><b>${pluriel(ep.serie, ep.unite)} d'affilée</b>${suivant ? ` · prochain trophée dans ${pluriel(suivant.reste, suivant.unite)}` : ""}</span></p>`;
+    else h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🌱</span><span>Une nouvelle série commence${ep.record > 1 ? ` · votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre` : ""}</span></p>`;
+
+    // 3. L'argent mis de côté et pas encore envoyé : seulement s'il y en a
+    if (ep.solde > 0) {
+      const pret = ep.solde >= seuil();
+      h += `<div class="ep2-cote${pret ? " pret" : ""}"><div><span class="small muted">Mis de côté, pas encore envoyé à votre SGI</span><b class="num">${F(ep.solde)}</b>
+          <span class="small">${pret ? "Prêt à investir : vous pouvez l'envoyer à votre SGI." : `Investissement possible ${delai(ep.seuilDans)} (à partir de ${F(seuil())}, pour limiter les frais).`}</span></div>
+        <div class="ep2-cote-act"><button class="btn${pret ? " primary" : ""} small" data-coffre="transfert">J'ai envoyé à ma SGI</button>
+          <button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button></div></div>`;
+    }
+
+    // Mes trophées : aperçu des médailles gagnées, la galerie complète se déplie
+    if (!debutant) {
+      const prochains = tr.filter((t) => !t.ok).slice(0, 2);
+      h += `<details class="ep2-pli ep2-trophees"${S.ui.epTrophees ? " open" : ""}><summary><span class="ep2-pli-t">Mes trophées</span>
+          <span class="ep2-mini" aria-hidden="true">${gagnes.slice(-4).map((t) => `<span class="ep2-mini-m">${medaille(t)}</span>`).join("")}</span>
+          <span class="small muted">${gagnes.length} sur ${tr.length}</span></summary>
+        <p class="small muted">Touchez « Partager » pour montrer un trophée à vos proches.</p>
+        <ul class="trophees">${[...gagnes, ...prochains].map((t) => `<li class="${t.ok ? "" : "verrou"}" title="${esc(t.titre)} · ${esc(RANGS[t.metal] || "")}">${medaille(t)}
+          <span>${esc(t.titre)}</span><span class="rang r-${t.metal}">${esc(RANGS[t.metal] || "")}</span>${!t.ok && t.reste > 0 ? `<span class="small muted">encore ${pluriel(t.reste, t.unite)}</span>` : ""}${t.ok ? `<button type="button" class="tr-partager" data-partager="${esc(t.id)}" aria-label="Partager le trophée ${esc(t.titre)}">Partager</button>` : ""}</li>`).join("")}</ul></details>`;
+    }
+
+    // Ma régularité : le calendrier, replié
+    if (ep.calendrier?.length && !debutant) {
+      const libCal = (c) => `${c.k.length === 7 ? c.k : D(c.k)} : ${c.fait ? "épargné" : c.joker ? "oubli couvert par le joker" : c.encours ? "à faire" : "manqué"}`;
+      h += `<details class="ep2-pli"><summary><span class="ep2-pli-t">Ma régularité</span><span class="small muted">${ep.tenus} sur ${pluriel(ep.total, ep.unite)} · record ${pluriel(Math.max(ep.record, ep.serie), ep.unite)}</span></summary>
+        <div class="ep-cal" role="list" aria-label="Mes ${ep.calendrier.length} dernières périodes d'épargne">${ep.calendrier.map((c, i) =>
+          `<span role="listitem" class="ec ${c.fait ? "fait" : c.joker ? "joker" : c.encours ? "encours" : "manque"}" style="--i:${i}" title="${esc(libCal(c))}" aria-label="${esc(libCal(c))}"></span>`).join("")}</div>
+        <p class="ep-legende small muted"><span class="ec fait"></span> épargné <span class="ec joker"></span> joker <span class="ec manque"></span> manqué</p>
+        ${ep.joker && ep.serie > 0 ? `<p class="small muted">Joker utilisé : l'oubli du ${D(ep.joker.length === 7 ? ep.joker + "-01" : ep.joker)} n'a pas cassé votre série (un joker par mois).</p>` : ""}</details>`;
+    }
+
     const der = [...ep.mv].sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0)).slice(0, 5);
-    if (der.length) h += `<details class="aide"><summary>Derniers mouvements</summary><ul class="list">${der.map((m) => `<li><div class="main">
+    if (der.length) h += `<details class="ep2-pli"><summary><span class="ep2-pli-t">Derniers mouvements</span></summary><ul class="list">${der.map((m) => `<li><div class="main">
         <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
         <div class="sub">${D(m.date)}${m.source ? " · " + esc(SOURCES[m.source] || m.source) : ""}</div></div>
         <div class="right num ${m.type === "VERSEMENT" ? "good" : ""}">${m.type === "VERSEMENT" ? "+" : "−"}${F(m.montant)}</div></li>`).join("")}</ul></details>`;
@@ -1464,10 +1486,10 @@
     }
     if (onglet === "epargne") {
       // l'épargne au quotidien : coffre, série, trophées, cercles (cercles.js s'insère avant l'ancre)
-      h += ep ? carteEpargne(ep) : `<div class="card"><h2>Mon épargne</h2><p>Fixez un rythme d'épargne pour suivre votre régularité et gagner vos premiers trophées.</p>
-        <div class="actions"><button type="button" class="btn primary" data-coffre="plan">Choisir mon rythme d'épargne</button></div></div>`;
+      h += ep ? carteEpargne(ep) : `<div class="card epargne ep2"><h2 class="ep2-etat">Fixez-vous un rythme d'épargne</h2><p>Suivez votre régularité et gagnez vos premiers trophées.</p>
+        <button type="button" class="btn primary ep2-cta" data-coffre="plan">Choisir mon rythme d'épargne</button></div>`;
       v.innerHTML = h;
-      animerEpargne(v);
+      $(".ep2-trophees", v)?.addEventListener("toggle", (ev) => (S.ui.epTrophees = ev.target.open));
       v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
       return;
     }

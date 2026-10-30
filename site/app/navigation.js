@@ -7,7 +7,7 @@
  * app.js fournit window.BRVM_APP et émet « brvm:pret », puis « brvm:maj ». */
 (() => {
   "use strict";
-  const VERSION = "2026.10.30d";
+  const VERSION = "2026.10.30e";
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
