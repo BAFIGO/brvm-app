@@ -24,6 +24,7 @@
   const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
                      FRAIS: "Frais", SOLDE: "Solde relevé" };
   const TABS = ["aujourdhui", "portefeuille", "performance", "marche", "profil"];
+  const ICONE_EPINGLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/></svg>`;
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
     equilibre: { t: "Équilibré", d: "Un tiers à la moitié en actions, le reste en obligations et fonds. Le choix par défaut." },
@@ -1445,8 +1446,9 @@
     const onglet = S.ui.pfOnglet || "placements";
     let h = `<h1 id="h-pf">Portefeuille</h1>`;
     h += `<div class="seg pf-onglets" role="tablist" aria-label="Rubriques du portefeuille">
-        <button type="button" role="tab" data-pfo="placements" aria-selected="${onglet === "placements"}" aria-pressed="${onglet === "placements"}">Mes placements</button>
-        <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Mon épargne${ep?.serie > 0 ? ` · 🔥 ${ep.serie}` : ""}</button>
+        <button type="button" role="tab" data-pfo="placements" aria-selected="${onglet === "placements"}" aria-pressed="${onglet === "placements"}">Placements</button>
+        <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Épargne${ep?.serie > 0 ? ` · 🔥${ep.serie}` : ""}</button>
+        <button type="button" role="tab" data-pfo="cercles" aria-selected="${onglet === "cercles"}" aria-pressed="${onglet === "cercles"}">Cercles</button>
         <button type="button" role="tab" data-pfo="simulateur" aria-selected="${onglet === "simulateur"}" aria-pressed="${onglet === "simulateur"}">Simulateur</button></div>`;
     if (onglet === "simulateur") {
       v.innerHTML = h + simulateurHtml(L);
@@ -1454,11 +1456,17 @@
       v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
       return;
     }
+    if (onglet === "cercles") {
+      // les cercles d'épargne : cercles.js s'insère avant l'ancre (indicateurs de régularité, jamais de montant)
+      v.innerHTML = h + `<p class="small muted pf-cer-intro">Épargnez avec vos proches ou rejoignez un cercle ouvert : chacun voit la régularité des autres, jamais leurs montants.</p><div class="pf-ancre-cercles"></div>`;
+      v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
+      return;
+    }
     if (onglet === "epargne") {
       // l'épargne au quotidien : coffre, série, trophées, cercles (cercles.js s'insère avant l'ancre)
       h += ep ? carteEpargne(ep) : `<div class="card"><h2>Mon épargne</h2><p>Fixez un rythme d'épargne pour suivre votre régularité et gagner vos premiers trophées.</p>
         <div class="actions"><button type="button" class="btn primary" data-coffre="plan">Choisir mon rythme d'épargne</button></div></div>`;
-      v.innerHTML = h + `<div class="pf-ancre-cercles"></div>`;
+      v.innerHTML = h;
       animerEpargne(v);
       v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
       return;
@@ -1501,12 +1509,15 @@
         const d = S.decisions?.get(p.code);
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
-        h += `<li${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Santé financière">${esc(act.analyse.note)}</span>` : ""}</div>
+        const ep1 = estEpingle(p.code);
+        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Santé financière">${esc(act.analyse.note)}</span>` : ""}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
-          <div class="sub etats">${chip(d)}${pastille(al)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
+          <div class="sub etats"><button type="button" class="epingler" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
+            aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}">${ICONE_EPINGLE}<span>${ep1 ? "Épinglé" : "Épingler"}</span></button>${chip(d)}${pastille(al)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
-      h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.</p>`;
+      h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.
+        « Épingler » place un titre dans le menu, pour y revenir en un geste.</p>`;
     }
     h += `</div>`;
     {
@@ -2978,6 +2989,49 @@
     };
     requestAnimationFrame(step);
   }
+  // Coffre flottant : seulement sur les écrans où l'on épargne (Aujourd'hui, Mon épargne, Mes cercles)
+  function majCoffre() {
+    const t = tab(), o = S.ui.pfOnglet || "placements";
+    const fab = $("#fab-coffre"), showFab = !!S.coffre && (t === "aujourdhui" || (t === "portefeuille" && (o === "epargne" || o === "cercles")));
+    fab.hidden = !showFab;
+    document.body.classList.toggle("has-fab", showFab);
+    const aFaire = !!epargne()?.aFaire;
+    $(".fab-dot", fab).hidden = !aFaire;
+    fab.setAttribute("aria-label", aFaire ? "Noter mon épargne (pas encore notée pour cette période)" : "Noter mon épargne");
+  }
+  window.addEventListener("brvm:maj", () => { if (S.user) majCoffre(); });
+  // Titres épinglés par l'utilisateur (menu latéral) : gardés sur cet appareil
+  const cleEpingles = () => "bafi-epingles-" + (S.user?.id || "demo");
+  function epingles() { try { return JSON.parse(localStorage.getItem(cleEpingles()) || "[]"); } catch (e) { return []; } }
+  const estEpingle = (c) => epingles().includes(c);
+  function basculerEpingle(c) {
+    const l = epingles(), i = l.indexOf(c);
+    if (i >= 0) l.splice(i, 1); else l.push(c);
+    try { localStorage.setItem(cleEpingles(), JSON.stringify(l.slice(-8))); } catch (e) { /* stockage plein ou bloqué */ }
+    return i < 0;
+  }
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-epingler]");
+    if (!b) return;
+    const c = b.dataset.epingler, on = basculerEpingle(c), nom = S.names.get(c) || c;
+    b.setAttribute("aria-pressed", String(on));
+    b.setAttribute("aria-label", `${on ? "Retirer des épinglés" : "Épingler dans le menu"} : ${nom}`);
+    b.querySelector("span").textContent = on ? "Épinglé" : "Épingler";
+    toast(on ? `${nom} est épinglé dans le menu.` : `${nom} n'est plus épinglé.`);
+  });
+  function allerPf(o, code) {
+    S.ui.pfOnglet = o;
+    const fin = () => {
+      window.dispatchEvent(new Event("brvm:maj"));
+      if (!code) return;
+      const li = document.getElementById("pos-" + code);
+      if (!li) return;
+      li.scrollIntoView({ block: "center", behavior: CALME ? "auto" : "smooth" });
+      li.classList.remove("pos-vise"); void li.offsetWidth; li.classList.add("pos-vise");
+    };
+    if (location.hash.slice(1) === "portefeuille") { render(); setTimeout(fin, 50); }
+    else { location.hash = "portefeuille"; setTimeout(fin, 350); }
+  }
   function render() {
     const t = tab();
     for (const k of TABS) $("#v-" + k).hidden = k !== t;
@@ -2988,12 +3042,7 @@
       $("#v-" + t).insertAdjacentHTML("afterbegin", `<div class="notice">Une partie de cet écran n'a pas pu s'afficher. Rechargez la page ;
         si le problème continue, signalez-le avec l'heure et l'écran concerné.</div>`);
     }
-    const fab = $("#fab-coffre"), showFab = !!S.coffre && ["aujourdhui", "portefeuille"].includes(t);
-    fab.hidden = !showFab;
-    document.body.classList.toggle("has-fab", showFab);
-    const aFaire = !!epargne()?.aFaire;
-    $(".fab-dot", fab).hidden = !aFaire;
-    fab.setAttribute("aria-label", aFaire ? "Noter mon épargne (pas encore notée pour cette période)" : "Noter mon épargne");
+    majCoffre();
     if (current !== t) {                                   // transition douce et compteur, sauf « mouvement réduit »
       const v = $("#v-" + t);
       v.classList.remove("v-in"); void v.offsetWidth; v.classList.add("v-in");
@@ -3185,11 +3234,12 @@
                         tab, aller: (t) => { if (location.hash.slice(1) !== t) location.hash = t; }, render, toast, sim: () => SIM(),
                         ouvrirOperation: (type) => openOp({ type }), nbOps: () => S.ops.length,
                         // menu latéral (navigation.js) : épinglés, récents, documents légaux
-                        positions: () => replay(S.ops).positions.slice(0, 3).map((p) => ({ code: p.code, nom: S.names?.get(p.code) || p.code, classe: p.classe })),
+                        epingles: () => epingles().map((c) => ({ code: c, nom: S.names?.get(c) || c })),
+                        ongletPf: () => S.ui.pfOnglet || "placements", allerPf,
                         recents: () => S.ops.slice().sort((x, y) => String(y.date).localeCompare(String(x.date))).slice(0, 3)
                           .map((o) => ({ type: TYPES_OP[o.type] || o.type, nom: o.ticker ? (S.names?.get(o.ticker) || o.ticker) : "", date: o.date })),
                         documents: () => S.docs || {}, voirDocument: (d) => showCgu(d, false),
-                        allerEpargne: () => { S.ui.pfOnglet = "epargne"; if (location.hash.slice(1) === "portefeuille") render(); else location.hash = "portefeuille"; },
+                        allerEpargne: () => allerPf("epargne"),
                         faits: () => ({ depot: S.ops.some((o) => o.type === "DEPOT" || o.type === "SOLDE"), achat: S.ops.some((o) => o.type === "ACHAT"),
                                         plan: S.coffre ? !!S.coffre.plan : null }),
                         tutoriel: etatTutoriel, sauverTutoriel,

@@ -322,7 +322,7 @@
     const v = $("#v-portefeuille");
     if (!v || v.hidden || !charge) return;
     $(".cer-carte", v)?.remove();
-    const ancre = $(".pf-ancre-cercles", v);            // seulement dans l'onglet « Mon épargne »
+    const ancre = $(".pf-ancre-cercles", v);            // seulement dans la rubrique « Mes cercles »
     if (ancre) { ancre.insertAdjacentHTML("beforebegin", carteHtml()); animerScenes(v); remplirTop(v); }
   }
 
