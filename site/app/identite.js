@@ -15,6 +15,7 @@
     const h = TEINTES[[...(p?.prenom || app?.email?.() || "x")].reduce((a, c) => a + c.charCodeAt(0), 0) % TEINTES.length];
     return `<span class="av-ini" style="--h:${h}">${esc(initiales(p))}</span>`;
   }
+  window.BafiAvatar = (taille) => avatar(app?.profil?.(), taille);
   // En-tête : « c'est moi qui navigue »
   function entete() {
     const bar = $(".topbar"), p = app?.profil?.();

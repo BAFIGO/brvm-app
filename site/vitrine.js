@@ -45,6 +45,34 @@
     } catch (e) { /* hors ligne ou fonction pas encore installée : on garde l'exemple de démonstration */ }
   }
 
+  // ------------------------------------------------------------ la communauté en chiffres
+  // Totaux arrondis, recalculés au plus toutes les 6 heures côté serveur. Sous le seuil d'épargnants actifs,
+  // la fonction ne renvoie aucun chiffre : on affiche la phrase d'accueil. Hors ligne ou non installée : section masquée.
+  function montantCourt(n) {
+    if (n >= 1e9) return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(Math.floor(n / 1e8) / 10) + " Md F";
+    if (n >= 1e6) return nf.format(Math.floor(n / 1e6)) + " M F";
+    return nf.format(n) + " F";
+  }
+  async function communaute() {
+    const sec = $("#communaute");
+    if (!sec) return;
+    let c;
+    try { c = await rest("rpc/chiffres_communaute", { method: "POST", body: "{}" }); } catch (e) { return; }
+    if (!c || typeof c !== "object") return;
+    if (!c.seuil_atteint) { $("[data-cm-debut]", sec).hidden = false; $(".cm-maj", sec).hidden = true; sec.hidden = false; return; }
+    const fmt = { total_epargne: montantCourt, total_investi: montantCourt, regularite_sur_10: (n) => `${n} jours sur 10` };
+    let visibles = 0;
+    sec.querySelectorAll("[data-cm]").forEach((el) => {
+      const v = c[el.dataset.cm];
+      const ok = typeof v === "number" && v > 0;
+      el.hidden = !ok;
+      if (ok) { $(".cm-n", el).textContent = (fmt[el.dataset.cm] || ((n) => nf.format(n)))(v); visibles++; }
+    });
+    if (!visibles) return;
+    $("[data-cm-chiffres]", sec).hidden = false;
+    sec.hidden = false;
+  }
+
   // ------------------------------------------------------------ avis des utilisateurs : carrousel des 10 meilleurs
   // Défilement automatique toutes les 7 s, seulement si la section est visible, jamais si l'appareil demande
   // de réduire les animations ; il s'arrête au survol, au toucher, au clavier, et se met en pause d'un bouton.
@@ -404,6 +432,7 @@
   if (location.hash === "#curieux" || location.hash === "#methode" || location.hash === "#apercu") { const d = document.getElementById("curieux"); if (d) d.open = true; }
   stats();
   mode();
+  communaute();
   avis();
   cgu();
 

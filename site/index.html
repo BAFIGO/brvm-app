@@ -17,16 +17,16 @@
   <meta property="og:image" content="https://bafibourse.com/og-image.png">
   <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <script src="charte.js?v=20261029a"></script>
-  <link rel="stylesheet" href="styles.css?v=20261029a">
-  <link rel="stylesheet" href="vitrine.css?v=20261029a">
-  <link rel="stylesheet" href="charte-indigo.css?v=20261029a">
-  <script src="boot.js?v=20261029a"></script>
-  <script src="config.js?v=20261029a" defer></script>
-  <script src="vendor/gsap.min.js?v=20261029a" defer></script>
-  <script src="vendor/ScrollTrigger.min.js?v=20261029a" defer></script>
-  <script src="vitrine.js?v=20261029a" defer></script>
-  <script src="defile.js?v=20261029a" data-mode="sections" defer></script>
+  <script src="charte.js?v=20261030a"></script>
+  <link rel="stylesheet" href="styles.css?v=20261030a">
+  <link rel="stylesheet" href="vitrine.css?v=20261030a">
+  <link rel="stylesheet" href="charte-indigo.css?v=20261030a">
+  <script src="boot.js?v=20261030a"></script>
+  <script src="config.js?v=20261030a" defer></script>
+  <script src="vendor/gsap.min.js?v=20261030a" defer></script>
+  <script src="vendor/ScrollTrigger.min.js?v=20261030a" defer></script>
+  <script src="vitrine.js?v=20261030a" defer></script>
+  <script src="defile.js?v=20261030a" data-mode="sections" defer></script>
 </head>
 <body class="vitrine">
   <a class="skip" href="#main">Aller au contenu</a>
@@ -61,6 +61,33 @@
       </ul>
       <p id="stats-src" class="small muted stats-src">Gratuit · votre argent reste chez votre SGI · vos données restent privées.</p>
 </section>
+
+    <!-- 2 bis. La communauté en chiffres (fonction chiffres_communaute, 18-chiffres-communaute.sql) : masquée tant qu'elle ne répond pas -->
+    <section id="communaute" class="communaute-v" aria-labelledby="communaute-title" hidden>
+      <div class="cm-cadre">
+        <span class="cm-trait" aria-hidden="true"></span>
+        <h2 id="communaute-title" class="cm-titre">La communauté en chiffres</h2>
+        <p class="cm-maj small muted">Mis à jour chaque soir</p>
+        <div class="cm-chiffres" data-cm-chiffres hidden>
+          <ul class="cm-grille">
+            <li class="cm-carte" data-cm="epargnants_actifs"><span class="bf-ic bf-recap" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 11a3 3 0 1 0 0-6"/><path d="M21 20c0-2.6-1.6-4.8-4-5.6"/></svg></span>
+              <b class="cm-n"></b><span class="cm-l">épargnants actifs ce mois</span></li>
+            <li class="cm-carte" data-cm="cercles_actifs"><span class="bf-ic bf-bot" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2" class="plein"/><circle cx="5.5" cy="16" r="2" class="plein"/><circle cx="18.5" cy="16" r="2" class="plein"/></svg></span>
+              <b class="cm-n"></b><span class="cm-l">cercles d'épargne actifs</span></li>
+            <li class="cm-carte" data-cm="total_epargne"><span class="bf-ic bf-coffre" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M12 8.3v1.1M12 13.6v1.1M8.8 11.5h1.1M14.1 11.5h1.1M6.5 19v1.6M17.5 19v1.6"/></svg></span>
+              <b class="cm-n"></b><span class="cm-l">épargnés depuis le lancement</span></li>
+            <li class="cm-carte" data-cm="total_investi"><span class="bf-ic bf-recap" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>
+              <b class="cm-n"></b><span class="cm-l">investis à la BRVM</span></li>
+          </ul>
+          <ul class="cm-lignes">
+            <li data-cm="versements_semaine"><span><i class="cm-point ambre" aria-hidden="true"></i>Versements cette semaine</span><b class="cm-n"></b></li>
+            <li data-cm="regularite_sur_10"><span><i class="cm-point" aria-hidden="true"></i>Régularité moyenne</span><b class="cm-n"></b></li>
+          </ul>
+          <p class="cm-note small muted">Montants déclarés par nos membres, arrondis. Votre argent reste chez votre SGI, BafiBourse ne le détient jamais.</p>
+        </div>
+        <p class="cm-debut" data-cm-debut hidden>La communauté BafiBourse démarre : soyez parmi les premiers épargnants et lancez votre cercle.</p>
+      </div>
+    </section>
 
     <!-- 3. Épargne mise de côté -->
     <section id="epargne" class="epargne-v" aria-labelledby="epargne-title">

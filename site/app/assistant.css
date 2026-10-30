@@ -111,15 +111,31 @@ dialog.ia[open] { display: flex; flex-direction: column; }
 .ia-chip { flex: none; min-height: 36px; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 999px;
   background: var(--accent-soft); color: var(--text); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
 
-.ia-saisie { display: flex; align-items: flex-end; gap: 6px; padding: 8px 12px 4px 16px; margin: 0; }
-.ia-saisie textarea { flex: 1; min-height: 44px; max-height: 120px; resize: none; padding: 10px 12px; border: 1px solid var(--border);
-  border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; line-height: 1.35; }
-.ia-micro, .ia-envoyer { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; cursor: pointer; }
-.ia-micro { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
-.ia-micro[aria-pressed="true"] { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
-.ia-envoyer { border: 0; background: var(--accent); color: var(--accent-text); }
+/* zone de saisie façon « carte » : le texte en haut, les boutons ronds en dessous (+ · onde · micro · envoyer) */
+.ia-saisie { margin: 8px 12px 4px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 26px; box-shadow: 0 6px 24px -10px hsl(232 50% 20% / .28); }
+.ia-saisie:focus-within { border-color: var(--accent); }
+.ia-saisie textarea { width: 100%; box-sizing: border-box; min-height: 40px; max-height: 120px; resize: none; padding: 6px 8px; border: 0; outline: 0;
+  background: transparent; color: var(--text); font: inherit; font-size: 1.02rem; line-height: 1.4; }
+.ia-barre { display: flex; align-items: center; gap: 8px; }
+.ia-plus, .ia-annuler, .ia-micro, .ia-envoyer { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; cursor: pointer; padding: 0; }
+.ia-plus, .ia-annuler, .ia-micro { border: 0; background: var(--surface-2); color: var(--text); }
+.ia-envoyer { width: 48px; height: 48px; border: 0; background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
 .ia-envoyer:disabled { opacity: .55; cursor: default; }
-.ia-micro svg, .ia-envoyer svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ia-plus svg, .ia-annuler svg, .ia-micro svg, .ia-envoyer svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ia-envoyer svg { stroke-width: 2.6; }
+.ia-micro .plein { fill: currentColor; stroke: none; }
+.ia-micro[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
+/* l'onde : invisible au repos, elle remplit l'espace pendant la dictée */
+.ia-onde { flex: 1; display: flex; align-items: center; justify-content: center; gap: 3px; height: 36px; overflow: hidden; visibility: hidden; }
+.ia-saisie.dicte .ia-onde { visibility: visible; }
+.ia-onde i { display: block; width: 3px; height: 30%; border-radius: 2px; background: var(--accent); }
+.ia-onde i:nth-child(n+14) { height: 3px; width: 3px; background: var(--muted); opacity: .6; }
+@media (prefers-reduced-motion: no-preference) {
+  .ia-saisie.dicte .ia-onde i:nth-child(-n+13) { animation: ia-onde .9s ease-in-out infinite alternate; animation-delay: calc(var(--k) * -73ms); }
+}
+@keyframes ia-onde { 0% { height: 18%; } 50% { height: 90%; } 100% { height: 40%; } }
+@media (prefers-reduced-motion: reduce) { .ia-saisie.dicte .ia-onde i:nth-child(-n+13) { height: 60%; } }
 .ia-avert { margin: 0; padding: 2px 16px calc(10px + env(safe-area-inset-bottom)); font-size: .75rem; color: var(--muted); }
 
 /* ---------------------------------------------------------------- confirmations après un enregistrement */

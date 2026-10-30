@@ -16,7 +16,10 @@
       <g class="yeux"><ellipse cx="11.8" cy="15.6" rx="1.7" ry="2.1" class="plein"/><ellipse cx="20.2" cy="15.6" rx="1.7" ry="2.1" class="plein"/></g>
       <path d="M12.5 20.6c1.9 1.5 5.1 1.5 7 0"/><path d="M2.5 14.5v5M29.5 14.5v5"/></svg>`;
   const ICONE_MICRO = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>`;
-  const ICONE_ENVOI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg>`;
+  const ICONE_ENVOI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>`;
+  const ICONE_PLUS = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`;
+  const ICONE_X = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+  const ONDE = Array.from({ length: 18 }, (_, i) => `<i style="--k:${i}"></i>`).join("");
 
   // ---------------------------------------------------------------- interface (créée une seule fois)
   document.body.insertAdjacentHTML("beforeend", `
@@ -35,9 +38,15 @@
       <div class="ia-sugg" role="group" aria-label="Questions proposées"></div>
       <form class="ia-saisie" novalidate>
         <label for="ia-q" class="sr-only">Votre question</label>
-        <textarea id="ia-q" rows="1" maxlength="500" placeholder="Posez votre question…" autocomplete="off"></textarea>
-        <button type="button" class="ia-micro" aria-label="Dicter ma question" aria-pressed="false" hidden>${ICONE_MICRO}</button>
-        <button type="submit" class="ia-envoyer" aria-label="Envoyer">${ICONE_ENVOI}</button>
+        <textarea id="ia-q" rows="1" maxlength="500" placeholder="Écrivez ou dictez votre question…" autocomplete="off"></textarea>
+        <div class="ia-barre">
+          <button type="button" class="ia-plus" aria-label="Joindre l'avis de ma SGI (photo ou PDF)" data-import="">${ICONE_PLUS}</button>
+          <button type="button" class="ia-annuler" aria-label="Annuler la dictée" hidden>${ICONE_X}</button>
+          <span class="ia-onde" aria-hidden="true">${ONDE}</span>
+          <span class="ia-ecoute sr-only" aria-live="polite"></span>
+          <button type="button" class="ia-micro" aria-label="Dicter ma question" aria-pressed="false" hidden>${ICONE_MICRO}</button>
+          <button type="submit" class="ia-envoyer" aria-label="Envoyer">${ICONE_ENVOI}</button>
+        </div>
       </form>
       <div class="ia-quota" aria-live="polite"><span class="iq-txt"></span>
         <label class="iq-appro" hidden><input type="checkbox" id="ia-appro"> Analyse approfondie <span class="iq-appro-n"></span></label></div>
@@ -151,26 +160,51 @@
   function ajusterChamp() { champ.style.height = "auto"; champ.style.height = Math.min(champ.scrollHeight, 120) + "px"; }
   champ.addEventListener("input", ajusterChamp);
 
+  // ---------------------------------------------------------------- « + » : joindre l'avis de sa SGI (import.js ouvre sa fenêtre)
+  $(".ia-plus", dlg).addEventListener("click", () => dlg.close());
+
   // ---------------------------------------------------------------- dictée (seulement si le navigateur la propose)
+  // Pendant l'écoute : l'onde s'anime, le micro devient « arrêter » (carré) et le « + » devient « annuler » (×).
+  // La question dictée n'est jamais envoyée seule : on la relit, puis on touche la flèche.
   const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (Reco) {
-    let reco = null;
+    let reco = null, avant = "", annule = false;
+    const plus = $(".ia-plus", dlg), annuler = $(".ia-annuler", dlg), ecoute = $(".ia-ecoute", dlg);
+    const ICONE_STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" class="plein"/></svg>`;
     micro.hidden = false;
-    const arreter = () => { micro.setAttribute("aria-pressed", "false"); micro.setAttribute("aria-label", "Dicter ma question"); reco = null; };
+    const etat = (on) => {
+      form.classList.toggle("dicte", on);
+      plus.hidden = on; annuler.hidden = !on;
+      micro.setAttribute("aria-pressed", String(on));
+      micro.setAttribute("aria-label", on ? "Arrêter la dictée" : "Dicter ma question");
+      micro.innerHTML = on ? ICONE_STOP : ICONE_MICRO;
+      ecoute.textContent = on ? "BafiBot vous écoute" : "";
+    };
+    const arreter = () => { etat(false); reco = null; };
     micro.addEventListener("click", () => {
       if (reco) { reco.stop(); return; }
       reco = new Reco();
       reco.lang = "fr-FR"; reco.interimResults = true; reco.continuous = false;
-      const avant = champ.value ? champ.value.trim() + " " : "";
+      avant = champ.value ? champ.value.trim() + " " : ""; annule = false;
       reco.onresult = (ev) => {
+        if (annule) return;
         champ.value = avant + [...ev.results].map((r) => r[0].transcript).join("");
         ajusterChamp();
       };
-      reco.onerror = (ev) => { if (ev.error === "not-allowed") bulle("ia erreur", "<p>Le micro est bloqué : autorisez-le dans les réglages du navigateur, ou tapez votre question.</p>"); };
-      reco.onend = () => { arreter(); champ.focus(); };     // la question n'est pas envoyée seule : on peut la relire
-      micro.setAttribute("aria-pressed", "true"); micro.setAttribute("aria-label", "Arrêter la dictée");
+      reco.onerror = (ev) => {
+        if (ev.error === "not-allowed" || ev.error === "service-not-allowed")
+          bulle("ia erreur", "<p>Le micro n'est pas disponible ici : autorisez-le dans les réglages, ou utilisez le micro de votre clavier.</p>");
+      };
+      reco.onend = () => { arreter(); if (!annule) champ.focus(); };
+      etat(true);
       try { reco.start(); } catch (e) { arreter(); }
     });
+    annuler.addEventListener("click", () => {
+      annule = true; champ.value = avant.trim(); ajusterChamp();
+      try { reco?.abort(); } catch (e) { /* déjà arrêtée */ }
+      arreter(); micro.focus();
+    });
+    dlg.addEventListener("close", () => { if (reco) { annule = true; try { reco.abort(); } catch (e) { /* déjà arrêtée */ } arreter(); } });
   }
 
   // ---------------------------------------------------------------- ouverture / fermeture

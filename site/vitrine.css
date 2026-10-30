@@ -566,3 +566,30 @@ html .v-foot .marque .m-bafi { color: hsl(35 92% 55%) !important; }
 .defile-b:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 .defile-b:disabled { opacity: .35; cursor: default; }
 @media print { .defile { display: none; } }
+
+/* ---------------------------------------------------------------- la communauté en chiffres (sous le premier écran) */
+.communaute-v { padding-top: 8px; padding-bottom: 8px; }
+.cm-cadre { max-width: 760px; margin: 0 auto; background: var(--surface-2); border-radius: 28px; padding: 24px 16px 20px; }
+.cm-trait { display: block; width: 32px; height: 3px; border-radius: 2px; background: hsl(35 92% 55%); margin: 0 4px; }
+.cm-titre { margin: 14px 4px 2px; font-size: 1.3rem; font-weight: 700; color: var(--brand); }
+.cm-maj { margin: 0 4px; }
+.cm-grille { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 720px) { .cm-grille { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.cm-carte { background: var(--surface); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 2px 10px hsl(232 50% 20% / .07); }
+.cm-carte .bf-ic { box-sizing: border-box; }
+.cm-n { display: block; font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; color: var(--brand); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cm-l { display: block; margin-top: -8px; font-size: .84rem; line-height: 1.4; color: var(--muted); }
+.cm-lignes { list-style: none; margin: 12px 0 0; padding: 4px 16px; background: var(--surface); border-radius: 20px; box-shadow: 0 2px 10px hsl(232 50% 20% / .07); }
+.cm-lignes li { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; font-size: .95rem; }
+.cm-lignes li + li { border-top: 1px solid var(--border); }
+.cm-lignes li > span { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.cm-lignes .cm-n { font-size: 1rem; }
+.cm-point { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex: none; }
+.cm-point.ambre { background: hsl(35 92% 55%); }
+.cm-note { margin: 16px 4px 0; line-height: 1.5; }
+.cm-debut { margin: 14px 4px 2px; font-size: 1.02rem; line-height: 1.5; color: var(--brand); }
+[data-cm][hidden] { display: none !important; }
+.cm-n { white-space: nowrap; font-size: clamp(1.3rem, 6.2vw, 1.7rem); }
+.cm-lignes .cm-n { font-size: 1rem; }
+.cm-lignes li > span { min-width: 0; }

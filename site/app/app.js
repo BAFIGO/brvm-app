@@ -3184,6 +3184,12 @@
                         // prise en main (tutoriel.js)
                         tab, aller: (t) => { if (location.hash.slice(1) !== t) location.hash = t; }, render, toast, sim: () => SIM(),
                         ouvrirOperation: (type) => openOp({ type }), nbOps: () => S.ops.length,
+                        // menu latéral (navigation.js) : épinglés, récents, documents légaux
+                        positions: () => replay(S.ops).positions.slice(0, 3).map((p) => ({ code: p.code, nom: S.names?.get(p.code) || p.code, classe: p.classe })),
+                        recents: () => S.ops.slice().sort((x, y) => String(y.date).localeCompare(String(x.date))).slice(0, 3)
+                          .map((o) => ({ type: TYPES_OP[o.type] || o.type, nom: o.ticker ? (S.names?.get(o.ticker) || o.ticker) : "", date: o.date })),
+                        documents: () => S.docs || {}, voirDocument: (d) => showCgu(d, false),
+                        allerEpargne: () => { S.ui.pfOnglet = "epargne"; if (location.hash.slice(1) === "portefeuille") render(); else location.hash = "portefeuille"; },
                         faits: () => ({ depot: S.ops.some((o) => o.type === "DEPOT" || o.type === "SOLDE"), achat: S.ops.some((o) => o.type === "ACHAT"),
                                         plan: S.coffre ? !!S.coffre.plan : null }),
                         tutoriel: etatTutoriel, sauverTutoriel,

@@ -1,0 +1,108 @@
+/* BafiBourse – menu latéral, en-tête à titre central, fenêtre « i », glissement des écrans (navigation.js).
+ * Chargé en dernier : il remplace la barre d'onglets du bas et les onglets du haut. Clair et sombre via les variables de la charte. */
+
+/* ---------------------------------------------------------------- la barre d'onglets disparaît : place libérée en bas */
+body.nav-tiroir .tabs-bottom, body.nav-tiroir .tabs-top { display: none !important; }
+body.nav-tiroir { padding-bottom: env(safe-area-inset-bottom) !important; }
+body.nav-tiroir .fab, body.nav-tiroir .fab-ia { bottom: calc(18px + env(safe-area-inset-bottom)) !important; }
+body.nav-tiroir.has-fab .fab-ia { bottom: calc(18px + 58px + 12px + env(safe-area-inset-bottom)) !important; }
+body.nav-tiroir .defile { bottom: calc(18px + env(safe-area-inset-bottom)) !important; }
+
+/* ---------------------------------------------------------------- en-tête : ☰ · titre · avatar (et « i » sur Profil) */
+body.nav-tiroir .topbar { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 10px; border-bottom: 0;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); }
+body.nav-tiroir .topbar .brand { display: none; }
+body.nav-tiroir .topbar #badge-demo { position: absolute; left: 70px; top: calc(4px + env(safe-area-inset-top)); font-size: .7rem; }
+.nav-ouvrir, .nav-info { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 0; background: var(--surface); color: var(--accent); box-shadow: 0 2px 10px hsl(232 50% 20% / .10); }
+.nav-ouvrir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.nav-titre { margin: 0; text-align: center; font-weight: 700; font-size: 1.08rem; color: var(--brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-info { grid-column: 3; font: 700 1.2rem/1 Georgia, "Times New Roman", serif; box-shadow: inset 0 0 0 2px var(--accent), 0 2px 10px hsl(232 50% 20% / .10); }
+body.nav-tiroir .topbar .moi { margin-left: 0; grid-column: 3; }
+body.nav-tiroir .topbar:has(.nav-info:not([hidden])) .moi { display: none; }      /* sur Profil, le « i » prend la place de l'avatar */
+@media (max-width: 420px) { body.nav-tiroir .topbar .moi-nom { display: none; } body.nav-tiroir .topbar .moi { padding-right: 3px; } }
+
+/* ---------------------------------------------------------------- le menu */
+.tiroir-fond { position: fixed; inset: 0; z-index: 40; background: hsl(232 40% 10% / .32); opacity: 0; transition: opacity .25s ease; }
+.tiroir { position: fixed; z-index: 41; top: 0; bottom: 0; left: 0; width: min(320px, 84vw); display: flex; flex-direction: column;
+  background: var(--surface-2); color: var(--text); padding: calc(14px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom));
+  box-sizing: border-box; transform: translateX(-104%); transition: transform .26s cubic-bezier(.2, .8, .2, 1); box-shadow: 8px 0 32px hsl(232 50% 15% / .18); }
+body.tiroir-ouvert .tiroir { transform: none; }
+body.tiroir-ouvert .tiroir-fond { opacity: 1; }
+/* l'écran derrière se décale un peu vers la droite, comme dans l'application Claude */
+body.nav-tiroir #main, body.nav-tiroir .topbar { transition: transform .26s cubic-bezier(.2, .8, .2, 1); }
+body.tiroir-ouvert #main, body.tiroir-ouvert .topbar { transform: translateX(min(56px, 12vw)); }
+body.tiroir-ouvert { overflow: hidden; }
+
+.ti-tete { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 16px; }
+.ti-marque { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-size: 1.35rem; letter-spacing: -.02em; color: var(--brand); }
+.ti-marque .m-bafi { color: hsl(35 92% 55%); font-weight: inherit; }
+.ti-fermer { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--surface); color: var(--text); display: grid; place-items: center; cursor: pointer; }
+.ti-fermer svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ti-defile { flex: 1; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
+.ti-liste, .ti-recents { list-style: none; margin: 0; padding: 0; }
+.ti-item { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 14px; border-radius: 14px; text-decoration: none;
+  color: var(--text); font-size: 1.02rem; font-weight: 500; }
+.ti-item svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ti-item:hover { background: color-mix(in srgb, var(--accent-soft) 60%, transparent); }
+.ti-item[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.ti-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ti-liste.petite .ti-item { min-height: 44px; font-size: .97rem; }
+.ti-pastille { width: 22px; height: 22px; flex: none; border-radius: 7px; display: grid; place-items: center; font-size: .7rem; font-weight: 800;
+  background: var(--brand); color: var(--surface); }
+.ti-pastille.rond { border-radius: 50%; background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+.ti-sous { margin: 20px 14px 6px; font-size: .86rem; font-weight: 600; color: var(--muted); }
+.ti-recents li { display: flex; justify-content: space-between; gap: 10px; min-height: 36px; align-items: center; padding: 0 14px; font-size: .95rem; }
+.ti-recents li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ti-recents .muted { font-size: .8rem; flex: none; }
+.ti-pied { display: flex; align-items: center; gap: 12px; padding-top: 12px; }
+.ti-moi { width: 48px; height: 48px; flex: none; border-radius: 50%; display: grid; place-items: center; overflow: hidden; text-decoration: none;
+  background: var(--surface); box-shadow: 0 1px 4px hsl(232 50% 20% / .15); }
+.ti-moi .av-img, .ti-moi .av-ini { width: 40px; height: 40px; }
+.ti-moi[aria-current="page"] { box-shadow: 0 0 0 2px var(--accent); }
+.ti-moi-nom { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ti-nouvelle { flex: 1; min-height: 52px; border: 0; border-radius: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: hsl(230 60% 26%); color: #fff; font: inherit; font-weight: 600; font-size: 1rem; }
+.ti-nouvelle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ti-nouvelle { background: var(--accent); color: var(--accent-text); } }
+:root[data-theme="dark"] .ti-nouvelle { background: var(--accent); color: var(--accent-text); }
+
+/* ---------------------------------------------------------------- fenêtre « i » : ancrée en haut à droite */
+dialog.infos { margin: calc(62px + env(safe-area-inset-top)) 12px auto auto; width: min(300px, calc(100vw - 24px)); padding: 16px 6px 6px; border: 0;
+  border-radius: 22px; background: var(--surface); color: var(--text); box-shadow: 0 14px 44px hsl(232 50% 15% / .28); }
+dialog.infos::backdrop { background: hsl(232 40% 10% / .14); }
+.inf-tete { padding: 0 14px 12px; border-bottom: 1px solid var(--border); }
+.inf-marque { margin: 0; font-weight: 800; font-size: 1.1rem; color: var(--brand); } .inf-marque .m-bafi { color: hsl(35 92% 55%); }
+.inf-tete .small { margin: 2px 0 0; }
+.inf-liste { list-style: none; margin: 4px 0 0; padding: 0; }
+.inf-liste button, .inf-liste a, .inf-absent { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px;
+  padding: 6px 14px; border-radius: 14px; cursor: pointer; color: var(--text); font-size: 1rem; }
+.inf-liste button:hover, .inf-liste a:hover { background: var(--accent-soft); }
+.inf-liste button:focus-visible, .inf-liste a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.inf-liste svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.inf-absent { cursor: default; color: var(--muted); }
+.inf-absent svg { stroke: var(--muted); }
+.inf-absent small { display: block; font-size: .78rem; }
+.inf-sep { height: 1px; background: var(--border); margin: 6px 14px; }
+
+/* ---------------------------------------------------------------- l'écran arrive de la droite */
+@media (prefers-reduced-motion: no-preference) {
+  .view.glisse { animation: ecran-glisse .28s cubic-bezier(.2, .8, .2, 1) both; }
+  dialog.infos[open] { animation: infos-in .18s ease-out both; transform-origin: top right; }
+}
+@keyframes ecran-glisse { from { transform: translateX(36px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes infos-in { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .tiroir, .tiroir-fond, body.nav-tiroir #main, body.nav-tiroir .topbar { transition: none; }
+  body.tiroir-ouvert #main, body.tiroir-ouvert .topbar { transform: none; }
+}
+
+/* noms longs : coupés proprement */
+.ti-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* au-dessus de tout, même du bandeau « version de test » */
+.tiroir-fond { z-index: 1000; } .tiroir { z-index: 1001; }
+/* la fenêtre « i » reste une petite fenêtre ancrée en haut à droite, même sur téléphone (pas un panneau du bas) */
+dialog.infos, dialog.infos:not(.ia):not(.bravo) { margin: calc(62px + env(safe-area-inset-top)) 12px auto auto !important; width: min(300px, calc(100vw - 24px)) !important;
+  max-width: none !important; max-height: calc(100vh - 90px) !important; padding: 16px 6px 6px !important; border-radius: 22px !important; border: 0 !important; }
+dialog.infos > div:first-child::before { content: none !important; }
+@media (prefers-reduced-motion: no-preference) { dialog.infos[open] { animation: infos-in .18s ease-out both !important; } }
