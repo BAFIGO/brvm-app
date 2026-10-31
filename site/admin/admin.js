@@ -80,6 +80,9 @@
       qEtats: (code) => rpc("admin_etats", { p_code: code }),
       qCorriger: (code, ex, vals, motif) => rpc("admin_corriger_postes", { p_code: code, p_exercice: ex, p_valeurs: vals, p_motif: motif }),
       qRelire: (code, ex) => rpc("admin_rescanner", { p_code: code, p_exercice: ex }),
+      qRelectures: () => rpc("admin_relectures", { p_jours: 30 }),
+      qRelireLot: (items) => rpc("admin_rescanner_lot", { p_items: items }),
+      qAnnulerRelecture: (id) => rpc("admin_annuler_relecture", { p_id: id }),
       qDividende: (code, ex, m, d, motif) => rpc("admin_corriger_dividende", { p_code: code, p_exercice: ex, p_montant: m, p_ex_date: d || null, p_motif: motif }),
       qFract: () => rpc("admin_fractionnements"),
       qDeclarer: (t, d, f, motif) => rpc("admin_declarer_fractionnement", { p_ticker: t, p_date: d, p_facteur: f, p_motif: motif }),
@@ -227,7 +230,7 @@
       qEtats: async (code) => ({ postes: ["revenue", "net_income", "ebit", "equity", "total_assets", "debt", "current_assets", "current_liab"].flatMap((p, i) =>
           [2025, 2024].map((ex) => ({ exercice: ex, poste: p, valeur: p === "ebit" && ex === 2025 ? 0 : [18200, 1240, 2600, 9100, 31000, 6200, 12100, 9800][i] * (ex === 2025 ? 1 : 0.94), statut: "verifie", url: "https://www.richbourse.com", corrige: null }))),
         corrections: [], relectures: [{ exercice: 2025, statut: "traitee", resultat: "relu, non confirmé par recoupement · 24 postes lus", cree_le: new Date().toISOString() }] }),
-      qCorriger: async () => 1, qRelire: async () => {}, qDividende: async () => {}, qDeclarer: async () => {}, qDetecter: async () => 1,
+      qCorriger: async () => 1, qRelire: async () => {}, qRelectures: async () => [], qRelireLot: async (l) => l.length, qAnnulerRelecture: async () => {}, qDividende: async () => {}, qDeclarer: async () => {}, qDetecter: async () => 1,
       qFract: async () => [{ ticker: "SNTS", date: "2026-10-26", facteur: 10, source: "moteur", motif: null }],
       qHistorique: async () => [{ type: "Poste financier", code: "ABJC", quoi: "2025 · ebit : 0 → 412", motif: "Rapport annuel 2025, page 34", actif: true, cree_le: new Date().toISOString(), par: "analyste@bafibourse.com" }],
       commandes: async () => [{ id: "k1", email: "awa.diop@exemple.sn", objet: "essentiel_an", montant: 20000, statut: "payee", mode: "live", cree_le: new Date(Date.now() - 3600e3).toISOString(), paye_le: new Date(Date.now() - 3500e3).toISOString(), recu_url: null },
@@ -1304,28 +1307,66 @@
           <button type="button" class="btn small" id="q-detecter">Rechercher dans l'historique des cours</button></div>` : ""}<h3>Anomalies</h3>`;
     }
     const L = await api.qAnomalies(d, S.qSt);
+    // Relectures : suivi de chaque demande (en attente / relue, avec son résultat), une seule par document
+    let R = [], relOk = true;
+    if (d === "financier") { try { R = await api.qRelectures(); } catch (e) { relOk = false; } }
+    const cleRel = (code, ex) => `${code}|${ex}`;
+    const relMap = new Map();
+    for (const x of R) { const k = cleRel(x.code, x.exercice); if (!relMap.has(k) || x.statut === "en_attente") relMap.set(k, x); }
+    const attente = R.filter((x) => x.statut === "en_attente");
+    const aRelire = [...new Map(L.filter((a) => a.statut === "ouverte" && a.ref && /^\d{4}$/.test(String(a.ref)) && relMap.get(cleRel(a.code, a.ref))?.statut !== "en_attente")
+      .map((a) => [cleRel(a.code, a.ref), { code: a.code, exercice: +a.ref }])).values()];
+    const etatRel = (a) => {
+      const x = a.ref ? relMap.get(cleRel(a.code, a.ref)) : null;
+      if (!x) return "";
+      return x.statut === "en_attente" ? ` <span class="chip warn">Relecture prévue ce soir</span>`
+        : ` <span class="chip neutre" title="${esc(x.resultat || "")}">Relu le ${D(x.traite_le)}</span>`;
+    };
+    if (d === "financier") extra += (relOk ? `<details class="q-rel"${attente.length ? " open" : ""}><summary><b>Suivi des relectures</b>
+        <span class="small muted">${N(attente.length)} en attente · ${N(R.length - attente.length)} terminée(s) sur 30 jours</span></summary>
+        ${R.length ? `<ul class="list">${R.slice(0, 60).map((x) => `<li><div class="main"><div class="name"><b>${esc(x.code)}</b> · exercice ${esc(x.exercice)}
+            ${x.statut === "en_attente" ? `<span class="chip warn">en attente</span>` : `<span class="chip ok">relu</span>`}</div>
+          <div class="sub">${x.statut === "en_attente" ? `demandée le ${DT(x.cree_le)}${x.par ? " par " + esc(x.par) : ""} · traitée au prochain traitement du soir`
+            : `relue le ${DT(x.traite_le)} : ${esc(x.resultat || "–")}`}</div></div>
+          ${peut && x.statut === "en_attente" ? `<div class="right"><button class="btn link small" data-q="annuler-rel" data-id="${x.id}">Retirer</button></div>` : ""}</li>`).join("")}</ul>`
+          : `<p class="small muted">Aucune relecture demandée ces 30 derniers jours.</p>`}</details>
+        ${peut && aRelire.length ? `<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" id="q-relire-tout">Relire tous les documents signalés (${N(aRelire.length)})</button></div>` : ""}`
+      : `<p class="small muted">Suivi des relectures indisponible : exécutez 19-relectures.sql dans Supabase.</p>`);
     z.innerHTML = extra + (L.length ? `<ul class="list q-l">${L.map((a) => `<li class="q-a ${a.statut}"><div class="main">
-        <div class="name"><b>${esc(a.code)}</b> <span class="status ${GRAV[a.gravite]?.[0] || ""}">${GRAV[a.gravite]?.[1] || ""}</span>${a.ref ? ` <span class="chip neutre">${esc(a.ref)}</span>` : ""}
+        <div class="name"><b>${esc(a.code)}</b> <span class="status ${GRAV[a.gravite]?.[0] || ""}">${GRAV[a.gravite]?.[1] || ""}</span>${a.ref ? ` <span class="chip neutre">${esc(a.ref)}</span>` : ""}${d === "financier" ? etatRel(a) : ""}
           ${a.statut !== "ouverte" ? ` <span class="chip ${a.statut === "ignoree" ? "neutre" : "ok"}">${esc({ corrigee: "corrigée", ignoree: "ignorée", resolue: "résolue" }[a.statut] || a.statut)}</span>` : ""}</div>
         <div class="sub">${esc(a.detail)}</div>${a.note ? `<div class="sub">Note : ${esc(a.note)}${a.par ? ` (${esc(a.par)})` : ""}</div>` : ""}</div>
         ${peut && a.statut === "ouverte" ? `<div class="right q-act">${d === "financier" ? `<button class="btn small primary" data-q="corriger" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Corriger les chiffres</button>
-            <button class="btn small" data-q="relire" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Relire le document</button>`
+            ${relMap.get(cleRel(a.code, a.ref))?.statut === "en_attente" ? ""
+              : `<button class="btn small" data-q="relire" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Relire le document${a.ref ? ` ${esc(a.ref)}` : ""}</button>`}`
           : d === "dividendes" ? `<button class="btn small primary" data-q="dividende" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Corriger</button>`
           : d === "fractionnements" ? `<button class="btn small primary" data-q="confirmer-fract" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Confirmer</button>`
           : `<button class="btn small" data-q="verifiee" data-id="${a.id}">Donnée vérifiée, juste</button>`}
           <button class="btn link small" data-q="ignorer" data-id="${a.id}">Ignorer</button></div>` : ""}</li>`).join("")}</ul>`
       : `<p class="small muted">${S.qSt === "ouverte" ? "✓ Rien à traiter dans ce domaine." : "Aucune anomalie."}</p>`);
     $("#q-declarer")?.addEventListener("click", () => qDeclarer());
+    $("#q-relire-tout")?.addEventListener("click", async (ev) => {
+      ev.target.disabled = true;
+      try { const n = await api.qRelireLot(aRelire); toast(`${N(n)} relecture(s) prévue(s) ce soir.`, { detail: "Une seule demande par document, même s'il a plusieurs anomalies." }); }
+      catch (e) { toast("Impossible : " + msgErr(e)); }
+      qListe();
+    });
     $("#q-detecter")?.addEventListener("click", async () => { try { const n = await api.qDetecter(); toast(n ? `${n} fractionnement(s) ajouté(s).` : "Aucun nouveau fractionnement trouvé."); qListe(); } catch (e) { toast("Impossible : " + msgErr(e)); } });
     z.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", async () => {
       const q = b.dataset.q;
       try {
         if (q === "corriger") return qEtatsDialog(b.dataset.code, +b.dataset.ref || null);
         if (q === "relire") {
-          const ex = +(prompt(`Relire quel exercice des états financiers de ${b.dataset.code} ?`, b.dataset.ref || String(new Date().getFullYear() - 1)) || 0);
+          // l'exercice est celui de l'anomalie : pas de question à poser (sauf anomalie sans exercice)
+          const ex = /^\d{4}$/.test(b.dataset.ref) ? +b.dataset.ref
+            : +(prompt(`Relire quel exercice des états financiers de ${b.dataset.code} ?`, String(new Date().getFullYear() - 1)) || 0);
           if (!ex) return;
-          await api.qRelire(b.dataset.code, ex); toast("Relecture demandée.", { detail: "Le document sera retéléchargé et réanalysé au prochain traitement du soir." }); return;
+          b.disabled = true;
+          await api.qRelire(b.dataset.code, ex);
+          toast(`Relecture de ${b.dataset.code} ${ex} prévue ce soir.`);
+          return qListe();
         }
+        if (q === "annuler-rel") { await api.qAnnulerRelecture(+b.dataset.id); toast("Demande de relecture retirée."); return qListe(); }
         if (q === "dividende") return qDividende(b.dataset.code, +b.dataset.ref || null, b.dataset.val);
         if (q === "confirmer-fract") return qDeclarer(b.dataset.code, b.dataset.ref, b.dataset.val);
         if (q === "verifiee") { await api.qTraiter(+b.dataset.id, "ignoree", "Donnée vérifiée : elle est juste"); toast("Anomalie classée."); return vQualite(); }
