@@ -536,9 +536,11 @@
               ui: { mkTab: "actions", mkFilter: "opp", mkQuery: "", mkShow: 30, perf: 1, tend: "1a" } };
 
   // ---------------------------------------------------------------- journal → positions (même méthode que l'outil)
+  // Opérations du « point de départ » (titres déjà détenus à l'arrivée) : repérées par leur note
+  const estDepart = (o) => /point de d[ée]part/i.test(o.note || "") && ok(o.montant);
   function replay(ops) {
     const pos = new Map();
-    let cash = 0, apports = 0, realise = 0, dividendes = 0, fraisOps = 0;
+    let cash = 0, apports = 0, realise = 0, dividendes = 0, fraisOps = 0, avantArrivee = 0;
     const errors = [];
     for (const o of ops) {
       const t = o.ticker || "", q = +o.quantite || 0, p = +o.prix || 0, m = +o.montant || 0;
@@ -546,6 +548,14 @@
       if (o.type === "DEPOT") { cash += m; apports += m; }
       else if (o.type === "RETRAIT") { cash -= m; apports -= m; }
       else if (o.type === "FRAIS") { cash -= m; fraisOps += m; }
+      else if (o.type === "ACHAT" && estDepart(o)) {
+        // Point de départ : titres déjà détenus à l'arrivée. Prix = prix de revient de la SGI (pour la plus-value
+        // de chaque ligne) ; la trésorerie et les apports comptent leur valeur du jour (montant) : le gain total part de zéro.
+        cash -= m;
+        avantArrivee += m - q * p;
+        const x = pos.get(t) || { q: 0, cost: 0 };
+        x.q += q; x.cost += q * p; pos.set(t, x);
+      }
       else if (o.type === "ACHAT") {
         cash -= q * p + fee;
         const x = pos.get(t) || { q: 0, cost: 0 };
@@ -568,7 +578,7 @@
     const investi = positions.reduce((s, p) => s + (p.valeur || 0), 0);
     const latent = positions.reduce((s, p) => s + (p.pv || 0), 0);
     const fraisVente = cotes.reduce((s, p) => s + p.valeur * FEES, 0);
-    return { positions, cash, apports, errors, valeur: cash + investi, investi, latent, realise, dividendes, fraisOps,
+    return { positions, cash, apports, errors, valeur: cash + investi, investi, latent, realise, dividendes, fraisOps, avantArrivee,
              fraisVente, gainTotal: cash + investi - apports,
              sansCours: positions.filter((p) => p.sansCours), coursAnciens: positions.filter((p) => p.coursDu) };
   }
@@ -1257,7 +1267,7 @@
     const L = replay(S.ops);
     const ligne = (t, v, cl = "") => `<tr class="${cl}"><th scope="row">${t}</th><td class="num ${cls(v)}">${v > 0 ? "+" : ""}${F(v)}</td></tr>`;
     const brut = L.latent + L.fraisVente;                         // valeur actuelle des titres − ce qu'ils ont coûté (frais d'achat compris)
-    const ecart = L.gainTotal - (brut + L.dividendes + L.realise - L.fraisOps);
+    const ecart = L.gainTotal - (brut + L.dividendes + L.realise - L.fraisOps - L.avantArrivee);
     showInfo("Comprendre mon gain", `<p>Le point de départ est le même : ce que valent vos titres aujourd'hui, comparé à ce qu'ils vous ont coûté (frais d'achat compris).</p>
       <h3 class="decomp-t">Si je vendais tout aujourd'hui</h3>
       <table class="decomp"><tbody>
@@ -1271,8 +1281,9 @@
         ${ligne("+ dividendes reçus", L.dividendes)}
         ${ligne("+ résultat des titres déjà vendus", L.realise)}
         ${L.fraisOps ? ligne("− autres frais prélevés", -L.fraisOps) : ""}
+        ${Math.abs(L.avantArrivee) >= 1 ? ligne("− plus-value acquise avant votre arrivée (déjà chez vous au point de départ)", -L.avantArrivee) : ""}
         ${Math.abs(ecart) >= 1 ? ligne("± écart à vérifier dans le journal", ecart) : ""}
-        ${ligne("= Gain total depuis le début", L.gainTotal, "tot")}
+        ${ligne(Math.abs(L.avantArrivee) >= 1 ? "= Gain total depuis votre arrivée" : "= Gain total depuis le début", L.gainTotal, "tot")}
       </tbody></table>
       ${L.coursAnciens.length ? `<p class="small">Sans cours lors de la dernière séance, ${L.coursAnciens.map((p) => `<b>${esc(S.names.get(p.code) || p.code)}</b> (cours du ${D(p.coursDu)})`).join(", ")}
         ${L.coursAnciens.length > 1 ? "sont valorisés" : "est valorisé"} à son dernier cours connu.</p>` : ""}
@@ -1521,10 +1532,11 @@
         <button type="button" class="ajout-import" data-import=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg></span>
           <span class="ai-txt"><b>Importer un avis ou un relevé</b><span>Photo ou PDF de votre SGI : les opérations se remplissent toutes seules</span></span>
           <span class="ai-badge">Le plus rapide</span></button>
-        <button type="button" class="ajout-main" data-op=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span><span>Saisir à la main</span><span aria-hidden="true">›</span></button></div>`;
+        <button type="button" class="ajout-main" data-op=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span><span>Saisir à la main</span><span aria-hidden="true">›</span></button>
+        ${!S.ops.length ? `<button type="button" class="ajout-main ajout-depart" data-depart=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V5l8-2 8 2v15"/><path d="M9 20v-5h6v5M8 9h2M14 9h2"/></svg></span><span>J'ai déjà des titres chez ma SGI<small>Déclarez ce que vous possédez aujourd'hui, sans ressaisir votre historique</small></span><span aria-hidden="true">›</span></button>` : ""}</div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
     h += `<div class="card positions"><h2>Positions${L.positions.length ? ` <span class="h-n">${L.positions.length}</span>` : ""}</h2>`;
-    if (!L.positions.length) h += `<p class="muted">Aucune position. Enregistrez vos achats avec « Nouvelle opération ».</p>`;
+    if (!L.positions.length) h += `<p class="muted">Aucune position pour l’instant : ajoutez une opération ci-dessus.</p>`;
     else {
       h += `<ul class="list">`;
       for (const p of L.positions) {
@@ -3324,6 +3336,7 @@
                                        ...S.mk.obligations.map((r) => ({ code: r.code, nom: r.nom, classe: "obligations" })),
                                        ...S.mk.opcvm.map((r) => ({ code: r.code, nom: r.nom, classe: "opcvm" }))],
                         nomTitre: (c) => S.names.get(c) || c,
+                        cours: (c) => S.prices.get(c), seance: () => S.seance?.date || null,
                         operations: () => S.ops,
                         journal: () => { const L = replay(S.ops); return { positions: L.positions.map((x) => ({ code: x.code, quantite: x.quantite })), cash: L.cash }; },
                         ajouterOperations: async (ops) => { const ids = await api.addOperations(ops); S.ops = await api.operations(S.user.id); render(); return ids; },

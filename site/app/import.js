@@ -38,7 +38,21 @@
           <p class="small muted">Le document est lu puis oublié : seules les opérations que vous validez sont enregistrées.
             Vos nom, adresse et numéro de compte ne sont pas repris.</p>
           <p class="imp-quota small" hidden></p>
+          <p class="imp-vers-depart small" hidden>Vous avez déjà des titres ? <button type="button" class="btn link small" data-imp="depart">Déclarer mon point de départ</button></p>
           <div class="actions"><button type="button" class="btn" data-imp="fermer">Fermer</button></div>
+        </section>
+        <section class="imp-depart" hidden>
+          <p>Indiquez ce que vous possédez <b>aujourd'hui</b> chez votre SGI. Inutile de ressaisir vos anciens achats ou dividendes :
+            votre suivi commence ce soir.</p>
+          <p class="small muted">Le <b>prix de revient moyen</b> figure sur le relevé de portefeuille de votre SGI (parfois « PRU » ou « coût moyen »).
+            Il sert à calculer la plus-value de chaque ligne.</p>
+          <label class="imp-ch dep-liq">Argent disponible sur mon compte SGI (F)<input type="number" min="0" step="any" inputmode="decimal" data-dep="liq"></label>
+          <ul class="dep-liste"></ul>
+          <button type="button" class="btn small" data-imp="dep-ajouter">+ Ajouter un titre</button>
+          <p class="dep-total" aria-live="polite"></p>
+          <p class="msg err" role="status" aria-live="polite"></p>
+          <div class="actions"><button type="button" class="btn" data-imp="fermer">Annuler</button>
+            <button type="button" class="btn primary" data-imp="dep-enregistrer">Enregistrer mon point de départ</button></div>
         </section>
         <section class="imp-lecture" hidden aria-live="polite"><div class="imp-roue" aria-hidden="true"></div><p class="imp-etat"></p></section>
         <section class="imp-revue" hidden>
@@ -46,6 +60,8 @@
           <div class="imp-docs"></div>
           <ul class="imp-liste"></ul>
           <div class="imp-ctrl"></div>
+          <p class="imp-releve-depart" hidden><button type="button" class="btn" data-imp="depuis-releve">Utiliser ce relevé comme point de départ</button>
+            <span class="small muted">Vos titres et votre argent disponible y sont repris : il ne reste qu'à vérifier les prix de revient.</span></p>
           <p class="msg err" role="status" aria-live="polite"></p>
           <div class="actions"><button type="button" class="btn" data-imp="fermer">Annuler</button>
             <button type="button" class="btn primary" data-imp="enregistrer">Enregistrer</button></div>
@@ -53,7 +69,7 @@
       </div>
     </dialog>`);
   const dlg = $("#dlg-import");
-  const etape = (n) => ["choix", "lecture", "revue"].forEach((k) => ($(`.imp-${k}`, dlg).hidden = k !== n));
+  const etape = (n) => ["choix", "lecture", "revue", "depart"].forEach((k) => ($(`.imp-${k}`, dlg).hidden = k !== n));
 
   let quotaAtteint = false;
   // Pages restantes ce mois-ci, affichées avant de choisir le fichier
@@ -73,8 +89,76 @@
     app.fermerOperation?.();
     lignes = []; controles = []; erreurs = [];
     dlg.querySelectorAll("input[type=file]").forEach((i) => (i.value = ""));
+    $(".imp-vers-depart", dlg).hidden = !!app.operations().length;
+    $("#imp-titre", dlg).textContent = "Importer un document de ma SGI";
     etape("choix");
     dlg.showModal();
+  }
+
+  // ---------------------------------------------------------------- point de départ : titres déjà détenus à l'arrivée
+  // Une seule fois, journal vide : un versement (argent disponible + valeur du jour des titres) et un achat par titre,
+  // au prix de revient de la SGI, notés « Point de départ ». Aucune ancienne opération, aucun ancien dividende à ressaisir.
+  let depart = [];
+  const NOTE_DEPART = "Point de départ";
+  function ouvrirDepart(pre) {
+    if (!app) return;
+    if (app.operations().length) { app.toast("Votre journal contient déjà des opérations : le point de départ se déclare seulement au début du suivi."); return; }
+    app.fermerOperation?.();
+    depart = (pre?.positions || []).map((p) => ({ ...rapprocher(p.titre || ""), titreLu: p.titre || "", quantite: +p.quantite || null, pru: p.prix_revient ?? null }));
+    if (!depart.length) depart = [{ code: "", quantite: null, pru: null }];
+    $('[data-dep="liq"]', dlg).value = pre?.liquidites ?? "";
+    $("#imp-titre", dlg).textContent = "Mon point de départ";
+    $(".imp-depart .msg", dlg).textContent = "";
+    afficherDepart();
+    etape("depart");
+    if (!dlg.open) dlg.showModal();
+  }
+  const valeurJour = (x) => { const c = app.cours(x.code); return x.quantite > 0 ? x.quantite * (c > 0 ? c : x.pru || 0) : 0; };
+  function afficherDepart() {
+    $(".dep-liste", dlg).innerHTML = depart.map((x, i) => `<li class="imp-op" data-di="${i}">
+      <label class="imp-ch imp-titre">Titre${x.titreLu ? ` <span class="muted">(lu : ${esc(x.titreLu)})</span>` : ""}<select data-dk="code" data-di="${i}">${options(x.code)}</select></label>
+      <div class="imp-champs">
+        <label class="imp-ch">Quantité<input type="number" min="0" step="any" inputmode="decimal" data-dk="quantite" data-di="${i}" value="${x.quantite ?? ""}"></label>
+        <label class="imp-ch">Prix de revient moyen (F)<input type="number" min="0" step="any" inputmode="decimal" data-dk="pru" data-di="${i}" value="${x.pru ?? ""}"></label>
+      </div>
+      ${x.code && !(app.cours(x.code) > 0) ? `<p class="small muted">Pas de cours connu pour ce titre : il est compté à son prix de revient jusqu'au prochain cours.</p>` : ""}
+      ${depart.length > 1 ? `<button type="button" class="btn link small" data-imp="dep-retirer" data-di="${i}">Retirer ce titre</button>` : ""}</li>`).join("");
+    majTotalDepart();
+  }
+  function majTotalDepart() {
+    const liq = +$('[data-dep="liq"]', dlg).value || 0, titres = depart.reduce((a, x) => a + (x.code ? valeurJour(x) : 0), 0);
+    $(".dep-total", dlg).innerHTML = `Valeur de départ : <b>${F(liq + titres)}</b> <span class="small muted">(titres au cours de la séance du ${D(app.seance())} + argent disponible)</span>`;
+  }
+  dlg.addEventListener("input", (ev) => {
+    const el = ev.target;
+    if (el.dataset.dep === "liq") return majTotalDepart();
+    if (el.dataset.dk && el.dataset.dk !== "code") { depart[+el.dataset.di][el.dataset.dk] = el.value === "" ? null : +el.value; majTotalDepart(); }
+  });
+  dlg.addEventListener("change", (ev) => {
+    const el = ev.target;
+    if (el.dataset.dk === "code") { const x = depart[+el.dataset.di]; x.code = el.value; x.titreLu = x.titreLu && el.value ? x.titreLu : ""; afficherDepart(); }
+  });
+  async function enregistrerDepart(b) {
+    const msg = $(".imp-depart .msg", dlg), date = app.seance() || auj();
+    const liq = +$('[data-dep="liq"]', dlg).value || 0;
+    const l = depart.filter((x) => x.code || x.quantite || x.pru);
+    if (l.some((x) => !x.code)) { msg.textContent = "Choisissez le titre de chaque ligne (ou retirez les lignes vides)."; return; }
+    if (l.some((x) => !(x.quantite > 0) || !(x.pru > 0))) { msg.textContent = "Indiquez la quantité et le prix de revient moyen de chaque titre."; return; }
+    if (new Set(l.map((x) => x.code)).size < l.length) { msg.textContent = "Un même titre apparaît deux fois : regroupez les quantités sur une seule ligne."; return; }
+    if (!l.length && !(liq > 0)) { msg.textContent = "Indiquez au moins un titre ou l'argent disponible."; return; }
+    const achats = l.map((x) => ({ date, type: "ACHAT", ticker: x.code, quantite: x.quantite, prix: x.pru, frais: 0,
+                                   montant: Math.round(valeurJour(x)), note: NOTE_DEPART }));
+    const total = liq + achats.reduce((a, o) => a + o.montant, 0);
+    const ops = [{ date, type: "DEPOT", ticker: null, quantite: null, prix: null, frais: null, montant: Math.round(total), note: NOTE_DEPART }, ...achats];
+    b.disabled = true; b.textContent = "Enregistrement…";
+    try {
+      const ids = await app.ajouterOperations(ops);
+      dlg.close();
+      app.toast("Point de départ enregistré.", { detail: "Votre suivi commence ce soir : performance et gain total partent de ce jour.",
+        actions: ids?.length ? [{ label: "Annuler", fn: async () => { await app.supprimerOperations(ids); app.toast("Point de départ annulé."); } }] : [] });
+      window.dispatchEvent(new CustomEvent("brvm:import", { detail: { n: ops.length } }));
+    } catch (e) { msg.textContent = "Enregistrement impossible : " + e.message; }
+    finally { b.disabled = false; b.textContent = "Enregistrer mon point de départ"; }
   }
 
   // ---------------------------------------------------------------- préparation des fichiers
@@ -219,6 +303,7 @@
     $(".imp-docs", dlg).innerHTML = erreurs.map((e) => `<p class="imp-alerte">${esc(e)}</p>`).join("");
     $(".imp-liste", dlg).innerHTML = lignes.map(ligneHtml).join("");
     $(".imp-ctrl", dlg).innerHTML = controlesHtml();
+    $(".imp-releve-depart", dlg).hidden = !(controles.some((c) => c.pos.length) && !app.operations().length);
     $(".msg", dlg).textContent = "";
     majPied();
   }
@@ -261,6 +346,14 @@
     const b = ev.target.closest("[data-imp]");
     if (!b) return;
     if (b.dataset.imp === "fermer") return dlg.close();
+    if (b.dataset.imp === "depart") return ouvrirDepart();
+    if (b.dataset.imp === "depuis-releve") {
+      const c = controles.find((x) => x.pos.length) || {};
+      return ouvrirDepart({ positions: c.pos, liquidites: c.liq?.montant ?? null });
+    }
+    if (b.dataset.imp === "dep-ajouter") { depart.push({ code: "", quantite: null, pru: null }); afficherDepart(); $(`.dep-liste [data-di="${depart.length - 1}"] select`, dlg)?.focus(); return; }
+    if (b.dataset.imp === "dep-retirer") { depart.splice(+b.dataset.di, 1); afficherDepart(); return; }
+    if (b.dataset.imp === "dep-enregistrer") return enregistrerDepart(b);
     if (b.dataset.imp !== "enregistrer") return;
     const choisies = lignes.filter((x) => x.sel && !x.bloquant);
     const ops = choisies.map((x) => {
@@ -282,6 +375,6 @@
     } catch (e) { $(".msg", dlg).textContent = "Enregistrement impossible : " + e.message; majPied(); }
   });
 
-  document.addEventListener("click", (ev) => { if (ev.target.closest("[data-import]")) ouvrir(); });
+  document.addEventListener("click", (ev) => { if (ev.target.closest("[data-import]")) ouvrir(); else if (ev.target.closest("[data-depart]")) ouvrirDepart(); });
   window.addEventListener("brvm:pret", () => { app = window.BRVM_APP?.lireDocument ? window.BRVM_APP : null; });
 })();

@@ -1047,3 +1047,11 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .ep2-plan .btn.link { padding: 0 2px; min-height: 32px; vertical-align: baseline; }
 .ep2-pli-t { white-space: nowrap; }
 .ep2-pli > summary .small { text-align: right; line-height: 1.3; }
+/* point de départ */
+.ajout-depart small { display: block; font-weight: 400; font-size: .8rem; color: var(--muted); margin-top: 2px; }
+.ajout-depart > span:nth-child(2) { text-align: left; }
+.imp-depart { display: grid; gap: 12px; }
+.imp-depart > p { margin: 0; }
+.dep-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dep-total { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); }
+.imp-releve-depart { display: grid; gap: 6px; margin: 12px 0 0; }
