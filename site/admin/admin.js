@@ -245,7 +245,11 @@
       qCorriger: async () => 1, qRelire: async () => {}, qRelectures: async () => [], qRelireLot: async (l) => l.length, qAnnulerRelecture: async () => {},
       qRelireSource: async () => {}, qDeposer: async (c, e) => `storage:${c}/${e}-demo.pdf`,
       qLireIA: async () => {}, qPropositionsIA: async () => ({ depense_mois: 0.21, propositions: [{ id: 1, code: "ABJC", exercice: 2025, unite: "millions", cree_le: new Date().toISOString(),
-        remarques: "", document: null, controles: { ca: { ok: true, ia: 24012, ref: 24000 }, rn: { ok: true, ia: 1803, ref: 1800 }, bilan: { ok: true, ia: 30120, ref: 30120 } },
+        remarques: "", document: null, controles: { ca: { ok: true, ia: 24012, ref: 24000 }, rn: { ok: true, ia: 1803, ref: 1800 }, bilan: { ok: true, ia: 30120, ref: 30120 },
+          liasse: { ok: false, constats: ["Total actif circulant (BK) lu 10 000 M, somme de ses lignes 5 005 M. La ligne « Clients » (BI, lue 5 M) semble lue avec une erreur d'unité : 5 000 M rétablirait le total."] } },
+        liasse: { XB: { valeur: 24012, origine: "lu", page: 5, libelle: "Chiffre d'affaires" }, XD: { valeur: 4010, origine: "lu", page: 5, libelle: "Excédent brut d'exploitation" },
+          BB: { valeur: 4000, origine: "lu", page: 3, libelle: "Stocks" }, BI: { valeur: 5, origine: "lu", page: 3, libelle: "Clients" }, BK: { valeur: 10000, origine: "lu", page: 3, libelle: "Total actif circulant" },
+          DP: { valeur: 7000, origine: "calculé" }, FA: { valeur: 2404, origine: "calculé" } },
         postes: { revenue: { valeur: 24012, n1: 23500, page: 5, libelle: "Chiffre d'affaires" }, net_income: { valeur: 1803, page: 5, libelle: "Résultat net" },
           ebe: { valeur: 4010, page: 5, libelle: "Excédent brut d'exploitation" }, total_assets: { valeur: 30120, page: 3, libelle: "Total actif" },
           equity: { valeur: 12050, page: 4, libelle: "Capitaux propres et ressources assimilées" } } }] }), qValiderIA: async () => 1, qRejeterIA: async () => {}, qDividende: async () => {}, qDeclarer: async () => {}, qDetecter: async () => 1,
@@ -1344,7 +1348,7 @@
         : ` <span class="chip neutre" title="${esc(x.resultat || "")}">Relu le ${D(x.traite_le)}</span>`;
     };
     if (d === "financier" && PIA) {
-      const ctl = (c) => Object.entries(c || {}).map(([k, v]) => `<span class="chip ${v.ok ? "ok" : "warn"}">${{ ca: "CA", rn: "Résultat net", bilan: "Bilan" }[k] || k} ${v.ok ? "✓" : "✗"}</span>`).join(" ");
+      const ctl = (c) => Object.entries(c || {}).map(([k, v]) => `<span class="chip ${v.ok ? "ok" : "warn"}">${{ ca: "CA", rn: "Résultat net", bilan: "Bilan", liasse: "Totaux" }[k] || k} ${v.ok ? "✓" : "✗"}</span>`).join(" ");
       extra += `<details class="q-rel q-ia"${S.qPIA.length ? " open" : ""}><summary><b>Lectures par l'IA (pilote)</b>
           <span class="small muted">${N(S.qPIA.length)} proposition(s) à valider · dépense du mois ${(+PIA.depense_mois || 0).toFixed(2)} $</span></summary>
         ${S.qPIA.length ? `<ul class="list">${S.qPIA.map((x) => `<li><div class="main"><div class="name"><b>${esc(x.code)}</b> · exercice ${esc(x.exercice)} ${ctl(x.controles)}</div>
@@ -1428,7 +1432,10 @@
   // Proposition de l'IA : l'analyste compare, retouche si besoin, puis valide (les postes deviennent des corrections)
   async function qExaminerIA(x) {
     if (!x) return;
-    const c = x.controles || {}, lib = { ca: "Chiffre d'affaires", rn: "Résultat net", bilan: "Total actif / total passif" };
+    const c = { ...(x.controles || {}) }, lib = { ca: "Chiffre d'affaires", rn: "Résultat net", bilan: "Total actif / total passif" };
+    const constatsLiasse = c.liasse?.constats || [];
+    delete c.liasse;
+    const L = Object.entries(x.liasse || {});
     const postes = Object.entries(x.postes || {}).filter(([k]) => k !== "total_liab");
     const res = await ask({ title: `${x.code} · lecture IA de l'exercice ${x.exercice}`, ok: "Valider ces chiffres",
       body: `<p class="small muted">Montants en millions de F CFA (unité du document : ${esc(x.unite || "?")}). Vérifiez chaque ligne avec la page indiquée,
@@ -1436,11 +1443,17 @@
           ${x.document ? `<a href="${esc(x.document)}" target="_blank" rel="noopener">Ouvrir le document</a>` : ""}</p>
         ${Object.keys(c).length ? `<ul class="small">${Object.entries(c).map(([k, v]) => `<li>${v.ok ? "✓" : "✗"} ${lib[k] || k} : IA ${N(v.ia)} · ${k === "bilan" ? "passif" : "Sikafinance"} ${N(v.ref)}</li>`).join("")}</ul>`
           : `<p class="small">Aucun contrôle automatique possible : vérifiez avec une attention particulière.</p>`}
-        ${x.remarques ? `<p class="notice small">Remarque de l'IA : ${esc(x.remarques)}</p>` : ""}
+        ${x.remarques ? `<p class="notice small">Remarque : ${esc(x.remarques)}</p>` : ""}
+        ${constatsLiasse.length ? `<div class="notice small"><b>Contrôle des totaux par leurs lignes :</b><ul>${constatsLiasse.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>`
+          : L.length ? `<p class="small">✓ Totaux cohérents avec leurs lignes (liasse normalisée).</p>` : ""}
         <div class="scroll-x"><table class="dtable q-postes"><thead><tr><th></th><th>Poste</th><th class="num">Valeur proposée</th><th class="num">N-1</th><th>Page · libellé lu</th></tr></thead><tbody>
         ${postes.map(([k, v]) => `<tr><td><input type="checkbox" name="g_${esc(k)}" checked aria-label="Garder ${esc(POSTES[k] || k)}"></td><td>${esc(POSTES[k] || k)}</td>
           <td class="num"><input type="number" step="any" name="v_${esc(k)}" value="${v.valeur ?? ""}" aria-label="Valeur : ${esc(POSTES[k] || k)}"></td>
-          <td class="num small muted">${v.n1 == null ? "–" : N(v.n1)}</td><td class="small">${v.page ? "p. " + esc(v.page) + " · " : ""}${esc(v.libelle || "")}</td></tr>`).join("")}</tbody></table></div>
+          <td class="num small muted">${v.n1 == null ? "–" : N(v.n1)}</td><td class="small">${v.origine === "calculé" ? '<span class="chip neutre">calculé</span> ' : ""}${v.page ? "p. " + esc(v.page) + " · " : ""}${esc(v.libelle || "")}</td></tr>`).join("")}</tbody></table></div>
+        ${L.length ? `<details class="q-liasse"><summary>Voir la liasse normalisée complète (${N(L.length)} lignes, en millions de F CFA)</summary>
+          <div class="scroll-x"><table class="dtable"><thead><tr><th>Code</th><th class="num">Valeur</th><th>Origine</th><th>Page · libellé lu</th></tr></thead><tbody>
+          ${L.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${N(v.valeur)}</td><td class="small">${v.origine === "calculé" ? "calculé" : "lu"}</td>
+            <td class="small">${v.page ? "p. " + esc(v.page) + " · " : ""}${esc(v.libelle || "")}</td></tr>`).join("")}</tbody></table></div></details>` : ""}
 `,
       motif: false });
     if (!res) {
@@ -1452,7 +1465,7 @@
       if (res.form[`g_${k}`]?.checked && i.value !== "") vals[k] = +i.value;
     });
     if (!Object.keys(vals).length) return toast("Aucune ligne gardée : rien n'a été validé.");
-    try { const n = await api.qValiderIA(x.id, vals, res.form.motif.value.trim()); toast(`${n} poste(s) validé(s) pour ${x.code} ${x.exercice}.`, { detail: "Ratios et note recalculés au prochain traitement." }); vQualite(); }
+    try { const n = await api.qValiderIA(x.id, vals, res.form.motif.value.trim()); toast(`${n} poste(s) validé(s) pour ${x.code} ${x.exercice}.`, { detail: "Ratios et note recalculés au prochain passage du workflow « BRVM relectures » (2 heures au plus en journée)." }); vQualite(); }
     catch (e) { toast("Impossible : " + msgErr(e)); }
   }
   // Fournir un autre document : un lien (BRVM.org, site de la société) ou un PDF déposé
@@ -1464,6 +1477,8 @@
         <label>Lien vers le PDF (BRVM.org, site de la société)<input type="url" name="url" placeholder="https://www.brvm.org/…/etats-financiers.pdf"></label>
         <p class="small">ou</p>
         <label>Déposer le PDF (20 Mo maximum)<input type="file" name="fichier" accept="application/pdf"></label>
+        <label class="q-case"><input type="checkbox" name="ia" checked> Lire ce document avec l'IA
+          <span class="small muted">(recommandé pour un rapport scanné ou difficile : une proposition à valider apparaîtra en haut de la console)</span></label>
         <p class="small muted">Un document scanné (image) ne pourra pas être lu automatiquement : saisissez alors les postes avec « Corriger les chiffres ».</p>`,
       motif: false,
       validate: ({ form }) => (!+form.ex.value ? "Indiquez l'exercice." : !form.url.value && !form.fichier.files.length ? "Donnez un lien ou déposez un PDF." : null) });
@@ -1471,8 +1486,13 @@
     const f = res.form, ex = +f.ex.value;
     try {
       const url = f.fichier.files.length ? await api.qDeposer(code, ex, f.fichier.files[0]) : f.url.value.trim();
-      await api.qRelireSource(code, ex, url);
-      toast(`Document ${code} ${ex} enregistré.`, { detail: "Il sera lu au prochain passage du workflow « BRVM relectures » (ou du traitement du soir)." });
+      if (f.ia.checked) {
+        await api.qLireIA(code, ex, url);
+        toast(`Document ${code} ${ex} confié à l'IA.`, { detail: "Proposition à valider au prochain passage du workflow « BRVM relectures »." });
+      } else {
+        await api.qRelireSource(code, ex, url);
+        toast(`Document ${code} ${ex} enregistré.`, { detail: "Il sera lu au prochain passage du workflow « BRVM relectures » (ou du traitement du soir)." });
+      }
       vQualite();
     } catch (e) { toast("Impossible : " + msgErr(e)); }
   }

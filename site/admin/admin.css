@@ -150,3 +150,4 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 .q-postes tr.q-cible td:first-child::after { content: " · poste signalé"; color: hsl(30 80% 40%); font-size: .78rem; font-weight: 600; }
 .q-rel { margin-bottom: 12px; } .q-rel > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; min-height: 40px; }
 #dlg:has(.q-postes) { width: min(920px, 96vw); max-width: none; }
+.q-case { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; margin-top: 10px; } .q-case input { width: auto; }
