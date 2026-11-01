@@ -83,6 +83,14 @@
       qRelectures: () => rpc("admin_relectures", { p_jours: 30 }),
       qRelireLot: (items) => rpc("admin_rescanner_lot", { p_items: items }),
       qAnnulerRelecture: (id) => rpc("admin_annuler_relecture", { p_id: id }),
+      qRelireSource: (code, ex, url) => rpc("admin_rescanner_source", { p_code: code, p_exercice: ex, p_url: url }),
+      // PDF déposé par l'analyste : espace privé « documents-analyste », lu par le moteur
+      qDeposer: async (code, ex, file) => {
+        const chemin = `${code}/${ex}-${Date.now()}.pdf`;
+        const { error } = await sb.storage.from("documents-analyste").upload(chemin, file, { contentType: "application/pdf", upsert: false });
+        if (error) throw error;
+        return "storage:" + chemin;
+      },
       qDividende: (code, ex, m, d, motif) => rpc("admin_corriger_dividende", { p_code: code, p_exercice: ex, p_montant: m, p_ex_date: d || null, p_motif: motif }),
       qFract: () => rpc("admin_fractionnements"),
       qDeclarer: (t, d, f, motif) => rpc("admin_declarer_fractionnement", { p_ticker: t, p_date: d, p_facteur: f, p_motif: motif }),
@@ -230,7 +238,8 @@
       qEtats: async (code) => ({ postes: ["revenue", "net_income", "ebit", "equity", "total_assets", "debt", "current_assets", "current_liab"].flatMap((p, i) =>
           [2025, 2024].map((ex) => ({ exercice: ex, poste: p, valeur: p === "ebit" && ex === 2025 ? 0 : [18200, 1240, 2600, 9100, 31000, 6200, 12100, 9800][i] * (ex === 2025 ? 1 : 0.94), statut: "verifie", url: "https://www.richbourse.com", corrige: null }))),
         corrections: [], relectures: [{ exercice: 2025, statut: "traitee", resultat: "relu, non confirmé par recoupement · 24 postes lus", cree_le: new Date().toISOString() }] }),
-      qCorriger: async () => 1, qRelire: async () => {}, qRelectures: async () => [], qRelireLot: async (l) => l.length, qAnnulerRelecture: async () => {}, qDividende: async () => {}, qDeclarer: async () => {}, qDetecter: async () => 1,
+      qCorriger: async () => 1, qRelire: async () => {}, qRelectures: async () => [], qRelireLot: async (l) => l.length, qAnnulerRelecture: async () => {},
+      qRelireSource: async () => {}, qDeposer: async (c, e) => `storage:${c}/${e}-demo.pdf`, qDividende: async () => {}, qDeclarer: async () => {}, qDetecter: async () => 1,
       qFract: async () => [{ ticker: "SNTS", date: "2026-10-26", facteur: 10, source: "moteur", motif: null }],
       qHistorique: async () => [{ type: "Poste financier", code: "ABJC", quoi: "2025 · ebit : 0 → 412", motif: "Rapport annuel 2025, page 34", actif: true, cree_le: new Date().toISOString(), par: "analyste@bafibourse.com" }],
       commandes: async () => [{ id: "k1", email: "awa.diop@exemple.sn", objet: "essentiel_an", montant: 20000, statut: "payee", mode: "live", cree_le: new Date(Date.now() - 3600e3).toISOString(), paye_le: new Date(Date.now() - 3500e3).toISOString(), recu_url: null },
@@ -1336,9 +1345,12 @@
         <div class="name"><b>${esc(a.code)}</b> <span class="status ${GRAV[a.gravite]?.[0] || ""}">${GRAV[a.gravite]?.[1] || ""}</span>${a.ref ? ` <span class="chip neutre">${esc(a.ref)}</span>` : ""}${d === "financier" ? etatRel(a) : ""}
           ${a.statut !== "ouverte" ? ` <span class="chip ${a.statut === "ignoree" ? "neutre" : "ok"}">${esc({ corrigee: "corrigée", ignoree: "ignorée", resolue: "résolue" }[a.statut] || a.statut)}</span>` : ""}</div>
         <div class="sub">${esc(a.detail)}</div>${a.note ? `<div class="sub">Note : ${esc(a.note)}${a.par ? ` (${esc(a.par)})` : ""}</div>` : ""}</div>
-        ${peut && a.statut === "ouverte" ? `<div class="right q-act">${d === "financier" ? `<button class="btn small primary" data-q="corriger" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-poste="${esc(a.champ || "")}">Corriger les chiffres</button>
+        ${peut && a.statut === "ouverte" ? `<div class="right q-act">${d === "financier" ? `<button class="btn small primary" data-q="corriger" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-poste="${esc(a.champ || "")}" data-id="${a.id}">Corriger les chiffres</button>
             ${relMap.get(cleRel(a.code, a.ref))?.statut === "en_attente" ? ""
-              : `<button class="btn small" data-q="relire" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Relire le document${a.ref ? ` ${esc(a.ref)}` : ""}</button>`}`
+              // déjà relu, scanné ou très mal lu : relire le même fichier ne changera rien → proposer un autre document
+              : (relMap.get(cleRel(a.code, a.ref))?.statut === "traitee" || /scannés|mal lus/.test(a.detail || ""))
+                ? `<button class="btn small" data-q="source" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Fournir un document${a.ref ? ` ${esc(a.ref)}` : ""}</button>`
+                : `<button class="btn small" data-q="relire" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Relire le document${a.ref ? ` ${esc(a.ref)}` : ""}</button>`}`
           : d === "dividendes" ? `<button class="btn small primary" data-q="dividende" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Corriger</button>`
           : d === "fractionnements" ? `<button class="btn small primary" data-q="confirmer-fract" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Confirmer</button>`
           : `<button class="btn small" data-q="verifiee" data-id="${a.id}">Donnée vérifiée, juste</button>`}
@@ -1355,7 +1367,7 @@
     z.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", async () => {
       const q = b.dataset.q;
       try {
-        if (q === "corriger") return qEtatsDialog(b.dataset.code, +b.dataset.ref || null, b.dataset.poste || null);
+        if (q === "corriger") return qEtatsDialog(b.dataset.code, +b.dataset.ref || null, b.dataset.poste || null, L.find((x) => String(x.id) === b.dataset.id)?.detail);
         if (q === "relire") {
           // l'exercice est celui de l'anomalie : pas de question à poser (sauf anomalie sans exercice)
           const ex = /^\d{4}$/.test(b.dataset.ref) ? +b.dataset.ref
@@ -1366,6 +1378,7 @@
           toast(`Relecture de ${b.dataset.code} ${ex} prévue ce soir.`);
           return qListe();
         }
+        if (q === "source") return qSource(b.dataset.code, +b.dataset.ref || null);
         if (q === "annuler-rel") { await api.qAnnulerRelecture(+b.dataset.id); toast("Demande de relecture retirée."); return qListe(); }
         if (q === "dividende") return qDividende(b.dataset.code, +b.dataset.ref || null, b.dataset.val);
         if (q === "confirmer-fract") return qDeclarer(b.dataset.code, b.dataset.ref, b.dataset.val);
@@ -1376,22 +1389,49 @@
     }));
   }
   // Les postes d'un exercice : valeur lue, valeur corrigée ; on ne saisit que ce qui est faux
-  async function qEtatsDialog(code, exercice, poste) {
+  // Fournir un autre document : un lien (BRVM.org, site de la société) ou un PDF déposé
+  async function qSource(code, exercice) {
+    const res = await ask({ title: `${code} · fournir un document`, ok: "Lire ce document",
+      body: `<p class="small muted">Relire le même fichier redonne le même résultat. Donnez un autre document des états financiers annuels :
+          il sera lu à la place de celui de RichBourse, par le workflow « BRVM relectures » ou au traitement du soir.</p>
+        <div class="grid-role"><label>Exercice<input type="number" name="ex" value="${exercice || new Date().getFullYear() - 1}"></label></div>
+        <label>Lien vers le PDF (BRVM.org, site de la société)<input type="url" name="url" placeholder="https://www.brvm.org/…/etats-financiers.pdf"></label>
+        <p class="small">ou</p>
+        <label>Déposer le PDF (20 Mo maximum)<input type="file" name="fichier" accept="application/pdf"></label>
+        <p class="small muted">Un document scanné (image) ne pourra pas être lu automatiquement : saisissez alors les postes avec « Corriger les chiffres ».</p>`,
+      motif: false,
+      validate: ({ form }) => (!+form.ex.value ? "Indiquez l'exercice." : !form.url.value && !form.fichier.files.length ? "Donnez un lien ou déposez un PDF." : null) });
+    if (!res) return;
+    const f = res.form, ex = +f.ex.value;
+    try {
+      const url = f.fichier.files.length ? await api.qDeposer(code, ex, f.fichier.files[0]) : f.url.value.trim();
+      await api.qRelireSource(code, ex, url);
+      toast(`Document ${code} ${ex} enregistré.`, { detail: "Il sera lu au prochain passage du workflow « BRVM relectures » (ou du traitement du soir)." });
+      vQualite();
+    } catch (e) { toast("Impossible : " + msgErr(e)); }
+  }
+  async function qEtatsDialog(code, exercice, poste, constat) {
     poste = { rev: "revenue", ni: "net_income" }[poste] || poste;     // clés du moteur → clés des postes
     let r;
     try { r = await api.qEtats(code); } catch (e) { return toast("Impossible : " + msgErr(e)); }
-    const exs = [...new Set(r.postes.map((p) => p.exercice))].sort((a, b) => b - a);
-    if (!exs.length) return toast(`Aucun poste lu pour ${code} : demandez une relecture du document.`);
+    // Même sans aucun poste lu (document scanné, absent), l'analyste peut saisir les chiffres de l'exercice
+    const exs = [...new Set([...r.postes.map((p) => p.exercice), ...(exercice ? [exercice] : [])])].sort((a, b) => b - a);
+    if (!exs.length) exs.push(new Date().getFullYear() - 1);
     const ex = exercice && exs.includes(exercice) ? exercice : exs[0];
-    const P = r.postes.filter((p) => p.exercice === ex), url = P.find((p) => p.url)?.url;
+    const lus = r.postes.filter((p) => p.exercice === ex), url = lus.find((p) => p.url)?.url;
+    // Tous les postes sont proposés (même ceux que la lecture n'a pas trouvés), le poste signalé en premier
+    const parPoste = new Map(lus.map((p) => [p.poste, p]));
+    const P = [...new Set([...(poste && POSTES[poste] ? [poste] : []), ...lus.map((p) => p.poste), ...Object.keys(POSTES)])]
+      .map((k) => parPoste.get(k) || { poste: k, valeur: null, corrige: null, absent: true });
     const fmt = (x) => (x == null ? "–" : N(x));
     const res = await ask({ title: `${code} · états financiers ${ex}`, ok: "Enregistrer les corrections",
       body: `<p class="small muted">Montants en millions de F CFA. Ne remplissez que les postes faux, en recopiant le chiffre du rapport annuel ;
           les ratios sont recalculés au prochain traitement du soir.${url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">Ouvrir le document source</a>.` : ""}</p>
         ${exs.length > 1 ? `<p class="small">Autres exercices : ${exs.filter((x) => x !== ex).map((x) => `<button type="button" class="btn link small" data-qex="${x}">${x}</button>`).join(" ")}</p>` : ""}
         <div class="scroll-x"><table class="dtable q-postes"><thead><tr><th>Poste</th><th class="num">Lu dans le document</th><th class="num">Valeur corrigée</th></tr></thead><tbody>
-        ${poste && POSTES[poste] ? `<p class="notice small">Poste signalé : <b>${esc(POSTES[poste])}</b> (surligné ci-dessous).</p>` : ""}
-        ${P.map((p) => `<tr${p.poste === poste ? ' class="q-cible"' : p.valeur === 0 ? ' class="q-suspect"' : ""}><td>${esc(POSTES[p.poste] || p.poste)}</td><td class="num">${fmt(p.valeur)}</td>
+        ${constat ? `<p class="notice small"><b>Constat :</b> ${esc(constat)}</p>` : ""}
+        ${poste && POSTES[poste] ? `<p class="small">Poste signalé : <b>${esc(POSTES[poste])}</b>, en tête du tableau. Corriger ce poste recalcule tous les ratios qui l'utilisent.</p>` : ""}
+        ${P.map((p) => `<tr${p.poste === poste ? ' class="q-cible"' : p.valeur === 0 ? ' class="q-suspect"' : ""}><td>${esc(POSTES[p.poste] || p.poste)}</td><td class="num">${p.absent ? '<span class="muted small">non lu</span>' : fmt(p.valeur)}</td>
           <td class="num"><input type="number" step="any" name="p_${esc(p.poste)}" value="${p.corrige ?? ""}" placeholder="—" aria-label="Valeur corrigée : ${esc(POSTES[p.poste] || p.poste)}"></td></tr>`).join("")}</tbody></table></div>
         ${r.relectures?.length ? `<p class="small muted">Dernière relecture : ${esc(r.relectures[0].exercice)} · ${esc(r.relectures[0].resultat || "en attente")}</p>` : ""}
         <p class="small">Le motif ci-dessous est la <b>source</b> de vos chiffres (ex. « Rapport annuel 2025, page 34 »).</p>`,
