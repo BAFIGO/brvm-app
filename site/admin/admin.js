@@ -1363,7 +1363,8 @@
             ${x.statut === "en_attente" ? `<span class="chip warn">en attente</span>` : `<span class="chip ok">relu</span>`}</div>
           <div class="sub">${x.statut === "en_attente" ? `demandée le ${DT(x.cree_le)}${x.par ? " par " + esc(x.par) : ""} · traitée au prochain traitement du soir`
             : `relue le ${DT(x.traite_le)} : ${esc(x.resultat || "–")}`}</div></div>
-          ${peut && x.statut === "en_attente" ? `<div class="right"><button class="btn link small" data-q="annuler-rel" data-id="${x.id}">Retirer</button></div>` : ""}</li>`).join("")}</ul>`
+          ${peut && x.statut === "en_attente" ? `<div class="right"><button class="btn link small" data-q="annuler-rel" data-id="${x.id}">Retirer</button></div>`
+            : peut && x.mode === "ia" && /échec|en attente/.test(x.resultat || "") ? `<div class="right"><button class="btn small" data-q="relancer-ia" data-code="${esc(x.code)}" data-ref="${esc(x.exercice)}" data-url="${esc(x.url || "")}">Relancer la lecture IA</button></div>` : ""}</li>`).join("")}</ul>`
           : `<p class="small muted">Aucune relecture demandée ces 30 derniers jours.</p>`}</details>
         ${peut && aRelire.length ? `<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" id="q-relire-tout">Relire tous les documents signalés (${N(aRelire.length)})</button></div>` : ""}`
       : `<p class="small muted">Suivi des relectures indisponible : exécutez 19-relectures.sql dans Supabase.</p>`);
@@ -1413,6 +1414,12 @@
           return qListe();
         }
         if (q === "examiner-ia") return qExaminerIA(S.qPIA.find((x) => String(x.id) === b.dataset.id));
+        if (q === "relancer-ia") {
+          b.disabled = true;
+          try { await api.qLireIA(b.dataset.code, +b.dataset.ref, b.dataset.url || null); toast(`Lecture IA de ${b.dataset.code} ${b.dataset.ref} relancée.`, { detail: "Même document qu'à la demande initiale." }); }
+          catch (e) { toast("Impossible : " + msgErr(e)); }
+          return qListe();
+        }
         if (q === "rejeter-ia") {
           const r = await ask({ title: "Rejeter la proposition de l'IA", ok: "Rejeter", danger: true, body: `<p class="small">Les chiffres proposés ne seront pas utilisés. Indiquez pourquoi (ex. « colonnes inversées »).</p>` });
           if (!r) return;
