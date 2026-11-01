@@ -146,3 +146,6 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 .q-postes input { width: 9em; text-align: right; min-height: 36px; padding: 4px 8px; }
 .q-postes tr.q-suspect td:first-child::after { content: " · valeur nulle suspecte"; color: var(--bad); font-size: .78rem; }
 .status.att { background: hsl(35 92% 55% / .2); color: hsl(30 80% 35%); }
+.q-postes tr.q-cible td { background: color-mix(in srgb, hsl(35 92% 55%) 18%, transparent); }
+.q-postes tr.q-cible td:first-child::after { content: " · poste signalé"; color: hsl(30 80% 40%); font-size: .78rem; font-weight: 600; }
+.q-rel { margin-bottom: 12px; } .q-rel > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; min-height: 40px; }

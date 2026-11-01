@@ -1336,7 +1336,7 @@
         <div class="name"><b>${esc(a.code)}</b> <span class="status ${GRAV[a.gravite]?.[0] || ""}">${GRAV[a.gravite]?.[1] || ""}</span>${a.ref ? ` <span class="chip neutre">${esc(a.ref)}</span>` : ""}${d === "financier" ? etatRel(a) : ""}
           ${a.statut !== "ouverte" ? ` <span class="chip ${a.statut === "ignoree" ? "neutre" : "ok"}">${esc({ corrigee: "corrigée", ignoree: "ignorée", resolue: "résolue" }[a.statut] || a.statut)}</span>` : ""}</div>
         <div class="sub">${esc(a.detail)}</div>${a.note ? `<div class="sub">Note : ${esc(a.note)}${a.par ? ` (${esc(a.par)})` : ""}</div>` : ""}</div>
-        ${peut && a.statut === "ouverte" ? `<div class="right q-act">${d === "financier" ? `<button class="btn small primary" data-q="corriger" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Corriger les chiffres</button>
+        ${peut && a.statut === "ouverte" ? `<div class="right q-act">${d === "financier" ? `<button class="btn small primary" data-q="corriger" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-poste="${esc(a.champ || "")}">Corriger les chiffres</button>
             ${relMap.get(cleRel(a.code, a.ref))?.statut === "en_attente" ? ""
               : `<button class="btn small" data-q="relire" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}">Relire le document${a.ref ? ` ${esc(a.ref)}` : ""}</button>`}`
           : d === "dividendes" ? `<button class="btn small primary" data-q="dividende" data-code="${esc(a.code)}" data-ref="${esc(a.ref || "")}" data-val="${a.valeur ?? ""}">Corriger</button>`
@@ -1355,7 +1355,7 @@
     z.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", async () => {
       const q = b.dataset.q;
       try {
-        if (q === "corriger") return qEtatsDialog(b.dataset.code, +b.dataset.ref || null);
+        if (q === "corriger") return qEtatsDialog(b.dataset.code, +b.dataset.ref || null, b.dataset.poste || null);
         if (q === "relire") {
           // l'exercice est celui de l'anomalie : pas de question à poser (sauf anomalie sans exercice)
           const ex = /^\d{4}$/.test(b.dataset.ref) ? +b.dataset.ref
@@ -1376,7 +1376,8 @@
     }));
   }
   // Les postes d'un exercice : valeur lue, valeur corrigée ; on ne saisit que ce qui est faux
-  async function qEtatsDialog(code, exercice) {
+  async function qEtatsDialog(code, exercice, poste) {
+    poste = { rev: "revenue", ni: "net_income" }[poste] || poste;     // clés du moteur → clés des postes
     let r;
     try { r = await api.qEtats(code); } catch (e) { return toast("Impossible : " + msgErr(e)); }
     const exs = [...new Set(r.postes.map((p) => p.exercice))].sort((a, b) => b - a);
@@ -1389,12 +1390,17 @@
           les ratios sont recalculés au prochain traitement du soir.${url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">Ouvrir le document source</a>.` : ""}</p>
         ${exs.length > 1 ? `<p class="small">Autres exercices : ${exs.filter((x) => x !== ex).map((x) => `<button type="button" class="btn link small" data-qex="${x}">${x}</button>`).join(" ")}</p>` : ""}
         <div class="scroll-x"><table class="dtable q-postes"><thead><tr><th>Poste</th><th class="num">Lu dans le document</th><th class="num">Valeur corrigée</th></tr></thead><tbody>
-        ${P.map((p) => `<tr${p.valeur === 0 ? ' class="q-suspect"' : ""}><td>${esc(POSTES[p.poste] || p.poste)}</td><td class="num">${fmt(p.valeur)}</td>
+        ${poste && POSTES[poste] ? `<p class="notice small">Poste signalé : <b>${esc(POSTES[poste])}</b> (surligné ci-dessous).</p>` : ""}
+        ${P.map((p) => `<tr${p.poste === poste ? ' class="q-cible"' : p.valeur === 0 ? ' class="q-suspect"' : ""}><td>${esc(POSTES[p.poste] || p.poste)}</td><td class="num">${fmt(p.valeur)}</td>
           <td class="num"><input type="number" step="any" name="p_${esc(p.poste)}" value="${p.corrige ?? ""}" placeholder="—" aria-label="Valeur corrigée : ${esc(POSTES[p.poste] || p.poste)}"></td></tr>`).join("")}</tbody></table></div>
         ${r.relectures?.length ? `<p class="small muted">Dernière relecture : ${esc(r.relectures[0].exercice)} · ${esc(r.relectures[0].resultat || "en attente")}</p>` : ""}
         <p class="small">Le motif ci-dessous est la <b>source</b> de vos chiffres (ex. « Rapport annuel 2025, page 34 »).</p>`,
       validate: ({ form }) => [...form.querySelectorAll('input[name^="p_"]')].some((i) => i.value !== "") ? null : "Saisissez au moins une valeur corrigée." ,
-      onOpen: (dlg) => dlg.querySelectorAll("[data-qex]").forEach((b) => b.addEventListener("click", () => { dlg.close(); qEtatsDialog(code, +b.dataset.qex); })) });
+      onOpen: (dlg) => {
+        dlg.querySelectorAll("[data-qex]").forEach((b) => b.addEventListener("click", () => { dlg.close(); qEtatsDialog(code, +b.dataset.qex, poste); }));
+        const cible = poste && dlg.querySelector(`input[name="p_${poste}"]`);
+        if (cible) setTimeout(() => { cible.scrollIntoView({ block: "center" }); cible.focus(); }, 50);
+      } });
     if (!res) return;
     const vals = {};
     res.form.querySelectorAll('input[name^="p_"]').forEach((i) => { if (i.value !== "") vals[i.name.slice(2)] = +i.value; });

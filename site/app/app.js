@@ -273,6 +273,11 @@
       },
       deleteOperation: async (id) => r(await sb.from("operations").delete().eq("id", id)),
       table: async (name, date) => r(await sb.from(name).select("*").eq("date", date).limit(2000)),
+      // dernière date pour laquelle une table contient des lignes (repli si la séance du jour n'a pas été publiée)
+      derniereDate: async (name, avant) => {
+        const { data } = await sb.from(name).select("date").lte("date", avant).order("date", { ascending: false }).limit(1);
+        return data?.[0]?.date || null;
+      },
       // Dernier cours connu d'un titre absent de l'analyse du jour : on cherche dans les trois tables
       dernierCours: async (code, avant) => {
         for (const [t, col] of [["actions_analyse", "cours"], ["obligations_analyse", "prix"], ["opcvm_analyse", "vl"]]) {
@@ -1995,7 +2000,9 @@
           <option value="all"${u.mkFilter === "all" ? " selected" : ""}>Tous</option>
         </select>
       </div>
-      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "ses repères et son analyse" : "le détail"}</p>
+      ${S.mkDate?.[u.mkTab] ? `<p class="notice small">Analyse de la séance du ${D(S.mkDate[u.mkTab])} : celle du ${D(S.seance?.date)} n'a pas encore été publiée.</p>` : ""}
+      ${!rows.length ? `<p class="notice small">Aucune donnée disponible pour le moment dans cette rubrique. Réessayez après le prochain traitement du soir.</p>` : ""}
+      <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.mkDate?.[u.mkTab] || S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "ses repères et son analyse" : "le détail"}</p>
       <div class="card"><ul class="list">`;
     for (const r of list.slice(0, u.mkShow)) {
       let px, det;
@@ -3194,6 +3201,19 @@
       for (const r of [...(a || []), ...(o || []), ...(f || [])]) r.nom = nomLisible(r.nom);
       for (const x of [...(S.prop?.contenu?.ordres || []), ...(S.prop?.contenu?.proposition?.lignes || [])]) if (x.libelle) x.libelle = nomLisible(x.libelle);
       S.mk = { actions: a || [], obligations: o || [], opcvm: f || [] };
+      // Séance annoncée mais tables vides (publication du soir interrompue) : on affiche la dernière analyse disponible
+      S.mkDate = {};
+      for (const [k, t] of [["actions", "actions_analyse"], ["obligations", "obligations_analyse"], ["opcvm", "opcvm_analyse"]]) {
+        if (S.mk[k].length || !api.derniereDate) continue;
+        try {
+          const d = await api.derniereDate(t, seance.date);
+          if (d && d !== seance.date) {
+            const rows = await api.table(t, d);
+            for (const r of rows || []) r.nom = nomLisible(r.nom);
+            if (rows?.length) { S.mk[k] = rows; S.mkDate[k] = d; }
+          }
+        } catch (e) { /* on garde la liste vide */ }
+      }
       S.cibles = c || [];
       try { S.indices = await api.indices(); } catch (e) { S.indices = []; }   // table pas encore créée
       S.prices = new Map(); S.names = new Map(); S.classes = new Map(); S.decisions = new Map();
