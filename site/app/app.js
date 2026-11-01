@@ -184,8 +184,24 @@
     for (const al of a.alertes || []) h += `<div class="notice small">⚠ ${esc(al)}</div>`;
     if (a.familles?.length) h += `<ul class="fam">${a.familles.map((f) => `<li><span>${esc(f.nom)}</span> ${appr(f.appreciation)}
       <div class="sub">${esc(f.resume || "")}</div></li>`).join("")}</ul>`;
+    // États financiers harmonisés : mêmes lignes, même ordre, millions de F CFA, pour toutes les sociétés
+    if (a.etats?.annees?.length) {
+      const e = a.etats, an = e.annees;
+      const cel = (x) => !x ? `<td class="muted">–</td>`
+        : `<td class="num ${x.o === "calculé" ? "et-calc" : x.o === "corrigé" ? "et-corr" : ""}"${x.o !== "lu" ? ` title="${esc(x.o)}"` : ""}>${m(x.v)}${x.o === "calculé" ? '<sup aria-label="calculé">c</sup>' : x.o === "corrigé" ? '<sup aria-label="corrigé">✎</sup>' : ""}</td>`;
+      h += `<details class="etats" open><summary>États financiers (millions de F CFA)</summary>
+        <div class="tbl" role="region" aria-label="États financiers" tabindex="0"><table>
+        <thead><tr><th scope="col">Poste</th>${an.map((y) => `<th scope="col">${esc(y)}</th>`).join("")}</tr></thead>
+        <tbody>${e.sections.map((sec) => {
+          const lignes = sec.codes.filter((c) => (e.lignes[c] || []).some(Boolean));
+          return lignes.length ? `<tr class="et-sec"><th scope="rowgroup" colspan="${an.length + 1}">${esc(sec.titre)}</th></tr>`
+            + lignes.map((c) => `<tr${/^(X|BK|BZ|CP|DF|DP|DZ|FA|ZB|PNB|RN|TOT)/.test(c) ? ' class="et-tot"' : ""}><th scope="row">${esc(e.libelles[c] || c)}</th>${(e.lignes[c] || []).map(cel).join("")}</tr>`).join("") : "";
+        }).join("")}</tbody></table></div>
+        <p class="small muted">Présentation identique pour toutes les sociétés. <sup>c</sup> calculé à partir des lignes du document ;
+          <sup>✎</sup> corrigé ou validé par notre analyste.</p></details>`;
+    }
     const yrs = (a.annees || []).filter((y) => ok(y.rev) || ok(y.ni));
-    if (yrs.length) h += `<div class="tbl" role="region" aria-label="Chiffres clés" tabindex="0"><table><caption class="small muted">Chiffres clés (millions de F)</caption>
+    if (yrs.length && !a.etats?.annees?.length) h += `<div class="tbl" role="region" aria-label="Chiffres clés" tabindex="0"><table><caption class="small muted">Chiffres clés (millions de F)</caption>
       <thead><tr><th scope="col">Exercice</th><th scope="col">${a.banque ? "PNB" : "Chiffre d'affaires"}</th><th scope="col">Résultat net</th><th scope="col">Marge nette</th></tr></thead>
       <tbody>${yrs.map((y) => `<tr><th scope="row">${esc(y.year)}</th><td>${m(y.rev)}</td><td class="${cls(y.ni)}">${m(y.ni)}</td><td>${pc(y.margin)}</td></tr>`).join("")}</tbody></table></div>`;
     if (a.ratios?.length) h += `<details class="ratios"><summary>Voir les ${a.ratios.length} ratios détaillés</summary><ul class="list">

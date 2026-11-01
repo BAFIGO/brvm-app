@@ -1055,3 +1055,14 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .dep-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .dep-total { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); }
 .imp-releve-depart { display: grid; gap: 6px; margin: 12px 0 0; }
+/* états financiers harmonisés */
+.etats > summary { cursor: pointer; font-weight: 700; margin: 12px 0 6px; }
+.etats table td.num, .etats table th[scope="col"] { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.etats tr.et-sec th { text-align: left; padding-top: 12px; color: var(--accent); font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; }
+.etats tr.et-tot th, .etats tr.et-tot td { font-weight: 700; }
+.etats sup { font-size: .65rem; margin-left: 2px; color: var(--muted); }
+.etats td.et-corr sup { color: hsl(30 80% 40%); }
+.etats table { width: 100%; table-layout: auto; }
+.etats th[scope="row"], .etats th[scope="rowgroup"] { white-space: normal; text-align: left; min-width: 8.5em; font-weight: 500; }
+.etats thead th:first-child { text-align: left; }
+.etats td.num { padding-left: 8px; }
