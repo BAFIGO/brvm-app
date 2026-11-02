@@ -39,7 +39,7 @@
     ["Diversification", ["diversification"], "Répartir son argent sur plusieurs titres et types de placements pour limiter le risque."],
     ["Plancher", ["plancher"], "Le niveau sous lequel une alerte vous invite à examiner un titre : 15 % sous le plus haut atteint depuis votre achat. Jamais une vente automatique."],
     ["Score", ["score"], "Le score BafiBourse, sur 100 : la synthèse de la santé financière de l'entreprise et de la tendance de son cours, avec le dividende, la valorisation et la liquidité. Un repère, pas un conseil."],
-    ["Santé financière", ["santé financière"], "La note de A (très solide) à E (très fragile) de l'entreprise, tirée de ses états financiers : croissance, rentabilité, solidité, régularité. Elle répond à la question « est-ce une entreprise solide ? »."],
+    ["Diagnostic financier", ["diagnostic financier", "santé financière"], "L'appréciation par BafiBourse des états financiers publiés de l'entreprise (très solide, solide, correct, fragile, très fragile) : croissance, rentabilité, solidité, régularité. Elle répond à la question « les comptes sont-ils solides ? ». Ce n'est pas une notation financière : seules les agences agréées par l'AMF-UMOA (Bloomfield, WARA…) délivrent des notations."],
     ["Tendance du cours", ["tendance du cours"], "Le sens du cours sur les trois derniers mois : en hausse, stable ou en baisse. Elle répond à la question « est-ce un bon moment ? », à court terme."],
   ];
   const DEF = new Map(TERMES.map(([t, , d]) => [t, d]));

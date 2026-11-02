@@ -1066,3 +1066,14 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .etats th[scope="row"], .etats th[scope="rowgroup"] { white-space: normal; text-align: left; min-width: 8.5em; font-weight: 500; }
 .etats thead th:first-child { text-align: left; }
 .etats td.num { padding-left: 8px; }
+
+/* Diagnostic financier BafiBourse : en mots (pas de lettre, pour ne pas imiter une échelle de notation d'agence) */
+.diag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: .9rem; white-space: nowrap; }
+.diag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.diag.sm { font-size: .75rem; padding: 2px 8px; }
+.diag.d-A, .diag.d-B { background: var(--accent-soft); color: var(--good); }
+.diag.d-C { background: var(--warn-bg); color: var(--warn); }
+.diag.d-D, .diag.d-E { background: var(--bad-bg); color: var(--bad); }
+.diag.d-x { background: var(--surface-2); color: var(--muted); }
+.diag-mention { margin: 6px 0 10px; line-height: 1.45; }
+.fin-head .diag { font-size: 1rem; padding: 6px 12px; }

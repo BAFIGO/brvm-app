@@ -86,6 +86,7 @@
       qRelireSource: (code, ex, url) => rpc("admin_rescanner_source", { p_code: code, p_exercice: ex, p_url: url }),
       qLireIA: (code, ex, url) => rpc("admin_lire_ia", { p_code: code, p_exercice: ex, p_url: url || null }),
       qPropositionsIA: () => rpc("admin_propositions_ia", { p_statut: "a_valider" }),
+      qNotations: async () => { const { data, error } = await sb.from("notations_agences").select("*").order("code"); if (error) throw error; return data || []; },
       qValiderIA: (id, vals, motif) => rpc("admin_valider_ia", { p_id: id, p_valeurs: vals, p_motif: motif }),
       qRejeterIA: (id, motif) => rpc("admin_rejeter_ia", { p_id: id, p_motif: motif }),
       // PDF déposé par l'analyste : espace privé « documents-analyste », lu par le moteur
@@ -244,7 +245,10 @@
         corrections: [], relectures: [{ exercice: 2025, statut: "traitee", resultat: "relu, non confirmé par recoupement · 24 postes lus", cree_le: new Date().toISOString() }] }),
       qCorriger: async () => 1, qRelire: async () => {}, qRelectures: async () => [], qRelireLot: async (l) => l.length, qAnnulerRelecture: async () => {},
       qRelireSource: async () => {}, qDeposer: async (c, e) => `storage:${c}/${e}-demo.pdf`,
-      qLireIA: async () => {}, qPropositionsIA: async () => ({ depense_mois: 0.21, propositions: [{ id: 1, code: "ABJC", exercice: 2025, unite: "millions", cree_le: new Date().toISOString(),
+      qLireIA: async () => {}, qNotations: async () => [
+        { code: "SNTS", nom: "SONATEL SN", agence: "Bloomfield", periode: "Juin 2026", long_terme: "AAA", court_terme: "A1+", perspective: "Stable", ancienne: false, url: "#" },
+        { code: "ORAC", nom: "ORANGE COTE D'IVOIRE", agence: "Bloomfield", periode: "Mai 2024", long_terme: "AA", court_terme: "A1", perspective: "Stable", ancienne: true },
+        { code: "ABJC", nom: "SERVAIR ABIDJAN CI", agence: null }, { code: "CABC", nom: "SICABLE CI", agence: null }], qPropositionsIA: async () => ({ depense_mois: 0.21, propositions: [{ id: 1, code: "ABJC", exercice: 2025, unite: "millions", cree_le: new Date().toISOString(),
         remarques: "", document: null, controles: { ca: { ok: true, ia: 24012, ref: 24000 }, rn: { ok: true, ia: 1803, ref: 1800 }, bilan: { ok: true, ia: 30120, ref: 30120 },
           liasse: { ok: false, constats: ["Total actif circulant (BK) lu 10 000 M, somme de ses lignes 5 005 M. La ligne « Clients » (BI, lue 5 M) semble lue avec une erreur d'unité : 5 000 M rétablirait le total."] } },
         liasse: { XB: { valeur: 24012, origine: "lu", page: 5, libelle: "Chiffre d'affaires" }, XD: { valeur: 4010, origine: "lu", page: 5, libelle: "Excédent brut d'exploitation" },
@@ -1347,6 +1351,25 @@
       return x.statut === "en_attente" ? ` <span class="chip warn">Relecture prévue ce soir</span>`
         : ` <span class="chip neutre" title="${esc(x.resultat || "")}">Relu le ${D(x.traite_le)}</span>`;
     };
+    // Notations des agences agréées : couverture des sociétés cotées (inventaire publié par le moteur chaque soir)
+    if (d === "financier") {
+      let NOT = null;
+      try { NOT = await api.qNotations(); } catch (e) { NOT = null; }
+      if (NOT === null) extra += `<p class="small muted">Inventaire des notations indisponible : exécutez 22-notations-agences.sql dans Supabase.</p>`;
+      else if (NOT.length) {
+        const notees = NOT.filter((x) => x.agence), sans = NOT.filter((x) => !x.agence), anciennes = notees.filter((x) => x.ancienne);
+        extra += `<details class="q-rel q-not"><summary><b>Notations d'agences</b>
+            <span class="small muted">${N(notees.length)} société(s) notée(s) sur ${N(NOT.length)} · ${N(anciennes.length)} à renouveler · ${N(sans.length)} sans notation</span></summary>
+          <p class="small muted">Notations délivrées par les agences agréées par l'AMF-UMOA (Bloomfield, WARA…). « À renouveler » : notation de plus de 18 mois ou échue,
+            à vérifier sur le site de l'agence. Le diagnostic BafiBourse n'est pas une notation.</p>
+          ${notees.length ? `<div class="scroll-x"><table class="dtable"><thead><tr><th>Société</th><th>Agence</th><th>Long terme</th><th>Court terme</th><th>Perspective</th><th>Période</th><th></th></tr></thead><tbody>
+            ${notees.map((x) => `<tr><td><b>${esc(x.code)}</b> <span class="small muted">${esc(x.nom || "")}</span></td><td>${esc(x.agence)}</td><td>${esc(x.long_terme || "–")}</td>
+              <td>${esc(x.court_terme || "–")}</td><td>${esc(x.perspective || "–")}</td><td>${esc(x.periode || "–")}${x.ancienne ? ' <span class="chip warn">à renouveler</span>' : ""}</td>
+              <td>${x.url && x.url !== "#" ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">rapport</a>` : ""}</td></tr>`).join("")}</tbody></table></div>` : ""}
+          ${sans.length ? `<p class="small"><b>Sans notation (${N(sans.length)}) :</b> ${sans.map((x) => `<span title="${esc(x.nom || "")}">${esc(x.code)}</span>`).join(", ")}</p>` : ""}
+        </details>`;
+      }
+    }
     if (d === "financier" && PIA) {
       const ctl = (c) => Object.entries(c || {}).map(([k, v]) => `<span class="chip ${v.ok ? "ok" : "warn"}">${{ ca: "CA", rn: "Résultat net", bilan: "Bilan", liasse: "Totaux" }[k] || k} ${v.ok ? "✓" : "✗"}</span>`).join(" ");
       extra += `<details class="q-rel q-ia"${S.qPIA.length ? " open" : ""}><summary><b>Lectures par l'IA (pilote)</b>

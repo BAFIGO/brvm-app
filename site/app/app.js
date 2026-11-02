@@ -66,7 +66,7 @@
   const cls = (v) => (ok(v) ? (+v > 0 ? "good" : +v < 0 ? "bad" : "") : "");
   // Score « bien noté » mais santé financière D ou E : l'étiquette ne promet pas plus que les comptes ne le permettent
   const chipSante = (d, note) => (/^[DE]$/.test(note || "") && (BUY.includes(d) || d === "RENFORCER")
-    ? `<span class="chip warn" title="Score favorable, mais santé financière ${esc(note)}">Neutre · santé fragile</span>` : chip(d));
+    ? `<span class="chip warn" title="Score favorable, mais diagnostic financier : ${esc(SANTE[note] || "")}">Neutre · comptes fragiles</span>` : chip(d));
   const chip = (d) => {
     if (!d) return "";
     const k = BUY.includes(d) ? "buy" : /VENDRE|ÉVITER|RACHETER/.test(d) ? "sell" : /ALLÉGER|SURVEILLER/.test(d) ? "warn" : "";
@@ -82,7 +82,7 @@
     if (/illiquide/i.test(t)) return "Peu échangé";
     return t.charAt(0) + t.slice(1).toLowerCase();
   }
-  // Les trois repères d'une action : santé financière (A à E), tendance du cours, score BafiBourse
+  // Les trois repères d'une action : diagnostic financier (en mots), tendance du cours, score BafiBourse
   // Historique boursier sur 5 ans : des faits passés (cours ajustés des fractionnements, dividendes), jamais une prévision
   function histoAnnuel(h, type = "action") {
     if (!h?.annees?.length) return "";
@@ -107,7 +107,12 @@
       <p class="small muted">${acces(1) && act ? "Total = variation du cours + dividende. " : ""}* année en cours, depuis le 1er janvier.
         Performances passées${act ? ", ajustées des fractionnements" : ""} : elles ne préjugent pas des performances futures.</p></div>`;
   }
-  const SANTE = { A: "Très solide", B: "Solide", C: "Correcte", D: "Fragile", E: "Très fragile" };
+  const SANTE = { A: "Très solide", B: "Solide", C: "Correct", D: "Fragile", E: "Très fragile" };
+  // Diagnostic financier BafiBourse : affiché en MOTS (jamais en lettres), pour ne pas imiter l'échelle d'une notation
+  // financière, activité réservée aux agences agréées par l'AMF-UMOA. La lettre reste un code interne.
+  const MENTION_DIAG = "Analyse des états financiers publiés, réalisée par BafiBourse. Ne constitue pas une notation financière au sens de la réglementation UMOA.";
+  const diagMot = (note, sm) => note && SANTE[note]
+    ? `<span class="diag d-${esc(note)}${sm ? " sm" : ""}" title="Diagnostic financier BafiBourse">${SANTE[note]}</span>` : "";
   function tendanceCours(c, raisons) {
     const m = /Tech\.\s*(Hausse|Baisse|Neutre|Stable)\s*\((\d+)\s*%\)/i.exec(raisons || "");
     if (m) {
@@ -130,24 +135,24 @@
     if (fra && t.k === "hausse") return "Le cours monte, mais l'entreprise est fragile : prudence.";
     if (fra && t.k === "baisse") return "Entreprise fragile et cours en baisse.";
     if (fra) return "Entreprise fragile, cours stable.";
-    return `Santé financière correcte, cours ${t.lib.toLowerCase()}.`;
+    return `Comptes corrects, cours ${t.lib.toLowerCase()}.`;
   }
   function reperes(r) {
     const note = r.analyse?.note, t = tendanceCours(r.courbe, r.raisons);
     const sol = /[AB]/.test(note || ""), fra = /[DE]/.test(note || "");
     const caseActive = (ligne, col) => (ligne === "sol" ? sol : fra) && t && (col === "h" ? t.k === "hausse" : t.k === "baisse") ? " actif" : "";
     return `<div class="reperes">
-      <div class="rp-tuile"><span class="rp-lbl">Santé financière</span>
-        ${note ? `<span class="rp-val"><span class="grade sm g-${esc(note)}">${esc(note)}</span> ${SANTE[note] || ""}</span>`
-          : r.analyse?.fiabilite === "partielle" ? `<span class="rp-val muted">En attente de vérification</span>` : `<span class="rp-val muted">Non notée</span>`}</div>
+      <div class="rp-tuile"><span class="rp-lbl">Diagnostic financier</span>
+        ${note ? `<span class="rp-val">${diagMot(note)}</span>`
+          : r.analyse?.fiabilite === "partielle" ? `<span class="rp-val muted">En attente de vérification</span>` : `<span class="rp-val muted">Non disponible</span>`}</div>
       <div class="rp-tuile"><span class="rp-lbl">Tendance du cours</span>
         ${t ? `<span class="rp-val t-${t.k}">${t.fl} ${t.lib} <small>${t.conf ? `confiance ${t.conf} %` : `${P(t.ch)} sur 3 mois`}</small></span>` : `<span class="rp-val muted">–</span>`}</div>
       <div class="rp-tuile"><span class="rp-lbl">Score BafiBourse</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chipSante(r.decision, r.analyse?.note)}</span></div>
     </div>
     ${note && t ? `<div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
       <span></span><span class="q-tete">Cours en hausse</span><span class="q-tete">Cours en baisse</span>
-      <span class="q-cote">Solide (A, B)</span><span class="q-case${caseActive("sol", "h")}">Solide et porteuse</span><span class="q-case${caseActive("sol", "b")}">Solide, le marché hésite</span>
-      <span class="q-cote">Fragile (D, E)</span><span class="q-case${caseActive("fra", "h")}">Le cours monte, prudence</span><span class="q-case${caseActive("fra", "b")}">Fragile et délaissée</span>
+      <span class="q-cote">Comptes solides</span><span class="q-case${caseActive("sol", "h")}">Solide et porteuse</span><span class="q-case${caseActive("sol", "b")}">Solide, le marché hésite</span>
+      <span class="q-cote">Comptes fragiles</span><span class="q-case${caseActive("fra", "h")}">Le cours monte, prudence</span><span class="q-case${caseActive("fra", "b")}">Fragile et délaissée</span>
     </div><p class="rp-phrase">${esc(phraseReperes(note, t))} <span class="muted">Le score résume les deux, avec le dividende, la valorisation et la liquidité.</span></p>` : ""}`;
   }
   function spark(c, w = 96, h = 30) {
@@ -168,12 +173,13 @@
     const attente = a.fiabilite === "partielle" && !a.note;
     let h = attente
       ? `<div class="fin"><div class="fin-head"><span class="grade g-x" aria-hidden="true">…</span>
-      <div><b>Santé financière : note en attente de vérification</b><div class="sub">La note sera publiée dès que toute l'analyse sera vérifiée</div></div></div>`
-      : `<div class="fin"><div class="fin-head"><span class="grade g-${esc(a.note || "x")}" aria-label="Santé financière ${esc(a.note || "non disponible")}">${esc(a.note || "–")}</span>
-      <div><b>Santé financière : ${esc(SANTE[a.note] || "non notée")}</b><div class="sub">Note ${esc(a.note || "–")} · perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>`;
+      <div><b>Diagnostic financier : en attente de vérification</b><div class="sub">Il sera publié dès que toute l'analyse sera vérifiée</div></div></div>`
+      : `<div class="fin"><div class="fin-head">${diagMot(a.note) || '<span class="diag d-x">Non disponible</span>'}
+      <div><b>Diagnostic financier BafiBourse</b><div class="sub">Perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>
+      <p class="small muted diag-mention">${MENTION_DIAG}</p>`;
     // analyse incomplète (indicateur manquant ou douteux) : pas de note, et l'utilisateur sait ce qui reste à vérifier
     if (a.fiabilite === "partielle") h += `<div class="notice small">ⓘ <b>Analyse en cours de vérification.</b> Certains indicateurs de cette société sont en cours de vérification par notre équipe${a.a_verifier?.length ? ` (${esc(a.a_verifier.join(", ").toLowerCase())})` : ""} :
-      la note sera publiée dès leur validation. Les indicateurs ci-dessous sont donnés à titre indicatif.</div>`;
+      le diagnostic sera publié dès leur validation. Les indicateurs ci-dessous sont donnés à titre indicatif.</div>`;
     if (!acces(2)) {                                          // Essentiel : le pourquoi en un coup d'œil ; le détail est réservé à l'Investisseur
       if (a.familles?.length) h += `<ul class="fam-pastilles" aria-label="Ce qui fait la note">${a.familles.map((f) =>
         `<li class="fp-${/bon/i.test(f.appreciation || "") ? "bon" : /faible/i.test(f.appreciation || "") ? "faible" : "moyen"}">${esc(f.nom)}</li>`).join("")}</ul>
@@ -1573,7 +1579,7 @@
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
         const ep1 = estEpingle(p.code);
-        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` <span class="grade sm g-${esc(act.analyse.note)}" title="Santé financière">${esc(act.analyse.note)}</span>` : ""}</div>
+        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` ${diagMot(act.analyse.note, true)}` : ""}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
           <div class="sub etats"><button type="button" class="epingler" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
             aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}">${ICONE_EPINGLE}<span>${ep1 ? "Épinglé" : "Épingler"}</span></button>${chip(d)}${pastille(al)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
@@ -2040,7 +2046,7 @@
         const acc = accesFcp();
         det = `${esc(r.gestionnaire || "")}${acc ? (acc.has(r.gestionnaire) ? " · souscriptible via vos comptes" : " · non souscriptible via vos SGI") : ""} · ${esc(CLASSES[r.classe] || r.classe || "")} · volatilité ${P(r.volatilite, false)} · rendement attendu ${P(r.rendement_attendu, false)}`;
       }
-      const note = r.analyse?.note ? ` <span class="grade sm g-${esc(r.analyse.note)}" title="Santé financière">${esc(r.analyse.note)}</span>` : "";
+      const note = r.analyse?.note ? ` ${diagMot(r.analyse.note, true)}` : "";
       if (u.mkTab !== "actions" && r.raisons) det += `<br>${esc(r.raisons)}`;
       const pxCourt = u.mkTab === "actions" ? `${F(r.cours)}<div class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</div>` : px;
       h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}</div>
