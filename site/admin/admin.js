@@ -86,6 +86,10 @@
       qRelireSource: (code, ex, url) => rpc("admin_rescanner_source", { p_code: code, p_exercice: ex, p_url: url }),
       qLireIA: (code, ex, url) => rpc("admin_lire_ia", { p_code: code, p_exercice: ex, p_url: url || null }),
       qPropositionsIA: () => rpc("admin_propositions_ia", { p_statut: "a_valider" }),
+      qResumes: () => rpc("admin_resumes_notations", {}),
+      qValiderResume: (id, plus, moins) => rpc("admin_valider_resume", { p_id: id, p_plus: plus, p_moins: moins }),
+      qRejeterResume: (id, motif) => rpc("admin_rejeter_resume", { p_id: id, p_motif: motif }),
+      qRefaireResume: (id) => rpc("admin_refaire_resume", { p_id: id }),
       qNotations: async () => { const { data, error } = await sb.from("notations_agences").select("*").order("code"); if (error) throw error; return data || []; },
       qValiderIA: (id, vals, motif) => rpc("admin_valider_ia", { p_id: id, p_valeurs: vals, p_motif: motif }),
       qRejeterIA: (id, motif) => rpc("admin_rejeter_ia", { p_id: id, p_motif: motif }),
@@ -245,6 +249,11 @@
         corrections: [], relectures: [{ exercice: 2025, statut: "traitee", resultat: "relu, non confirmé par recoupement · 24 postes lus", cree_le: new Date().toISOString() }] }),
       qCorriger: async () => 1, qRelire: async () => {}, qRelectures: async () => [], qRelireLot: async (l) => l.length, qAnnulerRelecture: async () => {},
       qRelireSource: async () => {}, qDeposer: async (c, e) => `storage:${c}/${e}-demo.pdf`,
+      qResumes: async () => [{ id: 7, code: "SNTS", agence: "Bloomfield", periode: "Juin 2026", statut: "a_valider", cree_le: new Date().toISOString(),
+        url: "#", lu: { note_long_terme: "AAA", perspective: "Stable", periode: "Juin 2026" },
+        plus: ["Position de premier opérateur télécoms au Sénégal, avec une large base d'abonnés.", "Rentabilité élevée et régulière sur plusieurs exercices.", "Endettement faible au regard des flux générés."],
+        moins: ["Pression réglementaire et fiscale sur le secteur des télécoms.", "Concurrence accrue sur les services de paiement mobile."] }],
+      qValiderResume: async () => {}, qRejeterResume: async () => {}, qRefaireResume: async () => {},
       qLireIA: async () => {}, qNotations: async () => [
         { code: "SNTS", nom: "SONATEL SN", agence: "Bloomfield", periode: "Juin 2026", long_terme: "AAA", court_terme: "A1+", perspective: "Stable", ancienne: false, url: "#" },
         { code: "ORAC", nom: "ORANGE COTE D'IVOIRE", agence: "Bloomfield", periode: "Mai 2024", long_terme: "AA", court_terme: "A1", perspective: "Stable", ancienne: true },
@@ -1355,7 +1364,9 @@
     if (d === "financier") {
       let NOT = null;
       try { NOT = await api.qNotations(); } catch (e) { NOT = null; }
-      if (NOT === null) extra += `<p class="small muted">Inventaire des notations indisponible : exécutez 22-notations-agences.sql dans Supabase.</p>`;
+      if (NOT === null) extra += `<p class="notice small"><b>Notations d'agences :</b> inventaire indisponible. Exécutez 22-notations-agences.sql dans Supabase.</p>`;
+      else if (!NOT.length) extra += `<p class="notice small"><b>Notations d'agences :</b> l'inventaire n'a pas encore été publié par le moteur.
+          Lancez le workflow « BRVM quotidien » (moteur 2026.11.11 ou plus récent) : il apparaîtra ici à la fin du traitement.</p>`;
       else if (NOT.length) {
         const notees = NOT.filter((x) => x.agence), sans = NOT.filter((x) => !x.agence), anciennes = notees.filter((x) => x.ancienne);
         extra += `<details class="q-rel q-not"><summary><b>Notations d'agences</b>
@@ -1368,6 +1379,25 @@
               <td>${x.url && x.url !== "#" ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">rapport</a>` : ""}</td></tr>`).join("")}</tbody></table></div>` : ""}
           ${sans.length ? `<p class="small"><b>Sans notation (${N(sans.length)}) :</b> ${sans.map((x) => `<span title="${esc(x.nom || "")}">${esc(x.code)}</span>`).join(", ")}</p>` : ""}
         </details>`;
+      }
+      // Résumés des rapports de notation : préparés par l'IA (reformulés), publiés seulement après validation
+      let RES = null;
+      try { RES = await api.qResumes(); } catch (e) { RES = null; }
+      S.qRES = RES || [];
+      if (RES === null) extra += `<p class="small muted">Résumés de notations indisponibles : exécutez 23-resumes-notations.sql dans Supabase.</p>`;
+      else {
+        const av = RES.filter((x) => x.statut === "a_valider"), val = RES.filter((x) => x.statut === "valide");
+        extra += `<details class="q-rel q-res"${av.length ? " open" : ""}><summary><b>Résumés de notations</b>
+            <span class="small muted">${N(av.length)} à valider · ${N(val.length)} publié(s)</span></summary>
+          <p class="small muted">Rédigés par l'IA avec ses propres mots à partir du rapport de l'agence (aucun texte de l'agence n'est reproduit).
+            Relisez-les avec le rapport : une fois validés, ils s'affichent dans l'application sous la notation.</p>
+          ${RES.length ? `<ul class="list">${RES.slice(0, 60).map((x) => `<li><div class="main"><div class="name"><b>${esc(x.code)}</b> · ${esc(x.agence)} · ${esc(x.periode)}
+              <span class="chip ${x.statut === "valide" ? "ok" : x.statut === "rejete" ? "neutre" : "warn"}">${{ a_valider: "à valider", valide: "publié", rejete: "rejeté" }[x.statut]}</span></div>
+              <div class="sub">${N((x.plus || []).length)} point(s) fort(s) · ${N((x.moins || []).length)} point(s) de vigilance${x.lu?.note_long_terme ? " · note lue : " + esc(x.lu.note_long_terme) : ""}</div></div>
+            <div class="right">${peut && x.statut !== "valide" ? `<button class="btn small primary" data-q="resume" data-id="${x.id}">Relire et valider</button>` : ""}
+              ${peut && x.statut === "valide" ? `<button class="btn small" data-q="resume" data-id="${x.id}">Modifier</button>` : ""}
+              ${peut && x.statut === "rejete" ? `<button class="btn link small" data-q="refaire-resume" data-id="${x.id}">Refaire</button>` : ""}</div></li>`).join("")}</ul>`
+            : `<p class="small muted">Aucun résumé pour l'instant : ils sont préparés automatiquement (5 par passage du workflow « BRVM relectures »).</p>`}</details>`;
       }
     }
     if (d === "financier" && PIA) {
@@ -1437,6 +1467,8 @@
           return qListe();
         }
         if (q === "examiner-ia") return qExaminerIA(S.qPIA.find((x) => String(x.id) === b.dataset.id));
+        if (q === "resume") return qResume(S.qRES.find((x) => String(x.id) === b.dataset.id));
+        if (q === "refaire-resume") { await api.qRefaireResume(+b.dataset.id); toast("Un nouveau résumé sera préparé au prochain passage."); return qListe(); }
         if (q === "relancer-ia") {
           b.disabled = true;
           try { await api.qLireIA(b.dataset.code, +b.dataset.ref, b.dataset.url || null); toast(`Lecture IA de ${b.dataset.code} ${b.dataset.ref} relancée.`, { detail: "Même document qu'à la demande initiale." }); }
@@ -1459,6 +1491,27 @@
     }));
   }
   // Les postes d'un exercice : valeur lue, valeur corrigée ; on ne saisit que ce qui est faux
+  // Résumé d'un rapport de notation : l'analyste le compare au rapport, le corrige, le valide ou le rejette
+  async function qResume(x) {
+    if (!x) return;
+    const champ = (k, i, v) => `<label class="q-res-l">${k === "plus" ? "Point fort" : "Point de vigilance"} ${i + 1}
+      <textarea name="${k}${i}" rows="2" maxlength="220">${esc(v || "")}</textarea></label>`;
+    const res = await ask({ title: `${x.code} · notation ${x.agence} (${x.periode})`, ok: "Valider et publier",
+      body: `<p class="small muted">Comparez au rapport ${x.url && x.url !== "#" ? `(<a href="${esc(x.url)}" target="_blank" rel="noopener">ouvrir le rapport</a>)` : ""} :
+          chaque point doit être fidèle et rédigé avec nos mots. Videz un champ pour retirer le point.
+          ${x.lu?.note_long_terme ? `Note lue dans le rapport : <b>${esc(x.lu.note_long_terme)}</b>${x.lu.perspective ? `, perspective ${esc(x.lu.perspective)}` : ""}.` : ""}</p>
+        <h3 class="small">Points forts</h3>${[0, 1, 2].map((i) => champ("plus", i, (x.plus || [])[i])).join("")}
+        <h3 class="small">Points de vigilance</h3>${[0, 1, 2].map((i) => champ("moins", i, (x.moins || [])[i])).join("")}
+        <p class="small"><button type="button" class="btn link small" data-rejeter>Rejeter ce résumé</button></p>`,
+      motif: false,
+      onOpen: (dlg) => dlg.querySelector("[data-rejeter]")?.addEventListener("click", async () => {
+        dlg.close(); await api.qRejeterResume(x.id, "rejeté à la relecture"); toast("Résumé rejeté : « Refaire » en demandera un nouveau."); qListe();
+      }) });
+    if (!res) return;
+    const lire = (k) => [0, 1, 2].map((i) => res.form[`${k}${i}`].value.trim()).filter(Boolean);
+    try { await api.qValiderResume(x.id, lire("plus"), lire("moins")); toast(`Résumé ${x.code} validé.`, { detail: "Visible dans l'application après le prochain passage du workflow « BRVM relectures »." }); qListe(); }
+    catch (e) { toast("Impossible : " + msgErr(e)); }
+  }
   // Proposition de l'IA : l'analyste compare, retouche si besoin, puis valide (les postes deviennent des corrections)
   async function qExaminerIA(x) {
     if (!x) return;

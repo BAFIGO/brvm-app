@@ -151,3 +151,4 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 .q-rel { margin-bottom: 12px; } .q-rel > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; min-height: 40px; }
 #dlg:has(.q-postes) { width: min(920px, 96vw); max-width: none; }
 .q-case { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; margin-top: 10px; } .q-case input { width: auto; }
+.q-res-l { display: block; margin: 6px 0; } .q-res-l textarea { width: 100%; box-sizing: border-box; }

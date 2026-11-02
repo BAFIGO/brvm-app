@@ -1077,3 +1077,14 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .diag.d-x { background: var(--surface-2); color: var(--muted); }
 .diag-mention { margin: 6px 0 10px; line-height: 1.45; }
 .fin-head .diag { font-size: 1rem; padding: 6px 12px; }
+/* notation d'une agence agréée (prime sur le diagnostic BafiBourse quand elle est valide) */
+.notation { border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin: 6px 0 14px; background: var(--surface); }
+.notation.ancienne { opacity: .85; }
+.nt-tete { display: flex; gap: 12px; align-items: center; }
+.nt-note { flex: none; min-width: 52px; height: 52px; padding: 0 8px; border-radius: 14px; display: grid; place-items: center; font-weight: 800; font-size: 1.15rem;
+  background: var(--brand); color: var(--surface); box-sizing: border-box; }
+.nt-res { display: grid; gap: 8px 18px; margin-top: 10px; }
+@media (min-width: 640px) { .nt-res { grid-template-columns: 1fr 1fr; } }
+.nt-res ul { margin: 4px 0 0; padding-left: 18px; } .nt-res li { margin: 2px 0; }
+.nt-mini { font-size: 1.05rem; }
+.fin-sous { font-size: .95rem; margin: 12px 0 6px; color: var(--muted); }

@@ -111,6 +111,22 @@
   // Diagnostic financier BafiBourse : affiché en MOTS (jamais en lettres), pour ne pas imiter l'échelle d'une notation
   // financière, activité réservée aux agences agréées par l'AMF-UMOA. La lettre reste un code interne.
   const MENTION_DIAG = "Analyse des états financiers publiés, réalisée par BafiBourse. Ne constitue pas une notation financière au sens de la réglementation UMOA.";
+  // Notation d'une agence agréée (Bloomfield, WARA…) : encore valide, elle prime sur notre diagnostic financier
+  const notationValide = (a) => (a?.notation?.long_terme && !a.notation.ancienne ? a.notation : null);
+  function blocNotation(n) {
+    if (!n?.long_terme) return "";
+    const r = n.resume, li = (l) => (l || []).map((t) => `<li>${esc(t)}</li>`).join("");
+    return `<div class="notation${n.ancienne ? " ancienne" : ""}"><div class="nt-tete"><span class="nt-note">${esc(n.long_terme)}</span>
+        <div><b>Notation financière ${esc(n.agence || "")}</b>
+          <div class="sub">Long terme ${esc(n.long_terme)}${n.court_terme ? ` · court terme ${esc(n.court_terme)}` : ""}${n.perspective ? ` · perspective ${esc(String(n.perspective).toLowerCase())}` : ""}
+            ${n.periode ? ` · ${esc(n.periode)}` : ""}${n.precedente && n.tendance && n.tendance !== "stable" ? ` · ${n.tendance === "hausse" ? "relevée" : "abaissée"} (avant : ${esc(n.precedente)})` : ""}</div></div></div>
+      ${n.ancienne ? `<p class="small muted">Notation de plus de 18 mois ou échue : elle est donnée pour mémoire, le diagnostic BafiBourse ci-dessous prend le relais.</p>` : ""}
+      ${r && (r.plus?.length || r.moins?.length) ? `<div class="nt-res">${r.plus?.length ? `<div><b>Points forts relevés par l'agence</b><ul>${li(r.plus)}</ul></div>` : ""}
+          ${r.moins?.length ? `<div><b>Points de vigilance</b><ul>${li(r.moins)}</ul></div>` : ""}</div>
+        <p class="small muted">Résumé rédigé par BafiBourse à partir du rapport de l'agence, relu par notre analyste.</p>` : ""}
+      ${n.url && n.url !== "#" ? `<p class="small"><a href="${esc(n.url)}" target="_blank" rel="noopener">Lire le rapport de l'agence</a></p>` : ""}
+      <p class="small muted">Notation délivrée par une agence agréée par l'AMF-UMOA. BafiBourse n'est pas une agence de notation.</p></div>`;
+  }
   const diagMot = (note, sm) => note && SANTE[note]
     ? `<span class="diag d-${esc(note)}${sm ? " sm" : ""}" title="Diagnostic financier BafiBourse">${SANTE[note]}</span>` : "";
   function tendanceCours(c, raisons) {
@@ -142,9 +158,11 @@
     const sol = /[AB]/.test(note || ""), fra = /[DE]/.test(note || "");
     const caseActive = (ligne, col) => (ligne === "sol" ? sol : fra) && t && (col === "h" ? t.k === "hausse" : t.k === "baisse") ? " actif" : "";
     return `<div class="reperes">
-      <div class="rp-tuile"><span class="rp-lbl">Diagnostic financier</span>
+      ${notationValide(r.analyse) ? `<div class="rp-tuile"><span class="rp-lbl">Notation financière</span>
+        <span class="rp-val"><b class="nt-mini">${esc(r.analyse.notation.long_terme)}</b> <small>${esc(r.analyse.notation.agence || "")}${r.analyse.notation.perspective ? ", " + esc(String(r.analyse.notation.perspective).toLowerCase()) : ""}</small></span></div>`
+      : `<div class="rp-tuile"><span class="rp-lbl">Diagnostic financier</span>
         ${note ? `<span class="rp-val">${diagMot(note)}</span>`
-          : r.analyse?.fiabilite === "partielle" ? `<span class="rp-val muted">En attente de vérification</span>` : `<span class="rp-val muted">Non disponible</span>`}</div>
+          : r.analyse?.fiabilite === "partielle" ? `<span class="rp-val muted">En attente de vérification</span>` : `<span class="rp-val muted">Non disponible</span>`}</div>`}
       <div class="rp-tuile"><span class="rp-lbl">Tendance du cours</span>
         ${t ? `<span class="rp-val t-${t.k}">${t.fl} ${t.lib} <small>${t.conf ? `confiance ${t.conf} %` : `${P(t.ch)} sur 3 mois`}</small></span>` : `<span class="rp-val muted">–</span>`}</div>
       <div class="rp-tuile"><span class="rp-lbl">Score BafiBourse</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chipSante(r.decision, r.analyse?.note)}</span></div>
@@ -171,12 +189,15 @@
     const m = (v) => (ok(v) ? nf0.format(Math.round(v)) : "–");
     const pc = (v) => (ok(v) ? nf1.format(v * 100) + " %" : "–");
     const attente = a.fiabilite === "partielle" && !a.note;
-    let h = attente
+    // Notation d'agence en tête quand elle existe ; notre diagnostic suit, sous un titre qui le distingue
+    const nv = notationValide(a);
+    const tete = blocNotation(a.notation) + (nv ? `<h3 class="fin-sous">Les chiffres de la société · diagnostic BafiBourse</h3>` : "");
+    let h = tete + (attente
       ? `<div class="fin"><div class="fin-head"><span class="grade g-x" aria-hidden="true">…</span>
       <div><b>Diagnostic financier : en attente de vérification</b><div class="sub">Il sera publié dès que toute l'analyse sera vérifiée</div></div></div>`
       : `<div class="fin"><div class="fin-head">${diagMot(a.note) || '<span class="diag d-x">Non disponible</span>'}
       <div><b>Diagnostic financier BafiBourse</b><div class="sub">Perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>
-      <p class="small muted diag-mention">${MENTION_DIAG}</p>`;
+      <p class="small muted diag-mention">${MENTION_DIAG}</p>`);
     // analyse incomplète (indicateur manquant ou douteux) : pas de note, et l'utilisateur sait ce qui reste à vérifier
     if (a.fiabilite === "partielle") h += `<div class="notice small">ⓘ <b>Analyse en cours de vérification.</b> Certains indicateurs de cette société sont en cours de vérification par notre équipe${a.a_verifier?.length ? ` (${esc(a.a_verifier.join(", ").toLowerCase())})` : ""} :
       le diagnostic sera publié dès leur validation. Les indicateurs ci-dessous sont donnés à titre indicatif.</div>`;
