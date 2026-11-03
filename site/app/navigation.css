@@ -158,7 +158,7 @@ body.tiroir-visible .ecran { border-top-left-radius: 28px; border-bottom-left-ra
 
 /* le titre est dans l'en-tête : les titres en double dans la page et les sous-onglets du Portefeuille disparaissent
    (les titres restent lus par les lecteurs d'écran) */
-body.nav-tiroir :is(#h-auj, #h-pf, #h-mk, #h-pr, #h-perf) { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+body.nav-tiroir :is(#h-auj, #h-pf, #h-mk, #h-pr, #h-perf, #h-bud) { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 body.nav-tiroir .pf-onglets { display: none !important; }
 body.nav-tiroir .view > :is(#h-auj, #h-pf, #h-mk, #h-pr, #h-perf) + * { margin-top: 4px; }

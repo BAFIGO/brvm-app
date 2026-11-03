@@ -23,7 +23,7 @@
   const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
   const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
                      FRAIS: "Frais", SOLDE: "Solde relevé" };
-  const TABS = ["aujourdhui", "portefeuille", "performance", "marche", "profil"];
+  const TABS = ["aujourdhui", "budget", "portefeuille", "performance", "marche", "profil"];
   const ICONE_EPINGLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/></svg>`;
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
@@ -378,6 +378,12 @@
       publierRegularite: async (x) => { const { error } = await sb.from("epargne_publique").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }); if (error) throw error; },
       // Rappels du soir (rappels.sql)
       rappels: async () => r(await sb.from("rappels").select("push, whatsapp, heure, epargne").maybeSingle()),
+      // Budget personnel (supabase 24-budget.sql) : données strictement privées (RLS : la personne seule)
+      budgetProfil: async () => r(await sb.from("budget_profils").select("*").maybeSingle()),
+      budgetSauverProfil: async (x) => r(await sb.from("budget_profils").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }, { onConflict: "user_id" })),
+      budgetMouvements: async (depuis) => r(await sb.from("budget_mouvements").select("*").gte("date", depuis).order("date", { ascending: false }).order("id", { ascending: false }).limit(2000)),
+      budgetAjouter: async (m) => r(await sb.from("budget_mouvements").insert({ ...m, user_id: S.user.id }).select().single()),
+      budgetSupprimer: async (id) => r(await sb.from("budget_mouvements").delete().eq("id", id)),
       sauverRappels: async (x) => { r(await sb.from("rappels").upsert({ ...x, user_id: S.user.id, modifie_le: new Date().toISOString() })); },
       abonnerPush: async (a) => { r(await sb.from("push_abonnements").upsert({ ...a, user_id: S.user.id, actif: true })); },
       desabonnerPush: async (endpoint) => { r(await sb.from("push_abonnements").delete().eq("endpoint", endpoint)); },
@@ -430,6 +436,16 @@
     };
   }
 
+  // Budget de démonstration : un salaire, quelques dépenses du mois (rien n'est enregistré)
+  const budgetDemo = (() => {
+    const iso = (j) => { const d = new Date(); d.setDate(d.getDate() - j); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+    const debut = new Date(); const jm = debut.getDate() - 1;
+    const mv = [[0, "depense", 2500, "transport"], [0, "depense", 18000, "nourriture"], [1, "depense", 15000, "ceremonie"], [2, "depense", 6000, "sante"],
+      [3, "depense", 12000, "famille"], [4, "depense", 3500, "transport"], [5, "depense", 9000, "sorties"], [Math.min(jm, 6), "revenu", 400000, "salaire"],
+      [Math.min(jm, 6), "depense", 100000, "logement"]].map(([j, type, montant, categorie], i) => ({ id: i + 1, date: iso(j), type, montant, categorie }));
+    return { id: 100, mv: DEMO_DEBUT ? [] : mv, profil: DEMO_DEBUT ? null : { mode: "simple", rythme: "mois", revenu: 400000, profil: "equilibre",
+      objectif_nom: "Scolarité de septembre", objectif_icone: "ecole", objectif_montant: 350000 } };
+  })();
   function demoApi() {
     let data = null, nextId = 10000;
     const load = async () => (data ??= debutDemo(await (await fetch("demo.json")).json()));
@@ -539,6 +555,11 @@
       monAvis: async () => avisDemo,
       noterDemandeAvis: async () => {},
       rappels: async () => rappelsDemo, sauverRappels: async (x) => { rappelsDemo = { ...rappelsDemo, ...x }; },
+      budgetProfil: async () => budgetDemo.profil,
+      budgetSauverProfil: async (x) => { budgetDemo.profil = { ...(budgetDemo.profil || {}), ...x }; },
+      budgetMouvements: async (depuis) => budgetDemo.mv.filter((m) => m.date >= depuis),
+      budgetAjouter: async (m) => { const x = { ...m, id: ++budgetDemo.id }; budgetDemo.mv.unshift(x); return x; },
+      budgetSupprimer: async (id) => { budgetDemo.mv = budgetDemo.mv.filter((m) => m.id !== id); },
       cercles: async () => cerclesDemo,
       maFormule: async () => ({ formule: new URLSearchParams(location.search).get("formule") || "essentiel", souscrite: "essentiel", essai: true,
         fin: new Date(Date.now() + 9 * 864e5).toISOString(), quotas: { questions: 100, approfondies: 0, pages: 15 },
@@ -2720,7 +2741,13 @@
     svg.addEventListener("pointerleave", () => { hov.setAttribute("visibility", "hidden"); tip.hidden = true; });
   }
 
-  const VIEWS = { aujourdhui: vAujourdhui, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
+  // Budget (budget.js) : revenus, dépenses, enveloppes ; mode simple ou complet
+  const vBudget = () => {
+    const v = $("#v-budget");
+    if (window.BafiBudget) window.BafiBudget.render(v);
+    else v.innerHTML = `<h1 id="h-bud">Mon budget</h1><p class="muted">Chargement…</p>`;
+  };
+  const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
   // ---------------------------------------------------------------- saisie d'une opération chez la SGI
   // Étapes : que s'est-il passé ? → catégorie → titre (liste « code – nom ») → quantité, prix, total en direct.
@@ -3371,6 +3398,11 @@
                           if (u + n <= q) S.abo.usage[k] = u + n; else if (k !== "approfondies" && S.abo.credits) S.abo.credits[k] = Math.max(0, (S.abo.credits[k] || 0) - n); } },
                         demanderAbonnement: (d) => api.demanderAbonnement(d), payer: (o) => api.payer(o), verifierPaiement: (t) => api.verifierPaiement(t),
                         profil: () => S.profil, email: () => S.user?.email || "",
+                        budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
+                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id) },
+                        // épargne mise de côté, résumée pour le budget (sécurité puis projet)
+                        epargneResume: () => { const e = epargne(); return e ? { solde: Math.max(0, e.solde || 0), serie: e.serie || 0, plan: e.plan || null,
+                          mv: (e.mv || []).map((m) => ({ date: m.date, type: m.type, montant: m.montant })) } : null; },
                         saveProfil: async (p) => { await api.saveProfil(S.user.id, p); Object.assign(S.profil, p); window.dispatchEvent(new Event("brvm:profil")); },
                         regularite: () => {
                           const ep = epargne(); if (!ep?.plan?.montant) return null;

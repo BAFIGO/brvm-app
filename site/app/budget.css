@@ -1,0 +1,92 @@
+/* BafiBourse – Mon budget (budget.js) : gros boutons, pictogrammes en tuiles, peu de texte. Clair et sombre via la charte. */
+#v-budget { display: flex; flex-direction: column; gap: 14px; }
+.bu-tuile { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); box-shadow: 0 6px 14px -8px hsl(232 50% 15% / .55); }
+.bu-tuile svg { width: 24px; height: 24px; }
+.bu-tuile.amb { background: linear-gradient(135deg, hsl(35 92% 58%), hsl(32 88% 50%)); color: hsl(232 50% 18%); box-shadow: 0 6px 14px -8px hsl(32 90% 40% / .7); }
+.bu-tuile.clair { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.bu-tuile.petit { width: 36px; height: 36px; border-radius: 11px; } .bu-tuile.petit svg { width: 20px; height: 20px; }
+
+/* la phrase du jour */
+.bu-phrase { display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 22px; color: #fff;
+  background: linear-gradient(160deg, hsl(232 50% 22%), hsl(230 50% 32%)); }
+.bu-phrase b { font-size: 2.2rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.bu-phrase .small { color: hsl(230 40% 85%); }
+
+/* les trois gros boutons */
+.bu-trois { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.bu-gros-b { min-height: 108px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font: inherit; font-weight: 700; font-size: 1rem;
+  box-shadow: 0 2px 10px hsl(232 50% 20% / .07); }
+.bu-gros-b:active { transform: scale(.98); }
+.bu-gros-b:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.bu-rien { min-height: 48px; border-radius: 14px; }
+.bu-ok { text-align: center; margin: 0; }
+
+/* cartes */
+.bu-h2 { margin: 0 0 8px; font-size: 1.05rem; }
+.bu-ligne { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.bu-ligne svg { width: 16px; height: 16px; vertical-align: -3px; }
+.bu-jauge { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 6px 0; }
+.bu-jauge i { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+.bu-jauge.amb i { background: hsl(35 92% 55%); } .bu-jauge.env2 i { background: hsl(230 40% 60%); }
+.bu-projet { display: flex; gap: 14px; align-items: flex-start; }
+.bu-projet-c { flex: 1; min-width: 0; } .bu-projet-c p { margin: 4px 0 0; }
+.bu-env { margin: 10px 0; }
+.bu-retour { display: flex; gap: 14px; align-items: flex-start; }
+.bu-retour p { margin: 4px 0 10px; }
+.bu-ops { list-style: none; margin: 0; padding: 0; }
+.bu-ops li { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--border); }
+.bu-ops li:first-child { border-top: 0; }
+.bu-op-l { flex: 1; min-width: 0; display: flex; flex-direction: column; } .bu-op-l small { color: var(--muted); }
+.bu-suppr { width: 36px; height: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 1.3rem; cursor: pointer; }
+.bu-sem > summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; min-height: 48px; }
+.bu-sem > summary::-webkit-details-marker { display: none; }
+.bu-sem-l { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.bu-sem-l li { display: flex; align-items: center; gap: 12px; } .bu-sem-l li > span:nth-child(2) { flex: 1; }
+.bu-mode { text-align: center; margin: 0; }
+.bu-reg { display: grid; gap: 10px; margin-top: 10px; } .bu-reg label { display: grid; gap: 4px; font-size: .9rem; }
+
+/* démarrage en images */
+.bu-demarrage { display: flex; flex-direction: column; gap: 16px; }
+.bu-etapes { display: flex; gap: 6px; } .bu-etapes span { flex: 1; height: 6px; border-radius: 3px; background: var(--border); }
+.bu-etapes span.on { background: var(--brand); }
+.bu-q { margin: 0; font-size: 1.35rem; line-height: 1.25; color: var(--brand); }
+.bu-choix2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bu-gros { min-height: 150px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font: inherit; font-weight: 700; font-size: 1.05rem; }
+.bu-gros small { font-weight: 400; color: var(--muted); font-size: .85rem; }
+.bu-gros[aria-pressed="true"], .bu-cat[aria-pressed="true"] { border: 2px solid var(--accent); }
+.bu-gros .bu-tuile { width: 60px; height: 60px; } .bu-gros .bu-tuile svg { width: 30px; height: 30px; }
+.bu-montant { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
+.bu-montant input { width: 100%; max-width: 260px; border: 0; border-bottom: 2px solid var(--border); background: transparent; color: var(--brand);
+  font: inherit; font-size: 2.4rem; font-weight: 800; text-align: center; padding: 6px 0; }
+.bu-montant input:focus { outline: none; border-color: var(--accent); }
+.bu-montant span { font-size: 1.4rem; font-weight: 700; color: var(--muted); }
+.bu-puces { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.bu-puce { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--border); background: var(--surface); color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; }
+.bu-grille { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 360px) { .bu-grille { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.bu-cat { min-height: 88px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: .78rem; text-align: center; padding: 6px 4px; }
+.bu-cat .bu-tuile { width: 40px; height: 40px; border-radius: 12px; }
+.bu-champ { display: grid; gap: 6px; font-weight: 600; } .bu-champ input { min-height: 46px; border-radius: 12px; border: 1px solid var(--border); padding: 0 12px; font: inherit; font-size: 1rem; background: var(--surface); color: var(--text); }
+.bu-suite { min-height: 54px; font-size: 1.05rem; border-radius: 14px; }
+.bu-note { text-align: center; margin: 0; }
+
+/* fenêtre de saisie */
+dialog.bu-dlg { width: min(460px, 100vw); max-width: none; margin: auto auto 0; padding: 0; border: 0; border-radius: 26px 26px 0 0; background: var(--surface); color: var(--text); }
+@media (min-width: 640px) { dialog.bu-dlg { margin: auto; border-radius: 26px; } }
+dialog.bu-dlg::backdrop { background: hsl(232 40% 10% / .45); }
+.bu-form { display: flex; flex-direction: column; gap: 14px; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+.bu-type { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface-2); }
+.bu-type button { min-height: 46px; border: 0; border-radius: 11px; background: transparent; color: var(--brand); font: inherit; font-weight: 700; cursor: pointer; }
+.bu-type button[aria-checked="true"] { background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); color: #fff; }
+.bu-plus-opt { display: grid; gap: 8px; } .bu-plus-opt:empty { display: none; } .bu-plus-opt label { display: flex; gap: 10px; align-items: center; min-height: 40px; }
+.bu-actions { display: flex; gap: 10px; }
+.bu-micro { flex: none; width: 54px; height: 54px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); color: var(--accent); cursor: pointer; display: grid; place-items: center; }
+.bu-micro svg { width: 24px; height: 24px; }
+.bu-ok-b { flex: 1; min-height: 54px; font-size: 1.05rem; border-radius: 14px; }
+.bu-annuler { align-self: center; }
+.bu-voix-r { margin: 0; text-align: center; } .bu-voix-r:empty { display: none; }
+#dlg-budget .bu-montant input, .bu-demarrage .bu-montant input { font-size: 2.4rem !important; font-weight: 800; min-height: 64px; border-radius: 0; border-width: 0 0 2px; box-shadow: none; }
