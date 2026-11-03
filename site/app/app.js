@@ -3414,7 +3414,13 @@
                         budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
                                   ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id) },
                         // épargne mise de côté, résumée pour le budget (sécurité puis projet)
-                        placements: () => { if (!S.ops?.some((o) => o.type === "ACHAT")) return null; const L = replay(S.ops); return { valeur: Math.max(0, L.valeur || 0) }; },
+                        placements: () => {
+                          if (!S.ops?.some((o) => o.type === "ACHAT")) return null;
+                          const L = replay(S.ops), act = new Map((S.mk?.actions || []).filter((r) => ok(r.var_1j)).map((r) => [r.code, +r.var_1j]));
+                          let titres = 0, delta = 0;     // variation du jour : celle des cours de la séance, pondérée par la valeur de chaque ligne
+                          for (const p of L.positions || []) { const v = act.get(p.code), val = +p.valeur || 0; titres += val; if (v !== undefined) delta += val * v / (1 + v); }
+                          return { valeur: Math.max(0, L.valeur || 0), varJour: titres > 0 ? delta / (titres - delta) : null };
+                        },
                         epargneResume: () => { const e = epargne(); return e ? { solde: Math.max(0, e.solde || 0), serie: e.serie || 0, plan: e.plan || null,
                           mv: (e.mv || []).map((m) => ({ date: m.date, type: m.type, montant: m.montant })) } : null; },
                         saveProfil: async (p) => { await api.saveProfil(S.user.id, p); Object.assign(S.profil, p); window.dispatchEvent(new Event("brvm:profil")); },

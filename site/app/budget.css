@@ -108,3 +108,6 @@ a.bu-pl { display: flex; align-items: center; gap: 12px; text-decoration: none; 
 .bu-etage .chip { white-space: nowrap; }
 .center { text-align: center; }
 .bu-invit { display: flex; gap: 14px; align-items: flex-start; } .bu-invit p { margin: 4px 0 10px; }
+.bu-sous { display: block; color: var(--muted); font-size: .82rem; font-weight: 400; }
+.bu-repart { display: flex; gap: 3px; height: 12px; border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }
+.bu-repart i:nth-child(1) { background: var(--brand); } .bu-repart i:nth-child(2) { background: hsl(35 92% 55%); }

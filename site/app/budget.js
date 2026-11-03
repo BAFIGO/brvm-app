@@ -128,6 +128,8 @@
     return `${barre}<h2 class="bu-q">Pour quoi voulez-vous garder de l'argent ?</h2>
       <div class="bu-grille">${OBJ.map(([k, l]) => `<button type="button" class="bu-cat" data-bu="obj" data-v="${k}" aria-pressed="${b.objectif_icone === k}"><span class="bu-tuile ${b.objectif_icone === k ? "" : "clair"}">${ic(P[k])}</span>${l}</button>`).join("")}</div>
       <label class="bu-champ">Combien ? <small>(facultatif)</small><input id="bu-obj-m" inputmode="numeric" placeholder="ex. 300 000" value="${b.objectif_montant ? nf.format(b.objectif_montant) : ""}"></label>
+      <p class="bu-q2">À quelle heure, le soir, voulez-vous votre petit rappel ?</p>
+      <div class="bu-puces">${[["19:30", "19 h 30"], ["20:00", "20 h"], ["21:00", "21 h"], ["22:00", "22 h"]].map(([h, l]) => `<button type="button" class="bu-puce" data-bu="heure" data-v="${h}" aria-pressed="${(b.heure || "20:00") === h}">${l}</button>`).join("")}</div>
       <button type="button" class="btn primary bu-suite" data-bu="terminer"${b.objectif_icone ? "" : " disabled"}>C'est parti</button>
       <p class="small muted bu-note">Vous pourrez tout changer plus tard. Vos chiffres restent privés.</p>`;
   }
@@ -138,7 +140,8 @@
     const lib = (OBJ.find((o) => o[0] === b.objectif_icone) || ["", "Mon projet"])[1];
     const profil = { mode: "simple", rythme: b.rythme || "mois", revenu: b.revenu || 0, profil: "equilibre", jour_paie: b.rythme === "mois" ? (b.jour_paie || null) : null,
                      objectif_nom: b.objectif_icone === "securite" ? "Mes imprévus" : lib === "École" ? "L'école" : lib, objectif_icone: b.objectif_icone, objectif_montant: b.objectif_montant };
-    try { await app().budget.sauverProfil(profil); S.profil = { ...(S.profil || {}), ...profil }; }
+    try { await app().budget.sauverProfil(profil); S.profil = { ...(S.profil || {}), ...profil };
+          app().sauverRappels?.({ heure: b.heure || "20:00", epargne: true }).catch?.(() => {}); }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); return; }
     const e = (S.profil.revenu || 0) * (S.profil.rythme === "jour" ? 0.2 : 0.2);
     app().toast("Votre budget est prêt.", { detail: `Vous pourriez garder environ ${F(e)} ${S.profil.rythme === "jour" ? "par jour" : "par mois"}.` });
@@ -209,7 +212,7 @@
   function blocCoffre(c) {
     const p = c.p;
     return `<section class="card bu-projet"><span class="bu-tuile amb">${ic(P.coffre)}</span>
-      <div class="bu-projet-c"><div class="bu-ligne"><b>Mon coffre</b><a href="#objectifs" class="small">Voir</a></div>
+      <div class="bu-projet-c"><div class="bu-ligne"><span><b>Mon coffre</b><small class="bu-sous">${F(c.solde)} gardés</small></span><a href="#objectifs" class="small">Voir</a></div>
         <div class="bu-ligne small"><span>${ic(P.securite)} Sécurité</span><span>${F(c.securite)} / ${F(c.securiteObj)}</span></div>${jauge(c.securite, c.securiteObj)}
         <div class="bu-ligne small"><span>${ic(P[p.objectif_icone] || P.coffre)} ${esc(p.objectif_nom || "Mon projet")}</span><span>${F(c.projet)}${p.objectif_montant ? " / " + F(p.objectif_montant) : ""}</span></div>
         ${p.objectif_montant ? jauge(c.projet, p.objectif_montant, "amb") : ""}</div></section>`;
@@ -229,7 +232,7 @@
     const pl = app().placements?.();
     if (!pl) return "";
     return `<a class="card bu-pl" href="#portefeuille" data-bu="placements"><span class="bu-tuile clair petit">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}</span>
-      <span class="bu-op-l"><b>Mes placements</b><small>${F(pl.valeur)}</small></span><span aria-hidden="true">›</span></a>`;
+      <span class="bu-op-l"><b>Mes placements</b><small>${F(pl.valeur)}${pl.varJour != null && Math.abs(pl.varJour) < 0.0005 ? " · stable aujourd'hui" : ""}${pl.varJour != null && Math.abs(pl.varJour) >= 0.0005 ? ` · <span class="${pl.varJour >= 0 ? "good" : "bad"}">${pl.varJour >= 0 ? "+" : ""}${(pl.varJour * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} % aujourd'hui</span>` : ""}</small></span><span aria-hidden="true">›</span></a>`;
   }
   function blocSoir(c) {
     return c.notéAujourdhui ? `<p class="small muted bu-ok">✓ Votre journée est notée.</p>`
@@ -310,6 +313,14 @@
     const projetEtat = !plein ? "ensuite" : p.objectif_montant && c.projet >= p.objectif_montant ? "atteint ✓" : "en cours";
     v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1>
       <p class="bu-intro">Ce que vous gardez remplit les étages <b>dans l'ordre</b>.</p>
+      ${(() => { const cible = c.epargneCible, versSecu = Math.min(cible, Math.max(0, c.securiteObj - c.securite)), versProjet = plein || versSecu < cible ? cible - versSecu : 0;
+        const mois = new Date().toLocaleDateString("fr-FR", { month: "long" });
+        return cible > 0 ? `<section class="card"><b>À garder en ${esc(mois)} : ${F(cible)}</b>
+          <div class="bu-repart" aria-hidden="true"><i style="flex:${versSecu || 0.001}"></i><i style="flex:${versProjet || 0.001}"></i></div>
+          <div class="bu-ligne small"><span>${ic(P.securite)} Vers la sécurité</span><b>${F(versSecu)}</b></div>
+          <div class="bu-ligne small"><span>${ic(P[p.objectif_icone] || P.coffre)} Vers ${esc(p.objectif_nom || "mon projet")}</span><b>${F(versProjet)}</b></div>
+          <div class="bu-ligne small muted"><span>Vers la bourse</span><span>${plein ? "quand vous le décidez" : "dès que la sécurité est pleine"}</span></div>
+          <p class="small muted">Déjà gardé ce mois-ci : ${F(c.garde)}.</p></section>` : ""; })()}
       ${etage(1, "Sécurité", "securite", false, `${c.jour ? "6" : "3"} mois de besoins, calculés depuis votre budget`, c.securite, c.securiteObj, plein ? "pleine ✓" : "en cours")}
       ${etage(2, p.objectif_nom || "Mon projet", p.objectif_icone, true, "Votre projet", c.projet, p.objectif_montant || 0, projetEtat)}
       <section class="card bu-etage${plein ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>
@@ -435,6 +446,7 @@
     else if (a === "suite2") { S.brouillon.revenu = lireNombre($("#bu-rev")?.value) || S.brouillon.revenu; if (!S.brouillon.revenu) { $("#bu-rev")?.focus(); return; } S.etape = 3; rendre(); }
     else if (a === "obj") { S.brouillon.objectif_icone = v; const m = $("#bu-obj-m")?.value; rendre(); if (m) $("#bu-obj-m").value = m; }
     else if (a === "terminer") terminerDemarrage();
+    else if (a === "heure") { S.brouillon.heure = v; const m = $("#bu-obj-m")?.value; rendre(); if (m && $("#bu-obj-m")) $("#bu-obj-m").value = m; }
     else if (a === "saisir") ouvrir(v);
     else if (a === "fermer-invit") { S.invitationFermee = true; b.closest(".bu-invit")?.remove(); }
     else if (a === "cercles" || a === "coffre" || a === "placements") { ev.preventDefault(); app().allerPf?.(a === "cercles" ? "cercles" : a === "coffre" ? "epargne" : "placements"); }
