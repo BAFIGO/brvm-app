@@ -1494,13 +1494,20 @@
     "placement", "actions", "diversifie", "monetaire", "epargne", "capital", "finance", "financiere", "portefeuille", "marche"]);
   const echap = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const contient = (t, w) => new RegExp(`(^|[^a-z0-9])${echap(w)}([^a-z0-9]|$)`).test(t);     // mot entier, pas un morceau de mot
+  // noms courants des titres (ce que disent les épargnants) → code BRVM
+  const SURNOMS = { bicici: "BICC", "bici ci": "BICC", sgci: "SGBC", sgbci: "SGBC", "societe generale": "SGBC", orange: "ORAC", "orange ci": "ORAC",
+    total: "TTLC", "total senegal": "TTLS", sonatel: "SNTS", ecobank: "ECOC", "ecobank ci": "ECOC", eti: "ETIT", nsia: "NSBC", oragroup: "ORGT",
+    "bank of africa": "BOAC", boa: "BOAC", saph: "SPHC", sogb: "SOGC", palmci: "PALC", solibra: "SLBC", nestle: "NTLC", "air liquide": "SIVC", erium: "SIVC",
+    vivo: "SHEC", "vivo energy": "SHEC", cie: "CIEC", sodeci: "SDCC", sitab: "STBC", filtisac: "FTSC", servair: "ABJC", cfao: "CFAC", tractafric: "PRSC",
+    "bridge bank": "BBGC", coris: "CBIBF", onatel: "ONTBF", "loterie": "LNBB", lonab: "LNBB", sicable: "CABC", setao: "STAC", uniwax: "UNXC", unilever: "UNLC" };
   function titresCites(q) {
-    const t = norm(q), out = [];
+    const t = norm(q), out = [], vus = new Set();
+    for (const [k, code] of Object.entries(SURNOMS)) if (contient(t, k) && S.lignesMk?.get(code) && !vus.has(code)) { vus.add(code); const [cat, r] = S.lignesMk.get(code); out.push(ligneTitre(cat, r)); if (out.length >= 3) return out; }
     for (const [code, [cat, r]] of S.lignesMk || []) {
       const nom = norm(r.nom);
       const vu = contient(t, norm(code)) || (nom.length >= 4 && contient(t, nom))
         || nom.split(/[\s\-']+/).some((w) => w.length >= 5 && !MOTS_COMMUNS.has(w) && contient(t, w));
-      if (vu) out.push(ligneTitre(cat, r));
+      if (vu && !vus.has(code)) { vus.add(code); out.push(ligneTitre(cat, r)); }
       if (out.length >= 3) break;
     }
     return out;
@@ -1520,14 +1527,39 @@
       portefeuille: { valeur_totale: r0(L.valeur), disponible: r0(L.cash), place_en_bourse: r0(L.investi), gain_latent: r0(L.latent),
                       gain_total_depuis_debut: r0(L.gainTotal), dividendes_recus: r0(L.dividendes),
                       performance: c?.performance ? { portefeuille: c.performance.twr_total, indice: c.performance.bench_total } : null },
-      positions: L.positions.slice(0, 30).map((p) => ({ code: p.code, nom: S.names.get(p.code) || p.code, classe: CLASSES[p.classe] || p.classe,
-        quantite: p.quantite, prix_achat_moyen: r0(p.pru), cours: p.cours, valeur: r0(p.valeur), gain_latent: r0(p.pv),
-        decision_du_soir: S.decisions?.get(p.code) || null })),
+      positions: L.positions.slice(0, 30).map((p) => {
+        const m = S.lignesMk?.get(p.code)?.[1] || {}, al = (S.alertes || []).find((a) => a.ticker === p.code);
+        return { code: p.code, nom: S.names.get(p.code) || p.code, classe: CLASSES[p.classe] || p.classe,
+          quantite: p.quantite, prix_achat_moyen: r0(p.pru), cours: p.cours, valeur: r0(p.valeur), gain_latent: r0(p.pv),
+          gain_latent_pct: p.pru ? +((p.cours / p.pru - 1)).toFixed(4) : null, variation_du_jour: m.var_1j ?? null,
+          decision_du_soir: S.decisions?.get(p.code) || m.decision || null, score: m.score ?? null, rendement_dividende: m.rendement_div ?? null,
+          per: m.per ?? null, objectif: m.objectif ?? null, plancher: al?.plancher ?? null, alerte: al ? (NIVEAUX[al.alerte]?.t || al.alerte) : null,
+          diagnostic_financier: m.analyse?.note ? { appreciation: m.analyse.verdict || null, perspective: m.analyse.perspective || null } : null,
+          notation_agence: m.analyse?.notation?.long_terme ? { agence: m.analyse.notation.agence, note: m.analyse.notation.long_terme, perspective: m.analyse.notation.perspective } : null };
+      }),
       alertes_titres: (S.alertes || []).map((a) => ({ code: a.ticker, niveau: NIVEAUX[a.alerte]?.t || a.alerte, motif: motifAlerte(a.motif) })),
       alertes_journal: [...L.errors, ...((S.prop?.date === S.seance?.date && c?.alertes) || [])],
       ordres_du_soir: (S.ordres || []).slice(0, 10).map((o) => ({ code: o.code, sens: o.sens, quantite: o.quantite, prix_limite: o.prix_limite, motif: o.motif })),
       indices: Object.values(derniers).map((i) => ({ code: i.code, date: i.date, cloture: i.cloture, variation: i.variation })),
       meilleures_analyses: { actions: top(S.mk.actions, 5), obligations: top(S.mk.obligations, 3), opcvm: top(S.mk.opcvm, 3) },
+      // le marché complet de la séance, en tableau compact : BafiBot peut répondre sur n'importe quel titre ou secteur
+      marche_de_la_seance: (() => {
+        const A = (S.mk.actions || []).filter((r) => ok(r.cours));
+        const v = A.filter((r) => ok(r.var_1j)), tri = [...v].sort((a, b) => b.var_1j - a.var_1j);
+        const lig = (r) => [r.code, r.nom, r.secteur || null, r.cours, ok(r.var_1j) ? +(+r.var_1j).toFixed(4) : null, r.score ?? null, r.decision || null,
+                            ok(r.rendement_div) ? +(+r.rendement_div).toFixed(4) : null, ok(r.per) ? +(+r.per).toFixed(1) : null];
+        return {
+          nombre_de_titres: A.length, en_hausse: v.filter((r) => r.var_1j > 0).length, en_baisse: v.filter((r) => r.var_1j < 0).length,
+          plus_fortes_hausses: tri.slice(0, 5).map((r) => ({ code: r.code, nom: r.nom, variation: r.var_1j, cours: r.cours })),
+          plus_fortes_baisses: tri.slice(-5).reverse().map((r) => ({ code: r.code, nom: r.nom, variation: r.var_1j, cours: r.cours })),
+          actions_colonnes: ["code", "nom", "secteur", "cours", "variation_du_jour", "score_sur_100", "decision", "rendement_dividende", "per"],
+          actions: A.map(lig),
+          obligations_principales: (S.mk.obligations || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 12)
+            .map((r) => ({ code: r.code, nom: r.nom, prix: r.prix ?? r.cours, rendement_actuariel: r.rendement_actuariel, echeance: r.echeance, decision: r.decision })),
+          opcvm_principaux: (S.mk.opcvm || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 12)
+            .map((r) => ({ code: r.code, nom: r.nom, vl: r.vl, rendement_attendu: r.rendement_attendu, decision: r.decision })),
+        };
+      })(),
       titres_cites: titresCites(question),
       // budget, coffre et projets (budget.js), épargne, cercles : BafiBot répond avec les vrais chiffres de l'utilisateur
       budget: window.BafiBudget?.contexte?.() || null,

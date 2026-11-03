@@ -136,7 +136,7 @@
     const attente = bulle("ia attente", `<span class="ia-points" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">BafiBot prépare sa réponse…</span>`);
     try {
       const approfondie = !!$("#ia-appro")?.checked && !$(".iq-appro", dlg).hidden;
-      const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte(question), approfondie });
+      const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte([question, ...histo.filter((h) => h.role === "user").slice(-2).map((h) => h.content)].join(" \n ")), approfondie });
       if ($("#ia-appro")) $("#ia-appro").checked = false;
       app.noterUsage?.(approfondie ? "approfondies" : "questions");
       attente.remove();
