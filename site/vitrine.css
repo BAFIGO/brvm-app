@@ -609,3 +609,5 @@ html .v-foot .marque .m-bafi { color: hsl(35 92% 55%) !important; }
 .pc-barre i:nth-child(1) { background: hsl(232 50% 32%); } .pc-barre i:nth-child(2) { background: hsl(230 40% 62%); } .pc-barre i:nth-child(3) { background: hsl(35 92% 55%); }
 .pc-note { text-align: center; margin: 12px 4px 0; }
 .pc-barre i { display: block; height: 100%; }
+.pc-barre { gap: 3px; } .pc-barre i { transform-origin: left center; }
+.pc-barre i:nth-child(1) { flex: 50; } .pc-barre i:nth-child(2) { flex: 30; } .pc-barre i:nth-child(3) { flex: 20; }

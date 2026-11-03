@@ -23,7 +23,7 @@
   const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
   const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
                      FRAIS: "Frais", SOLDE: "Solde relevé" };
-  const TABS = ["aujourdhui", "budget", "portefeuille", "performance", "marche", "profil"];
+  const TABS = ["aujourdhui", "budget", "objectifs", "portefeuille", "performance", "marche", "profil"];
   const ICONE_EPINGLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/></svg>`;
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
@@ -442,9 +442,10 @@
     const debut = new Date(); const jm = debut.getDate() - 1;
     const mv = [[0, "depense", 2500, "transport"], [0, "depense", 18000, "nourriture"], [1, "depense", 15000, "ceremonie"], [2, "depense", 6000, "sante"],
       [3, "depense", 12000, "famille"], [4, "depense", 3500, "transport"], [5, "depense", 9000, "sorties"], [Math.min(jm, 6), "revenu", 400000, "salaire"],
-      [Math.min(jm, 6), "depense", 100000, "logement"]].map(([j, type, montant, categorie], i) => ({ id: i + 1, date: iso(j), type, montant, categorie }));
+      [Math.min(jm, 6), "depense", 100000, "logement"], [9, "depense", 2500, "transport"], [jm + 3, "depense", 15000, "factures", true]]
+      .map(([j, type, montant, categorie, recurrent], i) => ({ id: i + 1, date: iso(j), type, montant, categorie, recurrent: !!recurrent }));
     return { id: 100, mv: DEMO_DEBUT ? [] : mv, profil: DEMO_DEBUT ? null : { mode: "simple", rythme: "mois", revenu: 400000, profil: "equilibre",
-      objectif_nom: "Scolarité de septembre", objectif_icone: "ecole", objectif_montant: 350000 } };
+      objectif_nom: "Scolarité de septembre", objectif_icone: "ecole", objectif_montant: 350000, jour_paie: new Date().getDate() } };
   })();
   function demoApi() {
     let data = null, nextId = 10000;
@@ -1069,6 +1070,15 @@
 
   // ---------------------------------------------------------------- vues
   function vAujourdhui() {
+    const v = $("#v-aujourdhui");
+    // Mode simple (budget.js) : Aujourd'hui devient l'accueil unique (budget du jour, coffre, cercle, placements, point du soir)
+    if (window.BafiBudget?.accueilSimple?.()) { v.onclick = null; window.BafiBudget.renderAccueil(v); return; }
+    vAujourdhuiClassique();
+    // utilisateurs déjà installés, sans budget : une invitation discrète, sous le titre
+    const inv = window.BafiBudget?.invitation?.();
+    if (inv) (v.querySelector("h1") || v).insertAdjacentHTML(v.querySelector("h1") ? "afterend" : "afterbegin", inv);
+  }
+  function vAujourdhuiClassique() {
     const v = $("#v-aujourdhui");
     v.onclick = (ev) => { if (ev.target.closest("[data-completer]")) onboarding(true); };
     const L = replay(S.ops);
@@ -2747,7 +2757,8 @@
     if (window.BafiBudget) window.BafiBudget.render(v);
     else v.innerHTML = `<h1 id="h-bud">Mon budget</h1><p class="muted">Chargement…</p>`;
   };
-  const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
+  const vObjectifs = () => { const v = $("#v-objectifs"); if (window.BafiBudget) window.BafiBudget.renderObjectifs(v); };
+  const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, objectifs: vObjectifs, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
   // ---------------------------------------------------------------- saisie d'une opération chez la SGI
   // Étapes : que s'est-il passé ? → catégorie → titre (liste « code – nom ») → quantité, prix, total en direct.
@@ -2997,7 +3008,7 @@
     fcf.date.value = today();
     $(".msg", fcf).textContent = "";
     const verser = mode === "verser", m = +ep.plan?.montant || 0;
-    $("#dlg-coffre-title").textContent = verser ? "J'ai épargné" : mode === "reprendre" ? "J'ai repris de mon épargne" : "J'ai envoyé à ma SGI";
+    $("#dlg-coffre-title").textContent = verser ? (window.BafiBudget?.mode?.() === "simple" ? "Je garde" : "J'ai épargné") : mode === "reprendre" ? "J'ai repris de mon épargne" : "J'ai envoyé à ma SGI";
     $("#dlg-coffre-sub").textContent = verser
       ? "Notez l'argent que vous venez de mettre de côté pour la bourse."
       : mode === "reprendre"
@@ -3111,7 +3122,9 @@
   // Coffre flottant : seulement sur les écrans où l'on épargne (Aujourd'hui, Mon épargne, Mes cercles)
   function majCoffre() {
     const t = tab(), o = S.ui.pfOnglet || "placements";
-    const fab = $("#fab-coffre"), showFab = !!S.coffre && (t === "aujourdhui" || (t === "portefeuille" && (o === "epargne" || o === "cercles")));
+    // Sur l'accueil simple, « Je garde » est déjà l'un des trois gros boutons : pas de second bouton flottant
+    const simple = t === "aujourdhui" && window.BafiBudget?.accueilSimple?.();
+    const fab = $("#fab-coffre"), showFab = !!S.coffre && !simple && (t === "aujourdhui" || (t === "portefeuille" && (o === "epargne" || o === "cercles")));
     fab.hidden = !showFab;
     document.body.classList.toggle("has-fab", showFab);
     const aFaire = !!epargne()?.aFaire;
@@ -3401,6 +3414,7 @@
                         budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
                                   ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id) },
                         // épargne mise de côté, résumée pour le budget (sécurité puis projet)
+                        placements: () => { if (!S.ops?.some((o) => o.type === "ACHAT")) return null; const L = replay(S.ops); return { valeur: Math.max(0, L.valeur || 0) }; },
                         epargneResume: () => { const e = epargne(); return e ? { solde: Math.max(0, e.solde || 0), serie: e.serie || 0, plan: e.plan || null,
                           mv: (e.mv || []).map((m) => ({ date: m.date, type: m.type, montant: m.montant })) } : null; },
                         saveProfil: async (p) => { await api.saveProfil(S.user.id, p); Object.assign(S.profil, p); window.dispatchEvent(new Event("brvm:profil")); },

@@ -90,3 +90,21 @@ dialog.bu-dlg::backdrop { background: hsl(232 40% 10% / .45); }
 .bu-annuler { align-self: center; }
 .bu-voix-r { margin: 0; text-align: center; } .bu-voix-r:empty { display: none; }
 #dlg-budget .bu-montant input, .bu-demarrage .bu-montant input { font-size: 2.4rem !important; font-weight: 800; min-height: 64px; border-radius: 0; border-width: 0 0 2px; box-shadow: none; }
+.bu-habitude { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .bu-habitude:empty { display: none; }
+.bu-hab { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 12px 4px 4px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.bu-q2 { margin: 8px 0 0; font-weight: 700; text-align: center; }
+.bu-paie { display: flex; gap: 14px; align-items: flex-start; } .bu-paie p { margin: 4px 0 10px; }
+.bu-cercle { display: flex; gap: 14px; align-items: flex-start; } .bu-cercle p { margin: 2px 0 8px; }
+.bu-pastilles { display: flex; gap: 6px; flex-wrap: wrap; }
+.bu-pastilles span { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: #fff;
+  background: hsl(232 30% 55%); border: 3px solid var(--border); }
+.bu-pastilles span.ok { border-color: hsl(35 92% 55%); background: hsl(232 45% 30%); }
+a.bu-pl { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+.bu-soir-b { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; } .bu-soir-b .btn { min-height: 48px; border-radius: 14px; }
+.bu-intro { margin: 0; color: var(--muted); }
+.bu-etage .bu-etage-t { display: flex; gap: 12px; align-items: center; } .bu-etage .bu-etage-t small { display: block; color: var(--muted); font-size: .82rem; }
+.bu-etage.actif { border: 2px solid hsl(35 92% 55%); }
+.bu-etage .chip { white-space: nowrap; }
+.center { text-align: center; }
+.bu-invit { display: flex; gap: 14px; align-items: flex-start; } .bu-invit p { margin: 4px 0 10px; }

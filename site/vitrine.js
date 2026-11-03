@@ -389,6 +389,13 @@
       onEnter: () => { remplir.restart(); fab.restart(true); }, onEnterBack: () => { remplir.restart(); fab.restart(true); },
       onLeaveBack: () => { remplir.pause(0); fab.pause(0); } });
 
+    // Parcours « trois gestes » : la recette se répartit sous les yeux, à chaque passage (dans les deux sens)
+    const repartir = gsap.fromTo(".pc-barre i", { scaleX: 0 }, { scaleX: 1, duration: 0.7, stagger: 0.25, ease: "power2.out", paused: true });
+    const lignesPc = gsap.fromTo(".pc-ecran .pc-l", { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.15, paused: true, delay: 0.2 });
+    ScrollTrigger.create({ trigger: ".pc-ecran", start: "top 85%", end: "bottom 10%",
+      onEnter: () => { repartir.restart(); lignesPc.restart(true); }, onEnterBack: () => { repartir.restart(); lignesPc.restart(true); },
+      onLeaveBack: () => { repartir.pause(0); lignesPc.pause(0); } });
+
     // Méthode : bureau = anneau assemblé au défilement (scrub) + étape active ; mobile = assemblage à l'entrée
     draw();
     mm.add("(min-width: 900px)", () => {

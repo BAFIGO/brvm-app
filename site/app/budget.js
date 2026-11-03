@@ -59,6 +59,7 @@
   // ------------------------------------------------------------------ état
   const S = { charge: false, enCours: false, profil: null, mv: [], etape: 1, brouillon: {}, absent: false, erreur: null, vue: null };
   const app = () => window.BRVM_APP;
+  const rendre = () => app()?.render?.();
   async function charger() {
     if (S.enCours) return;
     S.enCours = true;
@@ -71,7 +72,7 @@
       S.erreur = /budget_|relation|does not exist|42P01/i.test(String(e?.message || e)) ? "installer" : String(e?.message || e);
     }
     S.charge = true; S.enCours = false;
-    if (S.vue && location.hash.slice(1) === "budget") render(S.vue);
+    if (["budget", "objectifs", "aujourdhui", ""].includes(location.hash.slice(1))) rendre();
   }
 
   // ------------------------------------------------------------------ calculs
@@ -122,6 +123,7 @@
     if (e === 2) return `${barre}<h2 class="bu-q">Combien gagnez-vous ${b.rythme === "jour" ? "par jour" : "par mois"}, à peu près ?</h2>
       <label class="bu-montant"><span class="sr-only">Montant</span><input id="bu-rev" inputmode="numeric" autocomplete="off" placeholder="0" value="${b.revenu ? nf.format(b.revenu) : ""}"><span>F</span></label>
       <div class="bu-puces">${(b.rythme === "jour" ? [3000, 5000, 10000, 20000] : [100000, 200000, 400000, 800000]).map((v) => `<button type="button" class="bu-puce" data-bu="rev-puce" data-v="${v}">${nf.format(v)}</button>`).join("")}</div>
+      ${b.rythme === "mois" ? `<p class="bu-q2">Quel jour êtes-vous payé ?</p><div class="bu-puces">${[1, 5, 10, 15, 25, 28, 30].map((j) => `<button type="button" class="bu-puce" data-bu="paie" data-v="${j}" aria-pressed="${b.jour_paie === j}">${j === 30 ? "Fin du mois" : "Le " + j}</button>`).join("")}</div>` : ""}
       <button type="button" class="btn primary bu-suite" data-bu="suite2">Continuer</button>`;
     return `${barre}<h2 class="bu-q">Pour quoi voulez-vous garder de l'argent ?</h2>
       <div class="bu-grille">${OBJ.map(([k, l]) => `<button type="button" class="bu-cat" data-bu="obj" data-v="${k}" aria-pressed="${b.objectif_icone === k}"><span class="bu-tuile ${b.objectif_icone === k ? "" : "clair"}">${ic(P[k])}</span>${l}</button>`).join("")}</div>
@@ -134,13 +136,13 @@
     const b = S.brouillon;
     b.objectif_montant = lireNombre($("#bu-obj-m")?.value) || null;
     const lib = (OBJ.find((o) => o[0] === b.objectif_icone) || ["", "Mon projet"])[1];
-    const profil = { mode: "simple", rythme: b.rythme || "mois", revenu: b.revenu || 0, profil: "equilibre",
+    const profil = { mode: "simple", rythme: b.rythme || "mois", revenu: b.revenu || 0, profil: "equilibre", jour_paie: b.rythme === "mois" ? (b.jour_paie || null) : null,
                      objectif_nom: b.objectif_icone === "securite" ? "Mes imprévus" : lib === "École" ? "L'école" : lib, objectif_icone: b.objectif_icone, objectif_montant: b.objectif_montant };
     try { await app().budget.sauverProfil(profil); S.profil = { ...(S.profil || {}), ...profil }; }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); return; }
     const e = (S.profil.revenu || 0) * (S.profil.rythme === "jour" ? 0.2 : 0.2);
     app().toast("Votre budget est prêt.", { detail: `Vous pourriez garder environ ${F(e)} ${S.profil.rythme === "jour" ? "par jour" : "par mois"}.` });
-    render(S.vue);
+    rendre();
   }
 
   // ------------------------------------------------------------------ écrans
@@ -152,15 +154,6 @@
         <p class="small">On reprend à partir d'aujourd'hui, sans rien rattraper. ${c.p.objectif_nom ? `Votre projet « ${esc(c.p.objectif_nom)} » vous attend.` : ""}</p>
         <button type="button" class="btn primary small" data-bu="reprendre">Reprendre aujourd'hui</button></div></section>`;
   }
-  function blocProjet(c) {
-    const p = c.p;
-    return `<section class="card bu-projet"><span class="bu-tuile amb">${ic(P[p.objectif_icone] || P.coffre)}</span>
-      <div class="bu-projet-c"><div class="bu-ligne"><b>${esc(p.objectif_nom || "Mon projet")}</b><span>${F(c.projet)}${p.objectif_montant ? " / " + F(p.objectif_montant) : ""}</span></div>
-        ${p.objectif_montant ? jauge(c.projet, p.objectif_montant, "amb") : ""}
-        <div class="bu-ligne small"><span>${ic(P.securite)} Sécurité ${F(c.securite)} / ${F(c.securiteObj)}</span></div>
-        ${jauge(c.securite, c.securiteObj)}
-        <p class="small muted">${c.securite < c.securiteObj ? "Ce que vous gardez remplit d'abord la sécurité, puis votre projet." : "Sécurité remplie : ce que vous gardez va maintenant à votre projet."}</p></div></section>`;
-  }
   function blocSemaine(c) {
     const s = c.semaine, diff = s.depAvant ? Math.round(100 * (s.dep - s.depAvant) / s.depAvant) : null;
     return `<details class="card bu-sem"${new Date().getDay() === 0 ? " open" : ""}><summary><span class="bu-tuile">${ic(P.semaine, "#fff")}</span><b>Ma semaine</b></summary>
@@ -170,20 +163,79 @@
         <li><span class="bu-tuile clair petit">${ic(P.calendrier)}</span><span>Jours notés</span><b>${s.jours} / 7</b></li>
       </ul>${c.serie >= 7 ? `<p class="small">Vous êtes un épargnant régulier : ${c.serie} jours d'affilée.</p>` : ""}</details>`;
   }
-  function vueSimple(c) {
-    return `${blocRetour(c)}
-      ${c.jour && !c.revMois ? `<section class="bu-phrase"><span class="small">Bienvenue dans votre budget</span><b style="font-size:1.35rem">Notez votre recette du jour</b>
-          <span class="small">Touchez « J'ai gagné » : vous verrez aussitôt ce que vous pouvez dépenser.</span></section>`
+  // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
+  function vueAccueil(c) {
+    return `${blocRetour(c)}${blocPaie(c)}
+      ${c.jour && !c.revMois ? `<section class="bu-phrase"><span class="small">Bienvenue</span><b style="font-size:1.35rem">Notez votre recette du jour</b>
+          <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      <div class="bu-trois">
+      ${troisBoutons()}
+      ${blocRecurrents()}
+      ${blocCoffre(c)}${blocCercle()}${blocPlacements()}${blocSoir(c)}${blocSemaine(c)}`;
+  }
+  const troisBoutons = () => `<div class="bu-trois">
         <button type="button" class="bu-gros-b gagne" data-bu="saisir" data-v="revenu"><span class="bu-tuile">${ic(P.plus, "#fff")}</span>J'ai gagné</button>
         <button type="button" class="bu-gros-b depense" data-bu="saisir" data-v="depense"><span class="bu-tuile clair">${ic(P.moins)}</span>J'ai dépensé</button>
         <button type="button" class="bu-gros-b garde" data-coffre="verser"><span class="bu-tuile amb">${ic(P.coffre)}</span>Je garde</button>
-      </div>
-      ${!c.notéAujourdhui ? `<button type="button" class="btn bu-rien" data-bu="rien">Rien de spécial aujourd'hui</button>` : `<p class="small muted bu-ok">✓ Votre journée est notée.</p>`}
-      ${blocProjet(c)}${dernieres(4)}${blocSemaine(c)}
-      <p class="bu-mode small"><button type="button" class="btn link small" data-bu="mode" data-v="complet">Passer au budget détaillé</button></p>`;
+      </div>`;
+  // jour de paie (salaire) : garder d'abord, avant de dépenser
+  function blocPaie(c) {
+    const j = +c.p.jour_paie, d = new Date().getDate(), fin = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    if (c.jour || !j || !(d === Math.min(j, fin) || d === Math.min(j, fin) + 1) || c.garde >= c.epargneCible) return "";
+    return `<section class="card bu-paie"><span class="bu-tuile amb">${ic(P.salaire)}</span><div><b>C'est jour de paie</b>
+      <p class="small">Gardez d'abord <b>${F(Math.max(0, c.epargneCible - c.garde))}</b>, avant les dépenses.</p>
+      <button type="button" class="btn primary small" data-coffre="verser">Je garde maintenant</button></div></section>`;
+  }
+  // dépenses qui reviennent chaque mois : proposées le jour habituel, notées en une touche
+  function aNoterCeMois() {
+    const d0 = auj().slice(0, 8) + "01", jour = new Date().getDate(), vus = new Set(), out = [];
+    for (const m of S.mv) {
+      if (!m.recurrent || m.type !== "depense" || m.date >= d0) continue;
+      const cle = m.categorie + "|" + m.montant;
+      if (vus.has(cle)) continue; vus.add(cle);
+      const deja = S.mv.some((x) => x.date >= d0 && x.type === "depense" && x.categorie === m.categorie && +x.montant === +m.montant);
+      if (!deja && +m.date.slice(8, 10) <= jour) out.push(m);
+    }
+    return out.slice(0, 3);
+  }
+  function blocRecurrents() {
+    const l = aNoterCeMois();
+    if (!l.length) return "";
+    return `<section class="card"><h2 class="bu-h2">À noter ce mois-ci</h2><ul class="bu-ops">${l.map((m) => `<li>
+      <span class="bu-tuile clair petit">${ic(P[m.categorie] || P.autres)}</span><span class="bu-op-l">${esc(libCat(m))}<small>comme le mois dernier</small></span>
+      <button type="button" class="btn small primary" data-bu="rec" data-v="${esc(m.categorie)}|${+m.montant}">Noter ${F(m.montant)}</button></li>`).join("")}</ul></section>`;
+  }
+  function blocCoffre(c) {
+    const p = c.p;
+    return `<section class="card bu-projet"><span class="bu-tuile amb">${ic(P.coffre)}</span>
+      <div class="bu-projet-c"><div class="bu-ligne"><b>Mon coffre</b><a href="#objectifs" class="small">Voir</a></div>
+        <div class="bu-ligne small"><span>${ic(P.securite)} Sécurité</span><span>${F(c.securite)} / ${F(c.securiteObj)}</span></div>${jauge(c.securite, c.securiteObj)}
+        <div class="bu-ligne small"><span>${ic(P[p.objectif_icone] || P.coffre)} ${esc(p.objectif_nom || "Mon projet")}</span><span>${F(c.projet)}${p.objectif_montant ? " / " + F(p.objectif_montant) : ""}</span></div>
+        ${p.objectif_montant ? jauge(c.projet, p.objectif_montant, "amb") : ""}</div></section>`;
+  }
+  function blocCercle() {
+    let l = []; try { l = S.cercles || []; } catch (e) { l = []; }
+    const c = l[0];
+    if (!c) return `<section class="card bu-cercle"><span class="bu-tuile clair">${ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>')}</span>
+      <div><b>Garder à plusieurs</b><p class="small muted">Avec la famille ou des amis, on tient plus facilement.</p><a href="#portefeuille" data-bu="cercles" class="small">Créer ou rejoindre un cercle</a></div></section>`;
+    const m = c.membres || [], actifs = m.filter((x) => +x.serie > 0).length;
+    return `<section class="card bu-cercle"><span class="bu-tuile">${ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>', "#fff")}</span>
+      <div style="flex:1;min-width:0"><div class="bu-ligne"><b>${esc(c.nom)}</b><a href="#portefeuille" data-bu="cercles" class="small">Ouvrir</a></div>
+        <p class="small muted">${actifs} sur ${m.length} en série en ce moment</p>
+        <div class="bu-pastilles">${m.slice(0, 7).map((x) => `<span class="${+x.serie > 0 ? "ok" : ""}" title="${esc(x.pseudo || "")}">${esc(String(x.pseudo || "?").slice(0, 1).toUpperCase())}</span>`).join("")}</div></div></section>`;
+  }
+  function blocPlacements() {
+    const pl = app().placements?.();
+    if (!pl) return "";
+    return `<a class="card bu-pl" href="#portefeuille" data-bu="placements"><span class="bu-tuile clair petit">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}</span>
+      <span class="bu-op-l"><b>Mes placements</b><small>${F(pl.valeur)}</small></span><span aria-hidden="true">›</span></a>`;
+  }
+  function blocSoir(c) {
+    return c.notéAujourdhui ? `<p class="small muted bu-ok">✓ Votre journée est notée.</p>`
+      : `<section class="card bu-soir"><div class="bu-ligne"><b>Mon point du jour</b></div>
+          <div class="bu-soir-b"><button type="button" class="btn primary" data-bu="saisir" data-v="depense">Noter une dépense</button>
+          <button type="button" class="btn" data-bu="rien">Rien de spécial</button></div></section>`;
   }
   function dernieres(n) {
     const l = S.mv.filter((m) => m.type !== "rien").slice(0, n);
@@ -194,7 +246,7 @@
       <b class="${m.type === "revenu" ? "good" : ""}">${m.type === "revenu" ? "+" : "−"}${F(m.montant)}</b>
       <button type="button" class="bu-suppr" data-bu="suppr" data-v="${m.id}" aria-label="Supprimer ${esc(libCat(m))} ${F(m.montant)}">×</button></li>`).join("")}</ul></section>`;
   }
-  function vueComplete(c) {
+  function vueBudget(c, simple) {
     const mois = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
     const env = (nom, cle, i, cls) => {
       const max = c.revRef * c.part(i), v = cle === "epargne" ? c.garde : c.env[cle];
@@ -204,37 +256,69 @@
       <section class="bu-phrase large"><span class="small">Reste à vivre · ${esc(mois)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
         <span class="small">Gagné ${F(c.revMois)} · dépensé ${F(c.depMois)} · gardé ${F(c.garde)}</span>
         <span class="small">Aujourd'hui : ${F(c.duJour)} ${c.jour ? "(selon vos recettes du mois)" : `· ${c.joursRest} jour${c.joursRest > 1 ? "s" : ""} restant${c.joursRest > 1 ? "s" : ""}`}</span></section>
-      <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2>
-          <label class="small">Profil <select data-bu="profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}"${(c.p.profil || "equilibre") === k ? " selected" : ""}>${v[0]} ${v[1]}/${v[2]}/${v[3]}</option>`).join("")}</select></label></div>
-        ${env("Besoins", "besoins", 1, "")}${env("Envies", "envies", 2, "env2")}${env("Épargne et avenir", "epargne", 3, "amb")}
+      <section class="card"><div class="bu-ligne"><h2 class="bu-h2">${simple ? "Mon argent du mois" : "Mes enveloppes"}</h2>
+          ${simple ? "" : `<label class="small">Profil <select data-bu="profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}"${(c.p.profil || "equilibre") === k ? " selected" : ""}>${v[0]} ${v[1]}/${v[2]}/${v[3]}</option>`).join("")}</select></label>`}</div>
+        ${env(simple ? "Pour vivre" : "Besoins", "besoins", 1, "")}${env(simple ? "Pour se faire plaisir" : "Envies", "envies", 2, "env2")}${env(simple ? "Je garde" : "Épargne et avenir", "epargne", 3, "amb")}
         <p class="small muted">Besoins : logement, nourriture, transport, santé, école, famille. Envies : sorties, habits, fêtes, abonnements.</p></section>
-      <div class="bu-trois">
-        <button type="button" class="bu-gros-b gagne" data-bu="saisir" data-v="revenu"><span class="bu-tuile">${ic(P.plus, "#fff")}</span>Revenu</button>
-        <button type="button" class="bu-gros-b depense" data-bu="saisir" data-v="depense"><span class="bu-tuile clair">${ic(P.moins)}</span>Dépense</button>
-        <button type="button" class="bu-gros-b garde" data-coffre="verser"><span class="bu-tuile amb">${ic(P.coffre)}</span>Épargne</button>
-      </div>
-      ${!c.notéAujourdhui ? `<button type="button" class="btn bu-rien" data-bu="rien">Rien de spécial aujourd'hui</button>` : ""}
-      ${blocProjet(c)}${dernieres(8)}${blocSemaine(c)}
+      ${troisBoutons()}${blocRecurrents()}
+      ${blocCoffre(c)}${dernieres(8)}${blocSemaine(c)}
       <details class="card"><summary><b>Mes réglages de budget</b></summary>
         <div class="bu-reg">
           <label>Mon revenu ${c.jour ? "par jour" : "par mois"}<input id="bu-r-rev" inputmode="numeric" value="${nf.format(c.p.revenu || 0)}"></label>
           <label>Je gagne<select id="bu-r-ry"><option value="mois"${c.jour ? "" : " selected"}>chaque mois</option><option value="jour"${c.jour ? " selected" : ""}>chaque jour (variable)</option></select></label>
+          ${c.jour ? "" : `<label>Jour de paie<input id="bu-r-paie" inputmode="numeric" placeholder="ex. 28" value="${c.p.jour_paie || ""}"></label>`}
           <label>Mon projet<input id="bu-r-obj" value="${esc(c.p.objectif_nom || "")}"></label>
           <label>Montant du projet<input id="bu-r-objm" inputmode="numeric" value="${c.p.objectif_montant ? nf.format(c.p.objectif_montant) : ""}"></label>
           <button type="button" class="btn primary" data-bu="reglages">Enregistrer</button>
+          ${simple ? "" : ""}
           <a href="#profil" class="small">Régler l'heure de mon rappel</a>
         </div></details>
-      <p class="bu-mode small"><button type="button" class="btn link small" data-bu="mode" data-v="simple">Revenir au budget simple</button></p>`;
+      <p class="bu-mode small">${simple ? `<button type="button" class="btn link small" data-bu="mode" data-v="complet">Passer au mode complet (enveloppes, profils)</button>`
+        : `<button type="button" class="btn link small" data-bu="mode" data-v="simple">Revenir au mode simple</button>`}</p>`;
   }
 
+  // « Mon budget » (détail du mois), dans les deux modes
   function render(v) {
     S.vue = v;
-    if (!app()?.budget) { v.innerHTML = `<h1 id="h-bud">Mon budget</h1>`; return; }
-    if (!S.charge) { v.innerHTML = `<h1 id="h-bud">Mon budget</h1><p class="muted">Chargement…</p>`; charger(); return; }
-    if (S.erreur === "installer") { v.innerHTML = `<h1 id="h-bud">Mon budget</h1><div class="notice">Le budget arrive bientôt sur votre compte.</div>`; return; }
-    if (!S.profil) { v.innerHTML = `<h1 id="h-bud">Mon budget</h1><div class="bu-demarrage">${demarrage()}</div>`; brancherDemarrage(v); return; }
-    const c = calculs();
-    v.innerHTML = `<h1 id="h-bud">Mon budget</h1>` + (S.profil.mode === "complet" ? vueComplete(c) : vueSimple(c));
+    const t = (h) => `<h1 id="h-bud">${h}</h1>`;
+    if (!app()?.budget) { v.innerHTML = t("Mon budget"); return; }
+    if (!S.charge) { v.innerHTML = t("Mon budget") + `<p class="muted">Chargement…</p>`; charger(); return; }
+    if (S.erreur === "installer") { v.innerHTML = t("Mon budget") + `<div class="notice">Le budget arrive bientôt sur votre compte.</div>`; return; }
+    if (!S.profil) { v.innerHTML = t("Mon budget") + `<div class="bu-demarrage">${demarrage()}</div>`; brancherDemarrage(v); return; }
+    v.innerHTML = t("Mon budget") + vueBudget(calculs(), S.profil.mode !== "complet");
+  }
+  // Accueil du mode simple (onglet Aujourd'hui)
+  const accueilSimple = () => S.charge && !S.erreur && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
+  function renderAccueil(v) {
+    S.vue = v;
+    if (!S.cerclesCharges) { S.cerclesCharges = true; app().cercles?.().then((l) => { S.cercles = l || []; if (location.hash.slice(1) === "aujourdhui" || !location.hash) rendre(); }).catch(() => {}); }
+    v.innerHTML = `<h1 id="h-auj">Aujourd'hui</h1>` + (S.profil ? vueAccueil(calculs()) : `<div class="bu-demarrage">${demarrage()}</div>`);
+    if (!S.profil) brancherDemarrage(v);
+  }
+  // Mes objectifs : les trois étages (sécurité, projet, faire grandir), reliés au budget et au coffre
+  function renderObjectifs(v) {
+    S.vue = v;
+    if (!S.charge) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><p class="muted">Chargement…</p>`; charger(); return; }
+    if (!S.profil) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><div class="notice">Commencez par votre budget : vos objectifs se calculent à partir de lui.
+      <p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
+    const c = calculs(), p = c.p, plein = c.securite >= c.securiteObj && c.securiteObj > 0;
+    const moisRestants = c.epargneCible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / c.epargneCible) : null;
+    const etage = (n, titre, icone, amb, sous, v, max, etat) => `<section class="card bu-etage${etat === "en cours" ? " actif" : ""}">
+      <div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile${amb ? " amb" : ""}">${ic(P[icone] || P.coffre, amb ? "currentColor" : "#fff")}</span>
+        <span><b>${n} · ${esc(titre)}</b><small>${sous}</small></span></span><span class="chip">${etat}</span></div>
+      ${max ? `<div class="bu-ligne small"><span>${F(v)}</span><b>${F(max)}</b></div>${jauge(v, max, amb ? "amb" : "")}` : ""}</section>`;
+    const projetEtat = !plein ? "ensuite" : p.objectif_montant && c.projet >= p.objectif_montant ? "atteint ✓" : "en cours";
+    v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1>
+      <p class="bu-intro">Ce que vous gardez remplit les étages <b>dans l'ordre</b>.</p>
+      ${etage(1, "Sécurité", "securite", false, `${c.jour ? "6" : "3"} mois de besoins, calculés depuis votre budget`, c.securite, c.securiteObj, plein ? "pleine ✓" : "en cours")}
+      ${etage(2, p.objectif_nom || "Mon projet", p.objectif_icone, true, "Votre projet", c.projet, p.objectif_montant || 0, projetEtat)}
+      <section class="card bu-etage${plein ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>
+        <span><b>3 · Faire grandir</b><small>Placer à la BRVM chez votre SGI</small></span></span><span class="chip">${plein ? "prêt" : "bientôt"}</span></div>
+        <div class="bu-ligne small"><span>Plan proposé</span><b>${F(c.epargneCible)} ${c.jour ? "par mois" : "par mois, le jour de paie"}</b></div>
+        <p class="small muted">${plein ? "Votre sécurité est pleine : vous pouvez commencer à placer." : moisRestants ? `Possible quand la sécurité sera pleine, dans environ ${moisRestants} mois.` : "Possible quand la sécurité sera pleine."}</p>
+        ${plein ? `<button type="button" class="btn primary" data-coffre="sgi">J'ai envoyé à ma SGI</button>` : ""}</section>
+      <div class="bu-soir-b"><button type="button" class="btn primary" data-coffre="verser">Je garde</button><button type="button" class="btn" data-coffre="reprendre">J'ai repris</button></div>
+      <p class="small center"><a href="#portefeuille" data-bu="coffre">Historique et réglages du coffre</a></p>`;
   }
 
   function brancherDemarrage(v) {
@@ -251,6 +335,7 @@
       <div class="bu-type" role="radiogroup" aria-label="Type">
         <button type="button" data-t="revenu" role="radio">J'ai gagné</button><button type="button" data-t="depense" role="radio">J'ai dépensé</button></div>
       <label class="bu-montant"><span class="sr-only">Montant</span><input id="bu-m" inputmode="numeric" autocomplete="off" placeholder="0"><span>F</span></label>
+      <div class="bu-habitude" id="bu-hab"></div>
       <div class="bu-puces" id="bu-mp"></div>
       <div class="bu-grille" id="bu-cats"></div>
       <div class="bu-plus-opt" id="bu-opt"></div>
@@ -265,6 +350,8 @@
       const t = ev.target.closest("[data-t]"); if (t) { saisie.type = t.dataset.t; saisie.cat = null; peindre(); return; }
       const c = ev.target.closest("[data-cat]"); if (c) { saisie.cat = c.dataset.cat; peindre(); return; }
       const m = ev.target.closest("[data-m]"); if (m) { $("#bu-m", dlg).value = nf.format(+m.dataset.m); return; }
+      const h = ev.target.closest("[data-rep]");
+      if (h) { const [c, mt] = h.dataset.rep.split("|"); saisie.cat = c; $("#bu-m", dlg).value = nf.format(+mt); dlg.querySelector("form").requestSubmit(); return; }
       if (ev.target.closest(".bu-micro")) dicter();
     });
     $("#bu-m", dlg).addEventListener("input", (ev) => { const n = lireNombre(ev.target.value); ev.target.value = n ? nf.format(n) : ""; });
@@ -283,7 +370,7 @@
         app().toast(saisie.type === "revenu" ? `${F(montant)} gagnés, bravo.` : `${F(montant)} notés.`,
           { detail: saisie.type === "revenu" ? `Pensez à garder ${F(montant * c.part(3))} tout de suite.` : `Il vous reste ${F(c.duJour)} pour aujourd'hui.`,
             actions: saisie.type === "revenu" ? [{ label: "Je garde", fn: () => document.querySelector("[data-coffre='verser']")?.click() }] : [] });
-        render(S.vue);
+        rendre();
       } catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); }
       finally { b.disabled = false; }
     });
@@ -296,6 +383,14 @@
     $("#bu-cats", dlg).innerHTML = cats.map(([k, l]) => `<button type="button" class="bu-cat" data-cat="${k}" aria-pressed="${saisie.cat === k}">
       <span class="bu-tuile ${saisie.cat === k ? "" : "clair"}">${ic(P[k] || P.autres, saisie.cat === k ? "#fff" : "currentColor")}</span>${l}</button>`).join("");
     const puces = saisie.type === "revenu" ? (S.profil?.rythme === "jour" ? [2000, 5000, 10000, 20000] : [50000, 100000, 200000, 400000]) : [500, 1000, 2500, 5000];
+    // « Comme d'habitude » : les 3 dépenses les plus fréquentes du mois, enregistrées en une touche
+    const freq = new Map();
+    for (const m of S.mv) if (m.type === saisie.type && m.type !== "rien" && m.date >= ilya(30) && +m.montant > 0) {
+      const k = m.categorie + "|" + (+m.montant); freq.set(k, (freq.get(k) || 0) + 1);
+    }
+    const hab = [...freq.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    $("#bu-hab", dlg).innerHTML = hab.length ? `<span class="small muted">Comme d'habitude :</span>` + hab.map(([k]) => { const [c, mt] = k.split("|");
+      return `<button type="button" class="bu-hab" data-rep="${esc(k)}"><span class="bu-tuile clair petit">${ic(P[c] || P.autres)}</span>${esc(libCat({ type: saisie.type, categorie: c }))} ${F(mt)}</button>`; }).join("") : "";
     $("#bu-mp", dlg).innerHTML = puces.map((v) => `<button type="button" class="bu-puce" data-m="${v}">${nf.format(v)}</button>`).join("");
     $("#bu-opt", dlg).innerHTML = complet && saisie.type === "depense"
       ? `<label><input type="checkbox" id="bu-rec"> Revient chaque mois</label><label><input type="checkbox" id="bu-cre"> Payé à crédit</label>` : "";
@@ -332,44 +427,58 @@
   // ------------------------------------------------------------------ actions
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-bu]");
-    if (!b || !S.vue?.contains(b) && !b.closest(".bu-demarrage")) return;
+    if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs")) return;
     const a = b.dataset.bu, v = b.dataset.v;
-    if (a === "rythme") { S.brouillon.rythme = v; S.etape = 2; render(S.vue); setTimeout(() => $("#bu-rev")?.focus(), 50); }
-    else if (a === "rev-puce") { S.brouillon.revenu = +v; render(S.vue); }
-    else if (a === "suite2") { S.brouillon.revenu = lireNombre($("#bu-rev")?.value) || S.brouillon.revenu; if (!S.brouillon.revenu) { $("#bu-rev")?.focus(); return; } S.etape = 3; render(S.vue); }
-    else if (a === "obj") { S.brouillon.objectif_icone = v; const m = $("#bu-obj-m")?.value; render(S.vue); if (m) $("#bu-obj-m").value = m; }
+    if (a === "rythme") { S.brouillon.rythme = v; S.etape = 2; rendre(); setTimeout(() => $("#bu-rev")?.focus(), 50); }
+    else if (a === "rev-puce") { S.brouillon.revenu = +v; rendre(); }
+    else if (a === "paie") { S.brouillon.revenu = lireNombre($("#bu-rev")?.value) || S.brouillon.revenu; S.brouillon.jour_paie = +v; rendre(); }
+    else if (a === "suite2") { S.brouillon.revenu = lireNombre($("#bu-rev")?.value) || S.brouillon.revenu; if (!S.brouillon.revenu) { $("#bu-rev")?.focus(); return; } S.etape = 3; rendre(); }
+    else if (a === "obj") { S.brouillon.objectif_icone = v; const m = $("#bu-obj-m")?.value; rendre(); if (m) $("#bu-obj-m").value = m; }
     else if (a === "terminer") terminerDemarrage();
     else if (a === "saisir") ouvrir(v);
+    else if (a === "fermer-invit") { S.invitationFermee = true; b.closest(".bu-invit")?.remove(); }
+    else if (a === "cercles" || a === "coffre" || a === "placements") { ev.preventDefault(); app().allerPf?.(a === "cercles" ? "cercles" : a === "coffre" ? "epargne" : "placements"); }
+    else if (a === "rec") {
+      const [cat, mt] = v.split("|");
+      try { const x = await app().budget.ajouter({ date: auj(), type: "depense", montant: +mt, categorie: cat, enveloppe: catDep(cat)[2], recurrent: true });
+            S.mv.unshift(x || { date: auj(), type: "depense", montant: +mt, categorie: cat, recurrent: true, id: Date.now() }); app().toast(`${F(+mt)} notés.`); rendre(); }
+      catch (e) { app().toast("Impossible : " + (e.message || e)); }
+    }
     else if (a === "rien") {
       try { const x = await app().budget.ajouter({ date: auj(), type: "rien", montant: 0, categorie: null }); S.mv.unshift(x || { date: auj(), type: "rien", montant: 0, id: Date.now() }); }
       catch (e) { app().toast("Impossible : " + (e.message || e)); return; }
-      app().toast("C'est noté : votre série continue."); render(S.vue);
+      app().toast("C'est noté : votre série continue."); rendre();
     }
-    else if (a === "reprendre") { S.retourVu = true; render(S.vue); }
+    else if (a === "reprendre") { S.retourVu = true; rendre(); }
     else if (a === "suppr") {
-      try { await app().budget.supprimer(+v); S.mv = S.mv.filter((m) => String(m.id) !== String(v)); app().toast("Opération supprimée."); render(S.vue); }
+      try { await app().budget.supprimer(+v); S.mv = S.mv.filter((m) => String(m.id) !== String(v)); app().toast("Opération supprimée."); rendre(); }
       catch (e) { app().toast("Impossible : " + (e.message || e)); }
     }
     else if (a === "mode") { await sauver({ mode: v }); app().toast(v === "complet" ? "Budget détaillé activé." : "Budget simple activé."); }
     else if (a === "reglages") {
       await sauver({ revenu: lireNombre($("#bu-r-rev").value), rythme: $("#bu-r-ry").value, objectif_nom: $("#bu-r-obj").value.trim() || null,
+                     jour_paie: Math.min(31, lireNombre($("#bu-r-paie")?.value)) || null,
                      objectif_montant: lireNombre($("#bu-r-objm").value) || null });
       app().toast("Réglages enregistrés.");
     }
   });
   document.addEventListener("change", async (ev) => { if (ev.target.matches?.("[data-bu='profil']")) { await sauver({ profil: ev.target.value }); } });
   async function sauver(x) {
-    try { await app().budget.sauverProfil({ ...S.profil, ...x }); S.profil = { ...S.profil, ...x }; render(S.vue); window.dispatchEvent(new Event("brvm:budget")); }
+    try { await app().budget.sauverProfil({ ...S.profil, ...x }); S.profil = { ...S.profil, ...x }; rendre(); window.dispatchEvent(new Event("brvm:budget")); }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); }
   }
 
-  window.BafiBudget = { render, mode: () => S.profil?.mode || null, recharger: () => { S.charge = false; } };
+  // invitation sur l'ancien accueil (personnes déjà installées, sans budget) : un seul geste pour commencer
+  const invitation = () => (S.charge && !S.erreur && !S.profil && !S.invitationFermee ? `<section class="card bu-invit"><span class="bu-tuile amb">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>')}</span>
+      <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : BafiBourse vous dit ce que vous pouvez garder.</p>
+        <a class="btn primary small" href="#budget">Commencer (1 minute)</a> <button type="button" class="btn link small" data-bu="fermer-invit">Plus tard</button></div></section>` : "");
+  window.BafiBudget = { render, renderAccueil, renderObjectifs, accueilSimple, invitation,
+    mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {
     await charger();
     const h = location.hash.slice(1);
-    if ((!h || h === "aujourdhui") && !S.erreur && (S.profil?.mode === "simple" || (!S.profil && !app().nbOps?.()))) location.hash = "budget";
-    else if (h === "budget") app().render();
+    if (["", "aujourdhui", "budget", "objectifs"].includes(h)) app().render();
     window.dispatchEvent(new Event("brvm:budget"));
   });
 })();

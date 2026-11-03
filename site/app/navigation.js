@@ -16,19 +16,23 @@
   // Menu : chaque rubrique ouvre exactement son écran (les quatre rubriques du Portefeuille sont séparées).
   // BafiBot n'y figure pas : son bouton flottant est toujours là.
   const RUBRIQUES = [
-    { id: "aujourdhui", nom: "Aujourd'hui", href: "#aujourdhui",
+    { id: "aujourdhui", esp: 1, simple: true, nom: "Aujourd'hui", href: "#aujourdhui",
       ic: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>') },
-    { id: "budget", nom: "Mon budget", href: "#budget", simple: true,
+    { id: "budget", esp: 1, nom: "Mon budget", href: "#budget", simple: true,
       ic: ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>') },
-    { id: "pf:epargne", simple: true, nom: "Mon épargne", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
-    { id: "pf:cercles", simple: true, nom: "Mes cercles", ic: ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>') },
-    { id: "pf:placements", nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
-    { id: "pf:simulateur", nom: "Simulateur", ic: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>') },
-    { id: "performance", nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
-    { id: "marche", nom: "Marché", href: "#marche", ic: ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>') },
+    { id: "objectifs", esp: 2, simple: true, nom: "Mes objectifs", href: "#objectifs",
+      ic: ic('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>') },
+    { id: "pf:epargne", esp: 2, simple: true, nom: "Mon coffre", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
+    { id: "pf:cercles", esp: 2, simple: true, nom: "Mes cercles", ic: ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>') },
+    { id: "pf:placements", esp: 3, nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
+    { id: "pf:simulateur", esp: 3, nom: "Simuler un placement", ic: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>') },
+    { id: "performance", esp: 3, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
+    { id: "marche", esp: 3, nom: "Marché", href: "#marche", ic: ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>') },
   ];
   const NOMS_PF = { placements: "Mes placements", epargne: "Mon épargne", cercles: "Mes cercles", simulateur: "Simulateur" };
-  const TITRES = { aujourdhui: "Aujourd'hui", budget: "Mon budget", portefeuille: "Portefeuille", performance: "Performance", marche: "Marché", profil: "Profil et réglages" };
+  // trois espaces, dans l'ordre du parcours : budget → épargne et cercles → bourse
+  const ESPACES = { 1: "Mon argent au quotidien", 2: "Je garde", 3: "Je fais grandir" };
+  const TITRES = { objectifs: "Mes objectifs", aujourdhui: "Aujourd'hui", budget: "Mon budget", portefeuille: "Portefeuille", performance: "Performance", marche: "Marché", profil: "Profil et réglages" };
 
   // ---------------------------------------------------------------- éléments (créés une seule fois)
   const bar = $(".topbar");
@@ -53,8 +57,9 @@
           ${ic('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>')}<span class="ti-cadeau-pt" hidden></span></button>
       </div>
       <div class="ti-defile">
-        <ul class="ti-liste">${RUBRIQUES.map((r) => `<li${r.simple ? "" : " data-complet"}><a href="${r.href || "#portefeuille"}" class="ti-item" data-ti="${r.id}">${r.ic}<span>${r.nom}</span></a></li>`).join("")}
-          <li class="ti-plus" hidden><button type="button" class="ti-item ti-plus-b">${ic('<path d="M12 5v14M5 12h14"/>')}<span>Plus de rubriques</span></button></li></ul>
+        <ul class="ti-liste">${RUBRIQUES.map((r, i) => (r.esp !== RUBRIQUES[i - 1]?.esp ? `<li class="ti-esp"${r.esp === 3 ? " data-complet" : ""}>${ESPACES[r.esp]}</li>` : "")
+            + `<li${r.simple ? "" : " data-complet"}><a href="${r.href || "#portefeuille"}" class="ti-item" data-ti="${r.id}">${r.ic}<span>${r.nom}</span></a></li>`).join("")}
+          <li class="ti-plus" hidden><button type="button" class="ti-item ti-plus-b">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}<span>Je fais grandir</span></button></li></ul>
         <div class="ti-bloc" data-bloc="epingles"><p class="ti-sous">Épinglés</p><ul class="ti-liste petite"></ul>
           <p class="ti-astuce small" hidden>Touchez « Épingler » sur une ligne de Mes placements pour la retrouver ici.</p></div>
         <div class="ti-bloc" data-bloc="recents" hidden><p class="ti-sous">Récents</p><ul class="ti-recents"></ul></div>
@@ -232,7 +237,7 @@
   const actif = () => { const t = app?.tab?.() || "aujourdhui"; return t === "portefeuille" ? "pf:" + (app.ongletPf?.() || "placements") : t; };
   let toutVoir = false;
   function modeMenu() {
-    const simple = window.BafiBudget?.mode?.() === "simple" && !toutVoir;
+    const simple = window.BafiBudget?.mode?.() === "simple" && !toutVoir && !window.BRVM_APP?.placements?.();
     tiroir.querySelectorAll("[data-complet]").forEach((li) => (li.hidden = simple && !li.querySelector('[aria-current="page"]')));
     const plus = tiroir.querySelector(".ti-plus"); if (plus) plus.hidden = !simple;
   }
