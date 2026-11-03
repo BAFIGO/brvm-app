@@ -138,3 +138,34 @@ details.bu-bourse > summary { display: flex; align-items: center; gap: 12px; cur
 details.bu-bourse > summary::-webkit-details-marker { display: none; }
 details.bu-bourse > summary small { color: var(--muted); margin-left: auto; font-size: .8rem; }
 details.bu-bourse[open] > summary { margin-bottom: 12px; }
+/* l'accueil budget occupe toute la largeur de la vue ; deux colonnes sur grand écran */
+#v-aujourdhui > .bu-acc, #v-aujourdhui > .bu-acc-det, #v-aujourdhui > .bu-demarrage { grid-column: 1 / -1 !important; }
+.bu-acc { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.bu-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (min-width: 900px) { .bu-acc { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; } }
+@media (min-width: 900px) { #v-budget, #v-objectifs, #v-avenir { max-width: 760px; margin-inline: auto; } }
+/* bascule plus compacte, sans réduire la zone tactile (40 px) */
+.bu-bascule { width: 220px; max-width: 100%; align-self: flex-start; padding: 3px; border-radius: 13px; }
+.bu-bascule button { min-height: 40px; font-size: .9rem; }
+.bu-curseur { top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 10px; }
+/* livraison 3 */
+.bu-poches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bu-poche { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; border-radius: 16px; background: var(--surface);
+  border: 1px solid var(--border); text-decoration: none; color: var(--text); text-align: center; min-height: 96px; justify-content: center; }
+.bu-poche small { color: var(--muted); font-size: .78rem; } .bu-poche b { font-size: .92rem; font-variant-numeric: tabular-nums; }
+.bu-proj { align-items: flex-start !important; padding: 8px 0; } .bu-proj .bu-op-l { gap: 2px; }
+.bu-cer-b { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.bu-cer-b .btn { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; } .bu-cer-b svg { width: 18px; height: 18px; }
+.bu-encourager { margin-top: 8px; min-height: 40px; }
+.bu-bravo { margin: 8px 0 0; color: hsl(30 80% 38%); font-weight: 600; }
+.bu-av-saisie .bu-puces { justify-content: flex-start; margin: 4px 0 10px; } .bu-av-saisie .btn.primary { width: 100%; min-height: 48px; border-radius: 14px; }
+.bu-courbe { width: 100%; height: auto; display: block; }
+.bu-courbe .ax { stroke: var(--border); } .bu-courbe .besoin { stroke: hsl(35 92% 55%); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bu-courbe .place { fill: none; stroke: var(--brand); stroke-width: 3; } .bu-courbe .dort { fill: none; stroke: hsl(230 25% 65%); stroke-width: 3; }
+.bu-courbe text { font-size: 10px; fill: var(--muted); }
+.bu-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; } .bu-legende i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.bu-legende i.place { background: var(--brand); } .bu-legende i.dort { background: hsl(230 25% 65%); } .bu-legende i.besoin { border-top: 2px dashed hsl(35 92% 55%); height: 0; }
+.bu-habit input { width: 100px; min-height: 40px; border-radius: 10px; border: 1px solid var(--border); padding: 0 8px; font: inherit; font-weight: 700; background: var(--surface); color: var(--text); }
+.bu-habit-r { margin: 8px 0 0; } .bu-habit-r b { font-size: 1.4rem; color: var(--brand); }
+.bu-case { display: flex; gap: 10px; align-items: center; justify-content: center; min-height: 44px; }
+a.bu-av { text-decoration: none; }

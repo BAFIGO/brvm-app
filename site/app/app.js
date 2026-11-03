@@ -23,7 +23,7 @@
   const SOURCES = { especes: "Espèces", banque: "Banque", mobile: "Mobile money" };
   const TYPES_OP = { ACHAT: "Achat", VENTE: "Vente", DIVIDENDE: "Dividende", DEPOT: "Argent versé à ma SGI", RETRAIT: "Argent retiré de ma SGI",
                      FRAIS: "Frais", SOLDE: "Solde relevé" };
-  const TABS = ["aujourdhui", "budget", "objectifs", "portefeuille", "performance", "marche", "profil"];
+  const TABS = ["aujourdhui", "budget", "objectifs", "avenir", "portefeuille", "performance", "marche", "profil"];
   const ICONE_EPINGLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/></svg>`;
   const PROFILS = {
     prudent: { t: "Prudent", d: "Surtout des obligations et des fonds monétaires, peu d'actions. Variations faibles." },
@@ -384,6 +384,10 @@
       budgetMouvements: async (depuis) => r(await sb.from("budget_mouvements").select("*").gte("date", depuis).order("date", { ascending: false }).order("id", { ascending: false }).limit(2000)),
       budgetAjouter: async (m) => r(await sb.from("budget_mouvements").insert({ ...m, user_id: S.user.id }).select().single()),
       budgetSupprimer: async (id) => r(await sb.from("budget_mouvements").delete().eq("id", id)),
+      budgetProjets: async () => r(await sb.from("budget_projets").select("*").order("ordre").order("id")),
+      budgetAjouterProjet: async (x) => r(await sb.from("budget_projets").insert({ ...x, user_id: S.user.id }).select().single()),
+      budgetSupprimerProjet: async (id) => r(await sb.from("budget_projets").delete().eq("id", id)),
+      encouragerCercle: async (id) => { const { error } = await sb.rpc("encourager_cercle", { p_cercle: id }); if (error) throw new Error(error.message); },
       sauverRappels: async (x) => { r(await sb.from("rappels").upsert({ ...x, user_id: S.user.id, modifie_le: new Date().toISOString() })); },
       abonnerPush: async (a) => { r(await sb.from("push_abonnements").upsert({ ...a, user_id: S.user.id, actif: true })); },
       desabonnerPush: async (endpoint) => { r(await sb.from("push_abonnements").delete().eq("endpoint", endpoint)); },
@@ -444,7 +448,9 @@
       [3, "depense", 12000, "famille"], [4, "depense", 3500, "transport"], [5, "depense", 9000, "sorties"], [Math.min(jm, 6), "revenu", 400000, "salaire"],
       [Math.min(jm, 6), "depense", 100000, "logement"], [9, "depense", 2500, "transport"], [jm + 3, "depense", 15000, "factures", true]]
       .map(([j, type, montant, categorie, recurrent], i) => ({ id: i + 1, date: iso(j), type, montant, categorie, recurrent: !!recurrent }));
-    return { id: 100, mv: DEMO_DEBUT ? [] : mv, profil: DEMO_DEBUT ? null : { mode: "simple", rythme: "mois", revenu: 400000, profil: "equilibre",
+    const projets = DEMO_DEBUT ? [] : [{ id: 90, nom: "Scolarité de septembre", icone: "ecole", montant: 350000, date_cible: "2027-09-01", ordre: 0 },
+      { id: 91, nom: "Tabaski", icone: "tabaski", montant: 150000, date_cible: "2027-05-01", ordre: 1 }];
+    return { id: 100, projets, mv: DEMO_DEBUT ? [] : mv, profil: DEMO_DEBUT ? null : { mode: "simple", rythme: "mois", revenu: 400000, profil: "equilibre",
       objectif_nom: "Scolarité de septembre", objectif_icone: "ecole", objectif_montant: 350000, jour_paie: new Date().getDate() } };
   })();
   function demoApi() {
@@ -561,6 +567,10 @@
       budgetMouvements: async (depuis) => budgetDemo.mv.filter((m) => m.date >= depuis),
       budgetAjouter: async (m) => { const x = { ...m, id: ++budgetDemo.id }; budgetDemo.mv.unshift(x); return x; },
       budgetSupprimer: async (id) => { budgetDemo.mv = budgetDemo.mv.filter((m) => m.id !== id); },
+      budgetProjets: async () => [...budgetDemo.projets],
+      budgetAjouterProjet: async (x) => { const y = { ...x, id: ++budgetDemo.id }; budgetDemo.projets.push(y); return y; },
+      budgetSupprimerProjet: async (id) => { budgetDemo.projets = budgetDemo.projets.filter((p) => p.id !== id); },
+      encouragerCercle: async (id) => { const c = cerclesDemo.find((x) => x.id === id); if (c) c.jai_encourage = true; },
       cercles: async () => cerclesDemo,
       maFormule: async () => ({ formule: new URLSearchParams(location.search).get("formule") || "essentiel", souscrite: "essentiel", essai: true,
         fin: new Date(Date.now() + 9 * 864e5).toISOString(), quotas: { questions: 100, approfondies: 0, pages: 15 },
@@ -1540,7 +1550,7 @@
   const DEMANDES_DEMO = new Set();
   let RECUES_DEMO = [{ id: 901, cercle_id: "c1", cercle: "Les amis de la fac", pseudo: "Aminata K.", message: "Je viens de la page des cercles, j'aimerais épargner avec vous !", cree_le: new Date().toISOString() }];
   let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, objectif_pct: 80, createur: true, public: true,
-    presentation: "Anciens de la fac, tous les rythmes sont bienvenus.", capacite: 30, demandes: 1, membres: [
+    presentation: "Anciens de la fac, tous les rythmes sont bienvenus.", capacite: 30, demandes: 1, bravos: ["Awa D."], jai_encourage: false, membres: [
     { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, tenues: 16, attendues: 17, regularite: 0.92, maj_le: new Date().toISOString() },
     { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 },
     { pseudo: "Koffi A.", moi: false, serie: 2, unite: "semaine", record: 5, jours_mois: 2, tenues: 2, attendues: 3, regularite: 0.6 },
@@ -2760,7 +2770,8 @@
     else v.innerHTML = `<h1 id="h-bud">Mon budget</h1><p class="muted">Chargement…</p>`;
   };
   const vObjectifs = () => { const v = $("#v-objectifs"); if (window.BafiBudget) window.BafiBudget.renderObjectifs(v); };
-  const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, objectifs: vObjectifs, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
+  const vAvenir = () => { const v = $("#v-avenir"); if (window.BafiBudget) window.BafiBudget.renderAvenir(v); };
+  const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, objectifs: vObjectifs, avenir: vAvenir, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
   // ---------------------------------------------------------------- saisie d'une opération chez la SGI
   // Étapes : que s'est-il passé ? → catégorie → titre (liste « code – nom ») → quantité, prix, total en direct.
@@ -3414,7 +3425,9 @@
                         demanderAbonnement: (d) => api.demanderAbonnement(d), payer: (o) => api.payer(o), verifierPaiement: (t) => api.verifierPaiement(t),
                         profil: () => S.profil, email: () => S.user?.email || "",
                         budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
-                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id) },
+                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id),
+                                  projets: () => api.budgetProjets(), ajouterProjet: (x) => api.budgetAjouterProjet(x), supprimerProjet: (id) => api.budgetSupprimerProjet(id) },
+                        encouragerCercle: (id) => api.encouragerCercle(id), telephoneBudget: () => S.profil?.telephone || "",
                         // épargne mise de côté, résumée pour le budget (sécurité puis projet)
                         placements: () => {
                           if (!S.ops?.some((o) => o.type === "ACHAT")) return null;

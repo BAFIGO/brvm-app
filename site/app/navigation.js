@@ -24,6 +24,8 @@
       ic: ic('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>') },
     { id: "pf:epargne", esp: 2, simple: true, nom: "Mon coffre", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
     { id: "pf:cercles", esp: 2, simple: true, nom: "Mes cercles", ic: ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>') },
+    { id: "avenir", esp: 2, simple: true, nom: "Mon avenir", href: "#avenir",
+      ic: ic('<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>') },
     { id: "pf:placements", esp: 3, nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
     { id: "pf:simulateur", esp: 3, nom: "Simuler un placement", ic: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>') },
     { id: "performance", esp: 3, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
@@ -32,7 +34,7 @@
   const NOMS_PF = { placements: "Mes placements", epargne: "Mon épargne", cercles: "Mes cercles", simulateur: "Simulateur" };
   // trois espaces, dans l'ordre du parcours : budget → épargne et cercles → bourse
   const ESPACES = { 1: "Mon argent au quotidien", 2: "Je garde", 3: "Je fais grandir" };
-  const TITRES = { objectifs: "Mes objectifs", aujourdhui: "Aujourd'hui", budget: "Mon budget", portefeuille: "Portefeuille", performance: "Performance", marche: "Marché", profil: "Profil et réglages" };
+  const TITRES = { objectifs: "Mes objectifs", avenir: "Mon avenir", aujourdhui: "Aujourd'hui", budget: "Mon budget", portefeuille: "Portefeuille", performance: "Performance", marche: "Marché", profil: "Profil et réglages" };
 
   // ---------------------------------------------------------------- éléments (créés une seule fois)
   const bar = $(".topbar");

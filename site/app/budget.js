@@ -39,6 +39,9 @@
     commerce: '<path d="M4 10h16v10H4z"/><path d="M3 10l2-6h14l2 6"/><path d="M10 20v-5h4v5"/>',
     securite: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
     coffre: '<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>',
+    sablier: '<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>',
+    deux: '<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M10 20c0-3 3-5 6-5s6 2 6 5"/>',
+    cercle: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>',
     plus: '<path d="M12 5v14M5 12h14"/>', moins: '<path d="M5 12h14"/>', micro: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     soleil: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     calendrier: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -67,12 +70,13 @@
       const b = app().budget;
       S.profil = await b.profil();
       S.mv = (await b.mouvements(ilya(70))) || [];
+      try { S.projets = (await b.projets?.()) || []; S.projetsOk = true; } catch (e) { S.projets = []; S.projetsOk = false; }   // 25-livraison3.sql
       S.erreur = null;
     } catch (e) {
       S.erreur = /budget_|relation|does not exist|42P01/i.test(String(e?.message || e)) ? "installer" : String(e?.message || e);
     }
     S.charge = true; S.enCours = false;
-    if (["budget", "objectifs", "aujourdhui", ""].includes(location.hash.slice(1))) rendre();
+    if (["budget", "objectifs", "avenir", "aujourdhui", ""].includes(location.hash.slice(1))) rendre();
   }
 
   // ------------------------------------------------------------------ calculs
@@ -95,9 +99,13 @@
     for (const m of mois.filter((x) => x.type === "depense")) env[m.enveloppe || catDep(m.categorie)[2]] += +m.montant || 0;
     const ep = app().epargneResume?.() || null;
     const garde = ep ? ep.mv.filter((m) => m.type === "VERSEMENT" && m.date >= d0).reduce((a, m) => a + (+m.montant || 0), 0) : 0;
-    const securiteObj = Math.round(revMensuelPrevu * part(1) * (jour ? 6 : 3));
+    const fixes = p.charges && Object.values(p.charges).reduce((a, x) => a + (+x || 0), 0);
+    const securiteObj = Math.round((fixes > 0 ? fixes : revMensuelPrevu * part(1)) * (jour ? 6 : 3));
     const solde = ep?.solde || 0;
     const securite = Math.min(solde, securiteObj), projet = Math.max(0, solde - securiteObj);
+    const liste = (S.projets && S.projets.length) ? S.projets : (p.objectif_nom ? [{ id: "profil", nom: p.objectif_nom, icone: p.objectif_icone, montant: p.objectif_montant, date_cible: p.objectif_date }] : []);
+    let resteP = projet;
+    const projets = liste.map((x) => { const g = x.montant ? Math.min(resteP, +x.montant) : resteP; resteP = Math.max(0, resteP - g); return { ...x, garde: g }; });
     // série : jours notés d'affilée (mouvement ou « rien aujourd'hui »), jusqu'à aujourd'hui ou hier
     const jours = new Set(S.mv.map((m) => m.date));
     let serie = 0;
@@ -112,9 +120,76 @@
     const parJour = {}; for (const m of S.mv) if (m.type === "revenu" && m.date >= ilya(60)) parJour[m.date] = (parJour[m.date] || 0) + (+m.montant || 0);
     const vals = Object.values(parJour).sort((a, b) => a - b), basePrudente = vals.length >= 8 ? vals[Math.floor(vals.length / 4)] * 26 : null;
     const abonnements = (() => { const vus = new Map(); for (const m of S.mv) if (m.recurrent && m.type === "depense") vus.set(m.categorie + "|" + m.montant, m); return [...vus.values()]; })();
-    return { p, parts, jour, revMois, depMois, recAuj, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
+    return { p, projets, fixes, parts, jour, revMois, depMois, recAuj, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
              derniere, joursRest, epargneCible: revRef * part(3),
              semaine: { dep: somme(s1, "depense"), depAvant: somme(s0, "depense"), garde: gardeSem, jours: new Set(s1.map((m) => m.date)).size } };
+  }
+
+  // ------------------------------------------------------------------ Mon avenir : âge d'indépendance financière (en francs d'aujourd'hui)
+  // Hypothèses affichées et modifiables : rendement annuel par profil, inflation UEMOA ; on vit de son patrimoine quand
+  // 4 % de celui-ci par an couvrent les dépenses. Simulation, pas une promesse.
+  const HYP = { prudent: ["Prudent", 0.05], equilibre: ["Équilibré", 0.07], dynamique: ["Dynamique", 0.09] }, INFLATION = 0.025, RETRAIT = 0.04;
+  function trajectoire(age, patrimoine, parMois, depensesMois, rendement, departDans = 0) {
+    const reel = (1 + rendement) / (1 + INFLATION) - 1, rm = Math.pow(1 + reel, 1 / 12) - 1, besoin = depensesMois * 12 / RETRAIT;
+    let k = patrimoine, ageLib = null; const points = [];
+    for (let m = 0; m <= Math.max(1, 90 - age) * 12; m++) {
+      if (m % 12 === 0) points.push(k);
+      if (ageLib === null && k >= besoin && k > 0) ageLib = Math.ceil(age + m / 12);
+      k = k * (1 + rm) + (m >= departDans * 12 ? parMois : 0);
+    }
+    return { ageLib, points, besoin };
+  }
+  function avenir(c, x = {}) {
+    const age = +(x.age ?? S.avenirAge ?? c.p.age) || 0;
+    if (!age) return null;
+    const pl = app().placements?.(), patrimoine = (x.patrimoine ?? S.avenirPat ?? (c.solde + (pl?.valeur || 0))) || 0;
+    const parMois = x.parMois ?? S.avenirPm ?? Math.round(c.epargneCible);
+    const dep = x.depenses ?? S.avenirDep ?? Math.max(1, Math.round(c.revRef - c.epargneCible) || (c.fixes || 1));
+    const h = HYP[x.hyp || S.avenirHyp || "equilibre"][1];
+    const place = trajectoire(age, patrimoine, parMois, dep, h), dort = trajectoire(age, patrimoine, parMois, dep, 0);
+    const retard = trajectoire(age, patrimoine, parMois, dep, h, 10);
+    const sansMois = trajectoire(age, Math.max(0, patrimoine - c.garde), parMois, dep, h);
+    return { age, patrimoine, parMois, dep, h, agePlace: place.ageLib, ageDort: dort.ageLib, ageRetard: retard.ageLib, place, dort,
+             moisGagnes: place.ageLib && sansMois.ageLib ? Math.max(0, Math.round((sansMois.ageLib - place.ageLib) * 12)) : 0 };
+  }
+  function courbe(a) {
+    const n = Math.min(a.place.points.length, 50), max = Math.max(a.place.besoin * 1.15, ...a.place.points.slice(0, n));
+    const X = (i) => 24 + (i / Math.max(1, n - 1)) * 290, Y = (v) => 150 - Math.min(1, v / max) * 135;
+    const trace = (pts) => pts.slice(0, n).map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 320 172" class="bu-courbe" role="img" aria-label="Courbe du patrimoine : argent placé, argent qui dort, et le montant qui permet de vivre de son patrimoine">
+      <line x1="24" y1="150" x2="314" y2="150" class="ax"/><line x1="24" y1="${Y(a.place.besoin).toFixed(1)}" x2="314" y2="${Y(a.place.besoin).toFixed(1)}" class="besoin"/>
+      <path d="${trace(a.dort.points)}" class="dort"/><path d="${trace(a.place.points)}" class="place"/>
+      <text x="24" y="168">${a.age} ans</text><text x="314" y="168" text-anchor="end">${a.age + n - 1} ans</text></svg>`;
+  }
+  function renderAvenir(v) {
+    S.vue = v; S.decal = 0;
+    if (!S.charge) { v.innerHTML = `<h1 id="h-av">Mon avenir</h1><p class="muted">Chargement…</p>`; charger(); return; }
+    if (!S.profil) { v.innerHTML = `<h1 id="h-av">Mon avenir</h1><div class="notice">Commencez par votre budget : votre avenir se calcule à partir de lui.<p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
+    const c = calculs(), a = avenir(c), hyp = S.avenirHyp || "equilibre";
+    const pl = app().placements?.();
+    v.innerHTML = `<h1 id="h-av">Mon avenir</h1>
+      <section class="card bu-av-saisie"><div class="bu-2col">
+        <label class="bu-champ">Mon âge<input id="av-age" inputmode="numeric" placeholder="ex. 32" value="${a ? a.age : ""}"></label>
+        <label class="bu-champ">Je garde par mois<input id="av-pm" inputmode="numeric" value="${nf.format(a ? a.parMois : Math.round(c.epargneCible))}"></label>
+        <label class="bu-champ">J'ai déjà<input id="av-pat" inputmode="numeric" value="${nf.format(a ? a.patrimoine : c.solde + (pl?.valeur || 0))}"></label>
+        <label class="bu-champ">Je dépense par mois<input id="av-dep" inputmode="numeric" value="${nf.format(a ? a.dep : Math.max(0, Math.round(c.revRef - c.epargneCible)))}"></label></div>
+        <p class="small muted">Repris de votre budget, de votre coffre et de vos placements. Vous pouvez les changer.</p>
+        <div class="bu-puces" role="radiogroup" aria-label="Hypothèse de rendement">${Object.entries(HYP).map(([k, [l, r]]) => `<button type="button" class="bu-puce" role="radio" aria-checked="${hyp === k}" aria-pressed="${hyp === k}" data-bu="hyp" data-v="${k}">${l} · ${Math.round(r * 100)} %</button>`).join("")}</div>
+        <button type="button" class="btn primary" data-bu="avenir-calc">Calculer</button></section>
+      ${a ? `<section class="bu-phrase large"><span class="small">Mon âge de liberté estimé</span><b>${a.agePlace ? a.agePlace + " ans" : "au-delà de 90 ans"}</b>
+          <span class="small">si votre épargne est placée (${HYP[hyp][0]}). Laissée à dormir : ${a.ageDort ? a.ageDort + " ans" : "jamais"}.</span></section>
+        ${a.moisGagnes ? `<section class="card"><b>🎉 ${a.moisGagnes} mois gagnés</b><p class="small">grâce à ce que vous avez gardé ce mois-ci.</p></section>` : ""}
+        <section class="card"><h2 class="bu-h2">Deux chemins</h2>${courbe(a)}
+          <div class="bu-legende small"><span><i class="place"></i>Argent placé</span><span><i class="dort"></i>Argent qui dort</span><span><i class="besoin"></i>Vivre de son patrimoine</span></div></section>
+        <section class="card"><b>Et si vous attendiez 10 ans ?</b><p class="small">${a.agePlace && a.ageRetard ? `Commencer dans 10 ans repousse votre liberté à ${a.ageRetard} ans, soit ${a.ageRetard - a.agePlace} an${a.ageRetard - a.agePlace > 1 ? "s" : ""} plus tard.` : "Commencer tôt compte plus que le montant : chaque année d'avance travaille pour vous."}</p></section>
+        <section class="card bu-habit"><b>Le pouvoir des petites habitudes</b>
+          <label class="small">Chaque jour <input id="av-hab" inputmode="numeric" value="1 000"> F, pendant 20 ans, placés :</label>
+          <p class="bu-habit-r"><b id="av-hab-r"></b> <span class="small">en francs d'aujourd'hui</span></p></section>` : `<p class="small muted">Indiquez votre âge, puis touchez « Calculer ».</p>`}
+      <a class="btn" href="#portefeuille" data-bu="simuler">Simuler un placement à la BRVM</a>
+      <p class="small muted">Simulation, pas une promesse : rendement annuel supposé ${Math.round(HYP[hyp][1] * 100)} % (${HYP[hyp][0]}), inflation de ${(INFLATION * 100).toLocaleString("fr-FR")} % par an déduite ;
+        on considère qu'on peut vivre de son patrimoine quand 4 % par an couvrent les dépenses. Les performances passées ne préjugent pas des performances futures.</p>`;
+    const hab = () => { const j = lireNombre($("#av-hab", v)?.value); const t = trajectoire(30, 0, j * 30.4, 1, HYP[hyp][1]); const r = $("#av-hab-r", v); if (r) r.textContent = F(t.points[20] || 0); };
+    $("#av-hab", v)?.addEventListener("input", hab); hab();
   }
 
   // ------------------------------------------------------------------ démarrage en images (3 écrans)
@@ -141,6 +216,8 @@
       <p class="small bu-effort" id="bu-effort" aria-live="polite"></p>
       <p class="bu-q2">À quelle heure, le soir, voulez-vous votre petit rappel ?</p>
       <div class="bu-puces">${[["19:30", "19 h 30"], ["20:00", "20 h"], ["21:00", "21 h"], ["22:00", "22 h"]].map(([h, l]) => `<button type="button" class="bu-puce" data-bu="heure" data-v="${h}" aria-pressed="${(b.heure || "20:00") === h}">${l}</button>`).join("")}</div>
+      ${app().telephone?.() ? `<label class="bu-case"><input type="checkbox" id="bu-wa"${b.whatsapp ? " checked" : ""}> Recevoir aussi le rappel par WhatsApp</label>`
+        : `<p class="small muted center">Pour un rappel par WhatsApp, ajoutez votre numéro dans Profil.</p>`}
       <button type="button" class="btn primary bu-suite" data-bu="terminer"${b.objectif_icone ? "" : " disabled"}>C'est parti</button>
       <p class="small muted bu-note">Vous pourrez tout changer plus tard. Vos chiffres restent privés.</p>`;
   }
@@ -166,7 +243,9 @@
                      objectif_nom: $("#bu-obj-n")?.value.trim() || (b.objectif_icone === "securite" ? "Mes imprévus" : lib === "École" ? "L'école" : lib),
                      objectif_icone: b.objectif_icone, objectif_montant: b.objectif_montant, objectif_date: $("#bu-obj-d")?.value ? $("#bu-obj-d").value + "-01" : null };
     try { await app().budget.sauverProfil(profil); S.profil = { ...(S.profil || {}), ...profil };
-          app().sauverRappels?.({ heure: b.heure || "20:00", epargne: true }).catch?.(() => {}); }
+          const wa = !!$("#bu-wa")?.checked;
+          app().sauverRappels?.({ heure: b.heure || "20:00", epargne: true, ...(wa ? { whatsapp: true, whatsapp_le: new Date().toISOString() } : {}) })?.catch?.(() => {});
+          if (b.objectif_icone) try { const x = await app().budget.ajouterProjet?.({ nom: profil.objectif_nom, icone: b.objectif_icone, montant: profil.objectif_montant, date_cible: profil.objectif_date, ordre: 0 }); if (x) S.projets = [x]; } catch (e) { /* table non installée : le projet du profil sert */ } }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); return; }
     const e = (S.profil.revenu || 0) * (S.profil.rythme === "jour" ? 0.2 : 0.2);
     app().toast("Votre budget est prêt.", { detail: `Vous pourriez garder environ ${F(e)} ${S.profil.rythme === "jour" ? "par jour" : "par mois"}.` });
@@ -204,26 +283,26 @@
       <span class="bu-curseur${det ? " droite" : ""}" aria-hidden="true"></span></div>`; };
   // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
   function vueAccueil(c) {
-    return `${bascule()}${blocRetour(c)}${blocPaie(c)}
+    return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}${blocPaie(c)}
       ${c.jour && !c.revMois ? `<section class="bu-phrase"><span class="small">Bienvenue</span><b style="font-size:1.35rem">Notez votre recette du jour</b>
           <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
       ${troisBoutons()}${blocRecette(c)}
-      ${blocRecurrents()}
-      ${blocCoffre(c)}${blocCercle()}${blocPlacements()}${blocSoir(c)}${blocSemaine(c)}`;
+      ${blocRecurrents()}${blocSoir(c)}</div>
+      <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocPlacements()}${blocSemaine(c)}</div></div>`;
   }
   function vueAccueilDetaille(c) {
     const env = (nom, v, max, cls) => `<div class="bu-env mini"><div class="bu-ligne small"><span>${nom}</span><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
-    return `${bascule()}${blocRetour(c)}${blocPaie(c)}
+    return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}${blocPaie(c)}
       <section class="bu-phrase large"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         <span class="small">Reste à vivre du mois : ${F(Math.max(0, c.reste))} · gagné ${F(c.revMois)} · dépensé ${F(c.depMois)}</span>
         ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
         ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.revRef * c.part(3), "amb")}</section>
-      ${troisBoutons()}${blocRecette(c)}${blocRecurrents()}
-      ${blocCoffre(c)}${blocCercle()}${blocSoir(c)}${blocSemaine(c)}
-      <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}`;
+      ${troisBoutons()}${blocRecette(c)}${blocRecurrents()}${blocSoir(c)}</div>
+      <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocSemaine(c)}
+      <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}<div class="bu-place-bourse"></div></div></div>`;
   }
   const troisBoutons = () => `<div class="bu-trois">
         <button type="button" class="bu-gros-b gagne" data-bu="saisir" data-v="revenu"><span class="bu-tuile">${ic(P.plus, "#fff")}</span>J'ai gagné</button>
@@ -273,24 +352,41 @@
       <button type="button" class="btn small primary" data-bu="rec" data-v="${esc(m.categorie)}|${+m.montant}">Noter ${F(m.montant)}</button></li>`).join("")}</ul></section>`;
   }
   function blocCoffre(c) {
-    const p = c.p;
+    const pr = c.projets.slice(0, 2), autres = c.projets.length - pr.length;
+    let avant = Math.max(0, c.securiteObj - c.securite);
     return `<section class="card bu-projet"><span class="bu-tuile amb">${ic(P.coffre)}</span>
       <div class="bu-projet-c"><div class="bu-ligne"><span><b>Mon coffre</b><small class="bu-sous">${F(c.solde)} gardés</small></span><a href="#objectifs" class="small">Voir</a></div>
         <div class="bu-ligne small"><span>${ic(P.securite)} Sécurité</span><span>${F(c.securite)} / ${F(c.securiteObj)}</span></div>${jauge(c.securite, c.securiteObj)}
-        <div class="bu-ligne small"><span>${ic(P[p.objectif_icone] || P.coffre)} ${esc(p.objectif_nom || "Mon projet")}</span><span>${F(c.projet)}${p.objectif_montant ? " / " + F(p.objectif_montant) : ""}</span></div>
-        ${p.objectif_montant ? jauge(c.projet, p.objectif_montant, "amb") : ""}
-        ${p.objectif_montant ? `<p class="small muted">${quand(p.objectif_montant + Math.max(0, c.securiteObj - c.securite) - c.projet, c.epargneCible)}${p.objectif_date ? ` · objectif : ${new Date(p.objectif_date).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}` : ""}</p>` : ""}</div></section>`;
+        ${pr.map((x) => { const r = (+x.montant || 0) - x.garde, q = x.montant ? quand(avant + r, c.epargneCible) : ""; avant += Math.max(0, r);
+          return `<div class="bu-ligne small"><span>${ic(P[x.icone] || P.coffre)} ${esc(x.nom)}</span><span>${F(x.garde)}${x.montant ? " / " + F(x.montant) : ""}</span></div>
+          ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}${q ? `<p class="small muted">${q}</p>` : ""}`; }).join("")}
+        ${autres > 0 ? `<p class="small muted">+ ${autres} autre${autres > 1 ? "s" : ""} projet${autres > 1 ? "s" : ""}</p>` : ""}
+        ${!c.projets.length ? `<p class="small"><a href="#objectifs">Ajouter un projet</a></p>` : ""}</div></section>`;
+  }
+  // Mon avenir (accueil) : l'âge de liberté estimé, ou l'invitation à le calculer
+  function blocAvenir(c) {
+    const a = avenir(c);
+    return `<a class="card bu-pl bu-av" href="#avenir"><span class="bu-tuile amb petit">${ic(P.sablier)}</span>
+      <span class="bu-op-l"><b>Mon avenir</b><small>${a && a.agePlace ? `Âge de liberté estimé : ${a.agePlace} ans` : "Calculer mon âge de liberté"}</small></span><span aria-hidden="true">›</span></a>`;
   }
   function blocCercle() {
-    let l = []; try { l = S.cercles || []; } catch (e) { l = []; }
-    const c = l[0];
-    if (!c) return `<section class="card bu-cercle"><span class="bu-tuile clair">${ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>')}</span>
-      <div><b>Garder à plusieurs</b><p class="small muted">Avec la famille ou des amis, on tient plus facilement.</p><a href="#portefeuille" data-bu="cercles" class="small">Créer ou rejoindre un cercle</a></div></section>`;
-    const m = c.membres || [], actifs = m.filter((x) => +x.serie > 0).length;
-    return `<section class="card bu-cercle"><span class="bu-tuile">${ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>', "#fff")}</span>
+    const l = S.cercles || [], c = l[0];
+    const creer = `<div class="bu-cer-b"><button type="button" class="btn small" data-bu="cercle-projet">${ic(P.ecole)} Un cercle pour mon projet</button>
+      <button type="button" class="btn small" data-bu="cercle-deux">${ic(P.deux)} Épargner à deux</button></div>`;
+    if (!c) return `<section class="card bu-cercle"><span class="bu-tuile clair">${ic(P.cercle)}</span>
+      <div style="flex:1;min-width:0"><b>Garder à plusieurs</b><p class="small muted">Avec la famille ou des amis, on tient plus facilement.</p>${creer}</div></section>`;
+    const m = c.membres || [], jour = (x) => x.maj_le && String(x.maj_le).slice(0, 10) === auj();
+    const aujN = m.filter(jour).length, ten = m.reduce((a, x) => a + (+x.tenues || 0), 0), att = m.reduce((a, x) => a + (+x.attendues || 0), 0);
+    const bravos = (c.bravos || []).filter(Boolean);
+    return `<section class="card bu-cercle"><span class="bu-tuile">${ic(P.cercle, "#fff")}</span>
       <div style="flex:1;min-width:0"><div class="bu-ligne"><b>${esc(c.nom)}</b><a href="#portefeuille" data-bu="cercles" class="small">Ouvrir</a></div>
-        <p class="small muted">${actifs} sur ${m.length} en série en ce moment</p>
-        <div class="bu-pastilles">${m.slice(0, 7).map((x) => `<span class="${+x.serie > 0 ? "ok" : ""}" title="${esc(x.pseudo || "")}">${esc(String(x.pseudo || "?").slice(0, 1).toUpperCase())}</span>`).join("")}</div></div></section>`;
+        <p class="small">${aujN} sur ${m.length} ont gardé aujourd'hui</p>
+        <div class="bu-pastilles">${m.slice(0, 8).map((x) => `<span class="${jour(x) ? "ok" : ""}" title="${esc(x.pseudo || "")}${jour(x) ? " : a gardé aujourd'hui" : ""}">${esc(String(x.pseudo || "?").slice(0, 1).toUpperCase())}</span>`).join("")}</div>
+        ${att ? `<p class="small muted">Ce mois-ci, le cercle a tenu ${ten} jours sur ${att}${ten / att >= 0.7 ? " : bravo à tous !" : "."}</p>` : ""}
+        ${bravos.length ? `<p class="small bu-bravo">👏 ${esc(bravos.slice(0, 3).join(", "))}${bravos.length > 3 ? " et d'autres" : ""} ${bravos.length > 1 ? "vous encouragent" : "vous encourage"} aujourd'hui</p>` : ""}
+        ${c.jai_encourage ? `<p class="small muted">✓ Vous avez encouragé le cercle aujourd'hui.</p>`
+          : `<button type="button" class="btn small bu-encourager" data-bu="encourager" data-v="${esc(c.id)}">👏 J'encourage mon cercle</button>`}
+        ${creer}</div></section>`;
   }
   function blocPlacements() {
     const pl = app().placements?.();
@@ -351,6 +447,14 @@
           ${simple ? "" : ""}
           <a href="#profil" class="small">Régler l'heure de mon rappel</a>
         </div></details>
+      <details class="card"><summary><b>Affiner mon budget</b> <small class="muted">(2 minutes, facultatif)</small></summary>
+        <div class="bu-reg"><p class="small muted">Vos dépenses fixes de chaque mois, à peu près. Elles servent à calculer votre sécurité au plus juste.</p>
+          ${[["loyer", "Logement (loyer, eau, électricité)"], ["nourriture", "Nourriture"], ["transport", "Transport"], ["famille", "Famille et solidarité"]].map(([k, l]) =>
+            `<label>${l}<input data-charge="${k}" inputmode="numeric" value="${c.p.charges?.[k] ? nf.format(c.p.charges[k]) : ""}" placeholder="0"></label>`).join("")}
+          <button type="button" class="btn primary" data-bu="charges">Enregistrer</button>
+          ${c.fixes ? `<p class="small">Vos dépenses fixes : <b>${F(c.fixes)}</b> par mois. Votre sécurité vise ${c.jour ? 6 : 3} mois de ces dépenses.</p>` : ""}
+
+        </div></details>
 `;
   }
 
@@ -380,32 +484,71 @@
     if (!S.charge) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><p class="muted">Chargement…</p>`; charger(); return; }
     if (!S.profil) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><div class="notice">Commencez par votre budget : vos objectifs se calculent à partir de lui.
       <p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
-    const c = calculs(), p = c.p, plein = c.securite >= c.securiteObj && c.securiteObj > 0;
-    const moisRestants = c.epargneCible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / c.epargneCible) : null;
-    const etage = (n, titre, icone, amb, sous, v, max, etat) => `<section class="card bu-etage${etat === "en cours" ? " actif" : ""}">
-      <div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile${amb ? " amb" : ""}">${ic(P[icone] || P.coffre, amb ? "currentColor" : "#fff")}</span>
-        <span><b>${n} · ${esc(titre)}</b><small>${sous}</small></span></span><span class="chip">${etat}</span></div>
-      ${max ? `<div class="bu-ligne small"><span>${F(v)}</span><b>${F(max)}</b></div>${jauge(v, max, amb ? "amb" : "")}` : ""}</section>`;
-    const projetEtat = !plein ? "ensuite" : p.objectif_montant && c.projet >= p.objectif_montant ? "atteint ✓" : "en cours";
+    const c = calculs(), plein = c.securite >= c.securiteObj && c.securiteObj > 0, pl = app().placements?.();
+    const cible = c.epargneCible, versSecu = Math.min(cible, Math.max(0, c.securiteObj - c.securite)), versProjets = cible - versSecu;
+    const moisRestants = cible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / cible) : null;
+    let avant = Math.max(0, c.securiteObj - c.securite);
     v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1>
+      <div class="bu-poches" aria-label="Mes trois poches">
+        <a href="#budget" class="bu-poche"><span class="bu-tuile clair petit">${ic(P.salaire)}</span><small>Pour vivre</small><b>${F(Math.max(0, c.reste))}</b></a>
+        <a href="#objectifs" class="bu-poche"><span class="bu-tuile amb petit">${ic(P.coffre)}</span><small>Je garde</small><b>${F(c.solde)}</b></a>
+        <a href="#portefeuille" data-bu="placements" class="bu-poche"><span class="bu-tuile petit">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span><small>Je fais grandir</small><b>${F(pl?.valeur || 0)}</b></a></div>
       <p class="bu-intro">Ce que vous gardez remplit les étages <b>dans l'ordre</b>.</p>
-      ${(() => { const cible = c.epargneCible, versSecu = Math.min(cible, Math.max(0, c.securiteObj - c.securite)), versProjet = plein || versSecu < cible ? cible - versSecu : 0;
-        const mois = new Date().toLocaleDateString("fr-FR", { month: "long" });
-        return cible > 0 ? `<section class="card"><b>À garder en ${esc(mois)} : ${F(cible)}</b>
-          <div class="bu-repart" aria-hidden="true"><i style="flex:${versSecu || 0.001}"></i><i style="flex:${versProjet || 0.001}"></i></div>
-          <div class="bu-ligne small"><span>${ic(P.securite)} Vers la sécurité</span><b>${F(versSecu)}</b></div>
-          <div class="bu-ligne small"><span>${ic(P[p.objectif_icone] || P.coffre)} Vers ${esc(p.objectif_nom || "mon projet")}</span><b>${F(versProjet)}</b></div>
-          <div class="bu-ligne small muted"><span>Vers la bourse</span><span>${plein ? "quand vous le décidez" : "dès que la sécurité est pleine"}</span></div>
-          <p class="small muted">Déjà gardé ce mois-ci : ${F(c.garde)}.</p></section>` : ""; })()}
-      ${etage(1, "Sécurité", "securite", false, `${c.jour ? "6" : "3"} mois de besoins, calculés depuis votre budget`, c.securite, c.securiteObj, plein ? "pleine ✓" : "en cours")}
-      ${etage(2, p.objectif_nom || "Mon projet", p.objectif_icone, true, "Votre projet", c.projet, p.objectif_montant || 0, projetEtat)}
+      ${cible > 0 ? `<section class="card"><b>À garder en ${esc(new Date().toLocaleDateString("fr-FR", { month: "long" }))} : ${F(cible)}</b>
+        <div class="bu-repart" aria-hidden="true"><i style="flex:${versSecu || 0.001}"></i><i style="flex:${versProjets || 0.001}"></i></div>
+        <div class="bu-ligne small"><span>${ic(P.securite)} Vers la sécurité</span><b>${F(versSecu)}</b></div>
+        <div class="bu-ligne small"><span>${ic(P.coffre)} Vers mes projets</span><b>${F(versProjets)}</b></div>
+        <div class="bu-ligne small muted"><span>Vers la bourse</span><span>${plein ? "quand vous le décidez" : "dès que la sécurité est pleine"}</span></div>
+        <p class="small muted">Déjà gardé ce mois-ci : ${F(c.garde)}.</p></section>` : ""}
+      <section class="card bu-etage${plein ? "" : " actif"}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile">${ic(P.securite, "#fff")}</span>
+        <span><b>1 · Sécurité</b><small>${c.fixes ? "d'après vos dépenses fixes" : `${c.jour ? "6" : "3"} mois de besoins, d'après votre budget`}</small></span></span><span class="chip">${plein ? "pleine ✓" : "en cours"}</span></div>
+        <div class="bu-ligne small"><span>${F(c.securite)}</span><b>${F(c.securiteObj)}</b></div>${jauge(c.securite, c.securiteObj)}</section>
+      <section class="card bu-etage${plein ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile amb">${ic(P.coffre)}</span>
+        <span><b>2 · Mes projets</b><small>remplis l'un après l'autre</small></span></span><span class="chip">${plein ? "en cours" : "ensuite"}</span></div>
+        ${c.projets.length ? `<ul class="bu-ops">${c.projets.map((x) => { const r = (+x.montant || 0) - x.garde, q = x.montant ? quand(avant + r, cible) : ""; avant += Math.max(0, r);
+          return `<li class="bu-proj"><span class="bu-tuile clair petit">${ic(P[x.icone] || P.coffre)}</span><div class="bu-op-l">
+            <div class="bu-ligne"><b>${esc(x.nom)}</b><span class="small">${F(x.garde)}${x.montant ? " / " + F(x.montant) : ""}</span></div>
+            ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}<small>${q}${x.date_cible ? ` · pour ${new Date(x.date_cible).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}` : ""}</small></div>
+            ${x.id !== "profil" ? `<button type="button" class="bu-suppr" data-bu="suppr-projet" data-v="${x.id}" aria-label="Retirer le projet ${esc(x.nom)}">×</button>` : ""}</li>`; }).join("")}</ul>`
+          : `<p class="small muted">Aucun projet pour l'instant.</p>`}
+        ${S.projetsOk !== false ? `<button type="button" class="btn" data-bu="ajout-projet">Ajouter un projet</button>` : ""}</section>
       <section class="card bu-etage${plein ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>
         <span><b>3 · Faire grandir</b><small>Placer à la BRVM chez votre SGI</small></span></span><span class="chip">${plein ? "prêt" : "bientôt"}</span></div>
-        <div class="bu-ligne small"><span>Plan proposé</span><b>${F(c.epargneCible)} ${c.jour ? "par mois" : "par mois, le jour de paie"}</b></div>
+        <div class="bu-ligne small"><span>Plan proposé</span><b>${F(cible)} ${c.jour ? "par mois" : "par mois, le jour de paie"}</b></div>
         <p class="small muted">${plein ? "Votre sécurité est pleine : vous pouvez commencer à placer." : moisRestants ? `Possible quand la sécurité sera pleine, dans environ ${moisRestants} mois.` : "Possible quand la sécurité sera pleine."}</p>
-        ${plein ? `<button type="button" class="btn primary" data-coffre="sgi">J'ai envoyé à ma SGI</button>` : ""}</section>
+        ${plein ? `<button type="button" class="btn primary" data-coffre="sgi">J'ai envoyé à ma SGI</button>` : ""}
+        <p class="small"><a href="#avenir">Voir mon avenir</a></p></section>
       <div class="bu-soir-b"><button type="button" class="btn primary" data-coffre="verser">Je garde</button><button type="button" class="btn" data-coffre="reprendre">J'ai repris</button></div>
       <p class="small center"><a href="#portefeuille" data-bu="coffre">Historique et réglages du coffre</a></p>`;
+  }
+  // ajouter un projet (pictogramme, nom, montant, date)
+  let dlgP = null, projIcone = "ecole";
+  function ajouterProjet() {
+    if (!dlgP) {
+      document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-projet" class="bu-dlg" aria-labelledby="dp-t"><form method="dialog" class="bu-form" novalidate>
+        <h2 id="dp-t" class="bu-q">Nouveau projet</h2><div class="bu-grille" id="dp-ic"></div>
+        <label class="bu-champ">Son nom<input id="dp-n" maxlength="60" placeholder="ex. Tabaski 2027"></label>
+        <div class="bu-2col"><label class="bu-champ">Combien ?<input id="dp-m" inputmode="numeric" placeholder="ex. 150 000"></label>
+          <label class="bu-champ">Pour quand ?<input id="dp-d" type="month"></label></div>
+        <button type="submit" class="btn primary bu-ok-b">Ajouter</button><button type="button" class="btn link small bu-annuler">Annuler</button></form></dialog>`);
+      dlgP = $("#dlg-projet");
+      dlgP.querySelector(".bu-annuler").addEventListener("click", () => dlgP.close());
+      dlgP.addEventListener("click", (ev) => { const b = ev.target.closest("[data-pi]"); if (b) { projIcone = b.dataset.pi; peindreP(); } });
+      dlgP.querySelector("form").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const nom = $("#dp-n", dlgP).value.trim() || (OBJ.find((o) => o[0] === projIcone) || ["", "Mon projet"])[1];
+        const d = $("#dp-d", dlgP).value;
+        try {
+          const x = await app().budget.ajouterProjet({ nom, icone: projIcone, montant: lireNombre($("#dp-m", dlgP).value) || null, date_cible: d ? d + "-01" : null, ordre: (S.projets || []).length });
+          S.projets = [...(S.projets || []), x]; dlgP.close(); app().toast(`Projet « ${nom} » ajouté.`); rendre();
+        } catch (e) { app().toast("Impossible : " + (e.message || e)); }
+      });
+    }
+    $("#dp-n", dlgP).value = ""; $("#dp-m", dlgP).value = ""; $("#dp-d", dlgP).value = "";
+    peindreP(); dlgP.showModal();
+  }
+  function peindreP() {
+    $("#dp-ic", dlgP).innerHTML = OBJ.map(([k, l]) => `<button type="button" class="bu-cat" data-pi="${k}" aria-pressed="${projIcone === k}"><span class="bu-tuile ${projIcone === k ? "" : "clair"}">${ic(P[k], projIcone === k ? "#fff" : "currentColor")}</span>${l}</button>`).join("");
   }
 
   function brancherDemarrage(v) {
@@ -524,10 +667,17 @@
     try { r.start(); } catch (e) { out.textContent = ""; }
   }
 
+  // lit les champs du simulateur (s'ils sont à l'écran)
+  function lireAvenir() {
+    const n = (id) => { const e = document.getElementById(id); return e ? lireNombre(e.value) : undefined; };
+    const age = n("av-age"); if (age !== undefined) S.avenirAge = Math.min(90, age) || S.avenirAge;
+    const pm = n("av-pm"), pat = n("av-pat"), dep = n("av-dep");
+    if (pm !== undefined) S.avenirPm = pm; if (pat !== undefined) S.avenirPat = pat; if (dep !== undefined) S.avenirDep = dep || S.avenirDep;
+  }
   // ------------------------------------------------------------------ actions
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-bu]");
-    if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs")) return;
+    if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs, #v-avenir")) return;
     const a = b.dataset.bu, v = b.dataset.v;
     if (a === "rythme") { S.brouillon.rythme = v; S.etape = 2; rendre(); setTimeout(() => $("#bu-rev")?.focus(), 50); }
     else if (a === "rev-puce") { S.brouillon.revenu = +v; rendre(); }
@@ -538,6 +688,26 @@
     else if (a === "heure") { S.brouillon.heure = v; rendre(); }
     else if (a === "saisir") ouvrir(v);
     else if (a === "garder") garder(+v);
+    else if (a === "ajout-projet") ajouterProjet();
+    else if (a === "suppr-projet") { try { await app().budget.supprimerProjet(+v); S.projets = (S.projets || []).filter((x) => String(x.id) !== String(v)); app().toast("Projet retiré."); rendre(); } catch (e) { app().toast("Impossible : " + (e.message || e)); } }
+    else if (a === "encourager") { b.disabled = true; try { await app().encouragerCercle(v); const c = (S.cercles || []).find((x) => String(x.id) === String(v)); if (c) c.jai_encourage = true; app().toast("👏 Votre cercle est encouragé."); rendre(); } catch (e) { b.disabled = false; app().toast("Impossible : " + (e.message || e)); } }
+    else if (a === "cercle-projet" || a === "cercle-deux") {
+      const pr = calculs().projets[0], nom = a === "cercle-deux" ? `${app().profil?.()?.prenom || "Nous"} à deux` : `${pr?.nom || "Notre projet"} ensemble`;
+      try { await app().creerCercle(nom.slice(0, 40), 15); S.cerclesCharges = false; app().toast(`Cercle « ${nom} » créé.`, { detail: "Partagez son code depuis Mes cercles pour inviter vos proches." }); app().allerPf?.("cercles"); }
+      catch (e) { app().toast("Impossible : " + (e.message || e)); }
+    }
+    else if (a === "hyp") { S.avenirHyp = v; lireAvenir(); rendre(); }
+    else if (a === "avenir-calc") {
+      lireAvenir();
+      if (!S.avenirAge) { $("#av-age")?.focus(); app().toast("Indiquez votre âge."); return; }
+      await sauver({ age: S.avenirAge });
+    }
+    else if (a === "simuler") { ev.preventDefault(); app().allerPf?.("simulateur"); }
+    else if (a === "charges") {
+      const ch = {}; document.querySelectorAll("[data-charge]").forEach((i) => { const n = lireNombre(i.value); if (n) ch[i.dataset.charge] = n; });
+      await sauver({ charges: Object.keys(ch).length ? ch : null }); app().toast("Dépenses fixes enregistrées.", { detail: "Votre sécurité est recalculée." });
+    }
+
     else if (a === "mois") { S.decal = Math.max(-2, Math.min(0, (S.decal || 0) + +v)); rendre(); }
     else if (a === "fermer-invit") { S.invitationFermee = true; b.closest(".bu-invit")?.remove(); }
     else if (a === "cercles" || a === "coffre" || a === "placements") { ev.preventDefault(); app().allerPf?.(a === "cercles" ? "cercles" : a === "coffre" ? "epargne" : "placements"); }
@@ -588,14 +758,15 @@
     haut.className = "bu-acc-det";
     haut.innerHTML = vueAccueilDetaille(calculs());
     v.appendChild(haut);
-    if (bourse.children.length > 1) haut.appendChild(bourse);
+    const place = haut.querySelector(".bu-place-bourse");
+    if (bourse.children.length > 1) { if (place) place.replaceWith(bourse); else haut.appendChild(bourse); } else place?.remove();
     if (!S.cerclesCharges) { S.cerclesCharges = true; app().cercles?.().then((l) => { S.cercles = l || []; if (location.hash.slice(1) === "aujourdhui" || !location.hash) rendre(); }).catch(() => {}); }
   }
   // invitation sur l'ancien accueil (personnes déjà installées, sans budget) : un seul geste pour commencer
   const invitation = () => (S.charge && !S.erreur && !S.profil && !S.invitationFermee ? `<section class="card bu-invit"><span class="bu-tuile amb">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>')}</span>
       <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : BafiBourse vous dit ce que vous pouvez garder.</p>
         <a class="btn primary small" href="#budget">Commencer (1 minute)</a> <button type="button" class="btn link small" data-bu="fermer-invit">Plus tard</button></div></section>` : "");
-  window.BafiBudget = { render, renderAccueil, renderObjectifs, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
+  window.BafiBudget = { render, renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
     mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {
