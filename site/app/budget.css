@@ -111,3 +111,13 @@ a.bu-pl { display: flex; align-items: center; gap: 12px; text-decoration: none; 
 .bu-sous { display: block; color: var(--muted); font-size: .82rem; font-weight: 400; }
 .bu-repart { display: flex; gap: 3px; height: 12px; border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }
 .bu-repart i:nth-child(1) { background: var(--brand); } .bu-repart i:nth-child(2) { background: hsl(35 92% 55%); }
+.bu-type { grid-template-columns: repeat(3, 1fr); }
+.bu-type button { font-size: .92rem; }
+.bu-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bu-effort { margin: 0; text-align: center; } .bu-effort:empty { display: none; }
+.bu-recette .btn { margin-top: 6px; min-height: 48px; border-radius: 14px; width: 100%; }
+.bu-repart.trois i:nth-child(1) { background: var(--brand); } .bu-repart.trois i:nth-child(2) { background: hsl(230 40% 62%); } .bu-repart.trois i:nth-child(3) { background: hsl(35 92% 55%); }
+.bu-bonne { margin: 8px 0 0; }
+.bu-retour-b { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.bu-mois { display: flex; align-items: center; justify-content: space-between; } .bu-mois .btn { min-width: 44px; min-height: 44px; font-size: 1.2rem; }
+.bu-mois b { text-transform: capitalize; }

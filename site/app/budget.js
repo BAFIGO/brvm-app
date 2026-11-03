@@ -79,12 +79,13 @@
   function calculs() {
     const p = S.profil || {}, parts = PROFILS[p.profil] || PROFILS.equilibre;
     const jour = p.rythme === "jour";
-    const d0 = auj().slice(0, 8) + "01";
-    const mois = S.mv.filter((m) => m.date >= d0);
+    const dm = new Date(); dm.setDate(1); dm.setMonth(dm.getMonth() + (S.decal || 0));
+    const d0 = iso(dm).slice(0, 8) + "01", fm = new Date(dm.getFullYear(), dm.getMonth() + 1, 0), d1 = iso(fm);
+    const mois = S.mv.filter((m) => m.date >= d0 && m.date <= d1);
     const somme = (l, t) => l.filter((m) => m.type === t).reduce((a, m) => a + (+m.montant || 0), 0);
     const revMois = somme(mois, "revenu"), depMois = somme(mois, "depense");
     const fin = new Date(); fin.setMonth(fin.getMonth() + 1, 0);
-    const joursRest = fin.getDate() - new Date().getDate() + 1;
+    const joursRest = (S.decal || 0) ? 0 : fin.getDate() - new Date().getDate() + 1;
     const revRef = jour ? Math.max(revMois, 0) : Math.max(+p.revenu || 0, revMois);
     const revMensuelPrevu = jour ? (+p.revenu || 0) * 26 : Math.max(+p.revenu || 0, revMois);
     const part = (i) => parts[i] / 100;
@@ -106,7 +107,12 @@
     const sem = (de, a) => S.mv.filter((m) => m.date > ilya(a) && m.date <= ilya(de));
     const s1 = sem(0, 7), s0 = sem(7, 14);
     const gardeSem = ep ? ep.mv.filter((m) => m.type === "VERSEMENT" && m.date > ilya(7)).reduce((a, m) => a + (+m.montant || 0), 0) : 0;
-    return { p, parts, jour, revMois, depMois, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
+    const recAuj = S.mv.filter((m) => m.date === auj() && m.type === "revenu").reduce((a, m) => a + (+m.montant || 0), 0);
+    // revenu de base prudent (revenu journalier) : le quart le plus faible des jours de recette des 60 derniers jours
+    const parJour = {}; for (const m of S.mv) if (m.type === "revenu" && m.date >= ilya(60)) parJour[m.date] = (parJour[m.date] || 0) + (+m.montant || 0);
+    const vals = Object.values(parJour).sort((a, b) => a - b), basePrudente = vals.length >= 8 ? vals[Math.floor(vals.length / 4)] * 26 : null;
+    const abonnements = (() => { const vus = new Map(); for (const m of S.mv) if (m.recurrent && m.type === "depense") vus.set(m.categorie + "|" + m.montant, m); return [...vus.values()]; })();
+    return { p, parts, jour, revMois, depMois, recAuj, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
              derniere, joursRest, epargneCible: revRef * part(3),
              semaine: { dep: somme(s1, "depense"), depAvant: somme(s0, "depense"), garde: gardeSem, jours: new Set(s1.map((m) => m.date)).size } };
   }
@@ -127,19 +133,38 @@
       <button type="button" class="btn primary bu-suite" data-bu="suite2">Continuer</button>`;
     return `${barre}<h2 class="bu-q">Pour quoi voulez-vous garder de l'argent ?</h2>
       <div class="bu-grille">${OBJ.map(([k, l]) => `<button type="button" class="bu-cat" data-bu="obj" data-v="${k}" aria-pressed="${b.objectif_icone === k}"><span class="bu-tuile ${b.objectif_icone === k ? "" : "clair"}">${ic(P[k])}</span>${l}</button>`).join("")}</div>
-      <label class="bu-champ">Combien ? <small>(facultatif)</small><input id="bu-obj-m" inputmode="numeric" placeholder="ex. 300 000" value="${b.objectif_montant ? nf.format(b.objectif_montant) : ""}"></label>
+      ${b.objectif_icone ? `<label class="bu-champ">Son nom <small>(facultatif)</small><input id="bu-obj-n" maxlength="60" placeholder="${esc((OBJ.find((o) => o[0] === b.objectif_icone) || ["", "Mon projet"])[1])}" value="${esc(b.objectif_nom || "")}"></label>` : ""}
+      <div class="bu-2col">
+        <label class="bu-champ">Combien ? <small>(facultatif)</small><input id="bu-obj-m" inputmode="numeric" placeholder="ex. 300 000" value="${b.objectif_montant ? nf.format(b.objectif_montant) : ""}"></label>
+        <label class="bu-champ">Pour quand ? <small>(facultatif)</small><input id="bu-obj-d" type="month" value="${esc(b.objectif_date || "")}"></label>
+      </div>
+      <p class="small bu-effort" id="bu-effort" aria-live="polite"></p>
       <p class="bu-q2">À quelle heure, le soir, voulez-vous votre petit rappel ?</p>
       <div class="bu-puces">${[["19:30", "19 h 30"], ["20:00", "20 h"], ["21:00", "21 h"], ["22:00", "22 h"]].map(([h, l]) => `<button type="button" class="bu-puce" data-bu="heure" data-v="${h}" aria-pressed="${(b.heure || "20:00") === h}">${l}</button>`).join("")}</div>
       <button type="button" class="btn primary bu-suite" data-bu="terminer"${b.objectif_icone ? "" : " disabled"}>C'est parti</button>
       <p class="small muted bu-note">Vous pourrez tout changer plus tard. Vos chiffres restent privés.</p>`;
   }
+  // ouvre la fenêtre « Je garde » du coffre, montant prérempli
+  function garder(montant) {
+    const b = document.createElement("button"); b.type = "button"; b.dataset.coffre = "verser"; b.hidden = true;
+    document.body.appendChild(b); b.click(); b.remove();
+    if (montant > 0) setTimeout(() => { const i = document.querySelector("#f-coffre [name=montant]"); if (i) { i.value = Math.round(montant); i.dispatchEvent(new Event("input", { bubbles: true })); } }, 60);
+  }
+  // « à ce rythme, atteint en juillet » : d'après ce qu'on garde chaque mois (étages dans l'ordre : sécurité puis projet)
+  function quand(reste, parMois) {
+    if (!(reste > 0)) return "atteint ✓";
+    if (!(parMois > 0)) return "";
+    const n = Math.ceil(reste / parMois), d = new Date(); d.setMonth(d.getMonth() + n);
+    return `à ce rythme, atteint en ${d.toLocaleDateString("fr-FR", { month: "long", year: n > 10 ? "numeric" : undefined })}`;
+  }
   const lireNombre = (v) => +String(v || "").replace(/[^\d]/g, "") || 0;
   async function terminerDemarrage() {
     const b = S.brouillon;
     b.objectif_montant = lireNombre($("#bu-obj-m")?.value) || null;
-    const lib = (OBJ.find((o) => o[0] === b.objectif_icone) || ["", "Mon projet"])[1];
+    const lib = $("#bu-obj-n")?.value.trim() || (OBJ.find((o) => o[0] === b.objectif_icone) || ["", "Mon projet"])[1];
     const profil = { mode: "simple", rythme: b.rythme || "mois", revenu: b.revenu || 0, profil: "equilibre", jour_paie: b.rythme === "mois" ? (b.jour_paie || null) : null,
-                     objectif_nom: b.objectif_icone === "securite" ? "Mes imprévus" : lib === "École" ? "L'école" : lib, objectif_icone: b.objectif_icone, objectif_montant: b.objectif_montant };
+                     objectif_nom: $("#bu-obj-n")?.value.trim() || (b.objectif_icone === "securite" ? "Mes imprévus" : lib === "École" ? "L'école" : lib),
+                     objectif_icone: b.objectif_icone, objectif_montant: b.objectif_montant, objectif_date: $("#bu-obj-d")?.value ? $("#bu-obj-d").value + "-01" : null };
     try { await app().budget.sauverProfil(profil); S.profil = { ...(S.profil || {}), ...profil };
           app().sauverRappels?.({ heure: b.heure || "20:00", epargne: true }).catch?.(() => {}); }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); return; }
@@ -154,8 +179,10 @@
     if (!c.derniere || c.derniere >= ilya(3) || S.retourVu) return "";
     return `<section class="card bu-retour"><span class="bu-tuile amb">${ic(P.sante)}</span>
       <div><b>Content de vous revoir${app().profil?.()?.prenom ? ", " + esc(app().profil().prenom) : ""}</b>
-        <p class="small">On reprend à partir d'aujourd'hui, sans rien rattraper. ${c.p.objectif_nom ? `Votre projet « ${esc(c.p.objectif_nom)} » vous attend.` : ""}</p>
-        <button type="button" class="btn primary small" data-bu="reprendre">Reprendre aujourd'hui</button></div></section>`;
+        <p class="small">On reprend à partir d'aujourd'hui, sans rien rattraper. ${c.p.objectif_nom ? `Votre projet « ${esc(c.p.objectif_nom)} » vous attend : ${F(c.solde)} déjà gardés.` : ""}</p>
+        <div class="bu-retour-b"><button type="button" class="btn primary small" data-bu="reprendre">Reprendre aujourd'hui</button>
+          <button type="button" class="btn small" data-bu="saisir" data-v="depense">Noter mes derniers jours</button></div>
+        <p class="small"><a href="#profil">Trop de rappels ? Régler mes rappels</a></p></div></section>`;
   }
   function blocSemaine(c) {
     const s = c.semaine, diff = s.depAvant ? Math.round(100 * (s.dep - s.depAvant) / s.depAvant) : null;
@@ -164,7 +191,10 @@
         <li><span class="bu-tuile amb petit">${ic(P.coffre)}</span><span>Gardé</span><b>${F(s.garde)}</b></li>
         <li><span class="bu-tuile petit">${ic(P.moins, "#fff")}</span><span>Dépensé${diff !== null ? ` <small class="${diff <= 0 ? "good" : "bad"}">${diff <= 0 ? "" : "+"}${diff} %</small>` : ""}</span><b>${F(s.dep)}</b></li>
         <li><span class="bu-tuile clair petit">${ic(P.calendrier)}</span><span>Jours notés</span><b>${s.jours} / 7</b></li>
-      </ul>${c.serie >= 7 ? `<p class="small">Vous êtes un épargnant régulier : ${c.serie} jours d'affilée.</p>` : ""}</details>`;
+        <li><span class="bu-tuile amb petit">${ic(P.securite)}</span><span>Sécurité</span><b>${c.securiteObj ? (c.securite / (c.securiteObj / (c.jour ? 6 : 3))).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : 0} mois couverts</b></li>
+        <li><span class="bu-tuile clair petit">${ic(P.ceremonie)}</span><span>Plaisirs du mois</span><b class="${c.env.envies <= c.revRef * c.part(2) ? "good" : "bad"}">${c.env.envies <= c.revRef * c.part(2) ? "dans le budget ✓" : "au-dessus du budget"}</b></li>
+      </ul>${c.serie >= 7 ? `<p class="small">Vous êtes un épargnant régulier : ${c.serie} jours d'affilée.</p>` : ""}
+      <p class="small"><a href="#budget">Voir mon budget du mois</a></p></details>`;
   }
   // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
   function vueAccueil(c) {
@@ -173,7 +203,7 @@
           <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      ${troisBoutons()}
+      ${troisBoutons()}${blocRecette(c)}
       ${blocRecurrents()}
       ${blocCoffre(c)}${blocCercle()}${blocPlacements()}${blocSoir(c)}${blocSemaine(c)}`;
   }
@@ -182,6 +212,21 @@
         <button type="button" class="bu-gros-b depense" data-bu="saisir" data-v="depense"><span class="bu-tuile clair">${ic(P.moins)}</span>J'ai dépensé</button>
         <button type="button" class="bu-gros-b garde" data-coffre="verser"><span class="bu-tuile amb">${ic(P.coffre)}</span>Je garde</button>
       </div>`;
+  // recette (ou salaire) reçue aujourd'hui : sa répartition, et le geste « je garde » prérempli
+  function blocRecette(c) {
+    if (!c.recAuj) return "";
+    const g = Math.round(c.recAuj * c.part(3)), gardeAuj = (app().epargneResume?.()?.mv || []).filter((m) => m.type === "VERSEMENT" && m.date === auj()).reduce((a, m) => a + (+m.montant || 0), 0);
+    const habituel = c.jour ? +c.p.revenu || 0 : 0, surplus = habituel && c.recAuj > habituel * 1.2 ? Math.round(c.recAuj - habituel) : 0;
+    return `<section class="card bu-recette"><div class="bu-ligne"><b>Gagné aujourd'hui : ${F(c.recAuj)}</b></div>
+      <div class="bu-repart trois" aria-hidden="true"><i style="flex:${c.parts[1]}"></i><i style="flex:${c.parts[2]}"></i><i style="flex:${c.parts[3]}"></i></div>
+      <div class="bu-ligne small"><span>Pour vivre</span><b>${F(c.recAuj * c.part(1))}</b></div>
+      <div class="bu-ligne small"><span>Pour se faire plaisir</span><b>${F(c.recAuj * c.part(2))}</b></div>
+      <div class="bu-ligne small"><span>Je garde tout de suite</span><b>${F(g)}</b></div>
+      ${gardeAuj >= g ? `<p class="small good">✓ ${F(gardeAuj)} gardés aujourd'hui. Bravo.</p>`
+        : `<button type="button" class="btn primary" data-bu="garder" data-v="${g - gardeAuj}">J'ai gardé ${F(g - gardeAuj)}</button>`}
+      ${surplus && gardeAuj < g + surplus ? `<p class="small bu-bonne"><b>Bonne journée !</b> ${F(surplus)} de plus que d'habitude.
+        <button type="button" class="btn link small" data-bu="garder" data-v="${surplus}">Les garder aussi</button></p>` : ""}</section>`;
+  }
   // jour de paie (salaire) : garder d'abord, avant de dépenser
   function blocPaie(c) {
     const j = +c.p.jour_paie, d = new Date().getDate(), fin = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
@@ -215,7 +260,8 @@
       <div class="bu-projet-c"><div class="bu-ligne"><span><b>Mon coffre</b><small class="bu-sous">${F(c.solde)} gardés</small></span><a href="#objectifs" class="small">Voir</a></div>
         <div class="bu-ligne small"><span>${ic(P.securite)} Sécurité</span><span>${F(c.securite)} / ${F(c.securiteObj)}</span></div>${jauge(c.securite, c.securiteObj)}
         <div class="bu-ligne small"><span>${ic(P[p.objectif_icone] || P.coffre)} ${esc(p.objectif_nom || "Mon projet")}</span><span>${F(c.projet)}${p.objectif_montant ? " / " + F(p.objectif_montant) : ""}</span></div>
-        ${p.objectif_montant ? jauge(c.projet, p.objectif_montant, "amb") : ""}</div></section>`;
+        ${p.objectif_montant ? jauge(c.projet, p.objectif_montant, "amb") : ""}
+        ${p.objectif_montant ? `<p class="small muted">${quand(p.objectif_montant + Math.max(0, c.securiteObj - c.securite) - c.projet, c.epargneCible)}${p.objectif_date ? ` · objectif : ${new Date(p.objectif_date).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}` : ""}</p>` : ""}</div></section>`;
   }
   function blocCercle() {
     let l = []; try { l = S.cercles || []; } catch (e) { l = []; }
@@ -240,8 +286,16 @@
           <div class="bu-soir-b"><button type="button" class="btn primary" data-bu="saisir" data-v="depense">Noter une dépense</button>
           <button type="button" class="btn" data-bu="rien">Rien de spécial</button></div></section>`;
   }
-  function dernieres(n) {
-    const l = S.mv.filter((m) => m.type !== "rien").slice(0, n);
+  // dépenses qui reviennent chaque mois : à passer en revue tous les 6 mois
+  function blocAbonnements(c) {
+    if (!c.abonnements.length) return "";
+    const total = c.abonnements.reduce((a, m) => a + (+m.montant || 0), 0);
+    return `<details class="card"><summary class="bu-ligne"><b>Mes dépenses de chaque mois</b><span class="small">${F(total)} / mois</span></summary>
+      <ul class="bu-ops">${c.abonnements.map((m) => `<li><span class="bu-tuile clair petit">${ic(P[m.categorie] || P.autres)}</span><span class="bu-op-l">${esc(libCat(m))}</span><b>${F(m.montant)}</b></li>`).join("")}</ul>
+      <p class="small muted">Tous les 6 mois, vérifiez-les : un abonnement oublié, c'est de l'argent qui part sans vous.</p></details>`;
+  }
+  function dernieres(n, c) {
+    const l = S.mv.filter((m) => m.type !== "rien" && (!c || (m.date >= c.d0 && m.date <= c.d1))).slice(0, n);
     if (!l.length) return "";
     return `<section class="card"><h2 class="bu-h2">Dernières opérations</h2><ul class="bu-ops">${l.map((m) => `<li>
       <span class="bu-tuile ${m.type === "revenu" ? "" : "clair"} petit">${ic(P[m.categorie] || P.autres, m.type === "revenu" ? "#fff" : "currentColor")}</span>
@@ -256,18 +310,21 @@
       return `<div class="bu-env"><div class="bu-ligne"><b>${nom}</b><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
     };
     return `${blocRetour(c)}
-      <section class="bu-phrase large"><span class="small">Reste à vivre · ${esc(mois)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
+      <div class="bu-mois"><button type="button" class="btn small" data-bu="mois" data-v="-1" aria-label="Mois précédent"${(S.decal || 0) <= -2 ? " disabled" : ""}>‹</button>
+        <b>${esc(c.moisLib)}</b><button type="button" class="btn small" data-bu="mois" data-v="1" aria-label="Mois suivant"${(S.decal || 0) >= 0 ? " disabled" : ""}>›</button></div>
+      <section class="bu-phrase large"><span class="small">${S.decal ? (simple ? "Il me restait" : "Reste à vivre") : simple ? "Il me reste" : "Reste à vivre"} · ${esc(c.moisLib)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
         <span class="small">Gagné ${F(c.revMois)} · dépensé ${F(c.depMois)} · gardé ${F(c.garde)}</span>
-        <span class="small">Aujourd'hui : ${F(c.duJour)} ${c.jour ? "(selon vos recettes du mois)" : `· ${c.joursRest} jour${c.joursRest > 1 ? "s" : ""} restant${c.joursRest > 1 ? "s" : ""}`}</span></section>
+        ${S.decal ? `<span class="small">Mois terminé</span>` : `<span class="small">Aujourd'hui : ${F(c.duJour)} ${c.jour ? "(selon vos recettes du mois)" : `· ${c.joursRest} jour${c.joursRest > 1 ? "s" : ""} restant${c.joursRest > 1 ? "s" : ""}`}</span>`}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">${simple ? "Mon argent du mois" : "Mes enveloppes"}</h2>
           ${simple ? "" : `<label class="small">Profil <select data-bu="profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}"${(c.p.profil || "equilibre") === k ? " selected" : ""}>${v[0]} ${v[1]}/${v[2]}/${v[3]}</option>`).join("")}</select></label>`}</div>
         ${env(simple ? "Pour vivre" : "Besoins", "besoins", 1, "")}${env(simple ? "Pour se faire plaisir" : "Envies", "envies", 2, "env2")}${env(simple ? "Je garde" : "Épargne et avenir", "epargne", 3, "amb")}
         <p class="small muted">Besoins : logement, nourriture, transport, santé, école, famille. Envies : sorties, habits, fêtes, abonnements.</p></section>
-      ${troisBoutons()}${blocRecurrents()}
-      ${blocCoffre(c)}${dernieres(8)}${blocSemaine(c)}
+      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
+      ${blocCoffre(c)}${dernieres(8, c)}${blocAbonnements(c)}${S.decal ? "" : blocSemaine(c)}
       <details class="card"><summary><b>Mes réglages de budget</b></summary>
         <div class="bu-reg">
           <label>Mon revenu ${c.jour ? "par jour" : "par mois"}<input id="bu-r-rev" inputmode="numeric" value="${nf.format(c.p.revenu || 0)}"></label>
+          ${c.jour && c.basePrudente ? `<p class="small muted">Revenu de base prudent : <b>${F(c.basePrudente)}</b> par mois (vos mois les plus faibles). Votre budget s'appuie sur lui.</p>` : ""}
           <label>Je gagne<select id="bu-r-ry"><option value="mois"${c.jour ? "" : " selected"}>chaque mois</option><option value="jour"${c.jour ? " selected" : ""}>chaque jour (variable)</option></select></label>
           ${c.jour ? "" : `<label>Jour de paie<input id="bu-r-paie" inputmode="numeric" placeholder="ex. 28" value="${c.p.jour_paie || ""}"></label>`}
           <label>Mon projet<input id="bu-r-obj" value="${esc(c.p.objectif_nom || "")}"></label>
@@ -294,6 +351,7 @@
   const accueilSimple = () => S.charge && !S.erreur && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
   function renderAccueil(v) {
     S.vue = v;
+    S.decal = 0;
     if (!S.cerclesCharges) { S.cerclesCharges = true; app().cercles?.().then((l) => { S.cercles = l || []; if (location.hash.slice(1) === "aujourdhui" || !location.hash) rendre(); }).catch(() => {}); }
     v.innerHTML = `<h1 id="h-auj">Aujourd'hui</h1>` + (S.profil ? vueAccueil(calculs()) : `<div class="bu-demarrage">${demarrage()}</div>`);
     if (!S.profil) brancherDemarrage(v);
@@ -301,6 +359,7 @@
   // Mes objectifs : les trois étages (sécurité, projet, faire grandir), reliés au budget et au coffre
   function renderObjectifs(v) {
     S.vue = v;
+    S.decal = 0;
     if (!S.charge) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><p class="muted">Chargement…</p>`; charger(); return; }
     if (!S.profil) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><div class="notice">Commencez par votre budget : vos objectifs se calculent à partir de lui.
       <p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
@@ -335,6 +394,18 @@
   function brancherDemarrage(v) {
     const r = $("#bu-rev", v);
     r?.addEventListener("input", () => { S.brouillon.revenu = lireNombre(r.value); });
+    // effort mensuel du projet, calculé en direct (montant et date facultatifs)
+    const eff = () => {
+      const m = lireNombre($("#bu-obj-m", v)?.value), d = $("#bu-obj-d", v)?.value, out = $("#bu-effort", v);
+      if (!out) return;
+      S.brouillon.objectif_montant = m || null; S.brouillon.objectif_date = d || null; S.brouillon.objectif_nom = $("#bu-obj-n", v)?.value.trim() || null;
+      if (!m || !d) { out.textContent = ""; return; }
+      const [a, mo] = d.split("-").map(Number), n = Math.max(1, (a - new Date().getFullYear()) * 12 + mo - 1 - new Date().getMonth());
+      const rev = (S.brouillon.revenu || 0) * (S.brouillon.rythme === "jour" ? 26 : 1), effort = m / n;
+      out.innerHTML = `≈ <b>${F(effort)}</b> par mois pendant ${n} mois${rev ? (effort <= rev * 0.2 ? " : c'est dans vos moyens." : " : c'est beaucoup, une date plus lointaine aiderait.") : "."}`;
+    };
+    ["#bu-obj-m", "#bu-obj-d", "#bu-obj-n"].forEach((q) => $(q, v)?.addEventListener("input", eff));
+    eff();
   }
 
   // ------------------------------------------------------------------ saisie (deux touches ou à la voix)
@@ -344,7 +415,7 @@
     document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-budget" class="bu-dlg" aria-labelledby="bu-dlg-t"><form method="dialog" class="bu-form" novalidate>
       <h2 id="bu-dlg-t" class="sr-only">Nouvelle opération</h2>
       <div class="bu-type" role="radiogroup" aria-label="Type">
-        <button type="button" data-t="revenu" role="radio">J'ai gagné</button><button type="button" data-t="depense" role="radio">J'ai dépensé</button></div>
+        <button type="button" data-t="revenu" role="radio">J'ai gagné</button><button type="button" data-t="depense" role="radio">J'ai dépensé</button><button type="button" data-t="garde" role="radio">Je garde</button></div>
       <label class="bu-montant"><span class="sr-only">Montant</span><input id="bu-m" inputmode="numeric" autocomplete="off" placeholder="0"><span>F</span></label>
       <div class="bu-habitude" id="bu-hab"></div>
       <div class="bu-puces" id="bu-mp"></div>
@@ -358,7 +429,8 @@
     dlg.querySelector(".bu-annuler").addEventListener("click", () => dlg.close());
     dlg.addEventListener("click", (ev) => {
       if (ev.target === dlg) return dlg.close();
-      const t = ev.target.closest("[data-t]"); if (t) { saisie.type = t.dataset.t; saisie.cat = null; peindre(); return; }
+      const t = ev.target.closest("[data-t]");
+      if (t) { if (t.dataset.t === "garde") { const m = lireNombre($("#bu-m", dlg).value); dlg.close(); garder(m); return; } saisie.type = t.dataset.t; saisie.cat = null; peindre(); return; }
       const c = ev.target.closest("[data-cat]"); if (c) { saisie.cat = c.dataset.cat; peindre(); return; }
       const m = ev.target.closest("[data-m]"); if (m) { $("#bu-m", dlg).value = nf.format(+m.dataset.m); return; }
       const h = ev.target.closest("[data-rep]");
@@ -444,10 +516,12 @@
     else if (a === "rev-puce") { S.brouillon.revenu = +v; rendre(); }
     else if (a === "paie") { S.brouillon.revenu = lireNombre($("#bu-rev")?.value) || S.brouillon.revenu; S.brouillon.jour_paie = +v; rendre(); }
     else if (a === "suite2") { S.brouillon.revenu = lireNombre($("#bu-rev")?.value) || S.brouillon.revenu; if (!S.brouillon.revenu) { $("#bu-rev")?.focus(); return; } S.etape = 3; rendre(); }
-    else if (a === "obj") { S.brouillon.objectif_icone = v; const m = $("#bu-obj-m")?.value; rendre(); if (m) $("#bu-obj-m").value = m; }
+    else if (a === "obj") { S.brouillon.objectif_icone = v; rendre(); }
     else if (a === "terminer") terminerDemarrage();
-    else if (a === "heure") { S.brouillon.heure = v; const m = $("#bu-obj-m")?.value; rendre(); if (m && $("#bu-obj-m")) $("#bu-obj-m").value = m; }
+    else if (a === "heure") { S.brouillon.heure = v; rendre(); }
     else if (a === "saisir") ouvrir(v);
+    else if (a === "garder") garder(+v);
+    else if (a === "mois") { S.decal = Math.max(-2, Math.min(0, (S.decal || 0) + +v)); rendre(); }
     else if (a === "fermer-invit") { S.invitationFermee = true; b.closest(".bu-invit")?.remove(); }
     else if (a === "cercles" || a === "coffre" || a === "placements") { ev.preventDefault(); app().allerPf?.(a === "cercles" ? "cercles" : a === "coffre" ? "epargne" : "placements"); }
     else if (a === "rec") {
