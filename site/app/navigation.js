@@ -159,6 +159,8 @@
     if (!app || ev.touches.length !== 1 || document.querySelector("dialog[open]") || document.getElementById("tuto")?.offsetParent) return;
     const t = ev.touches[0];
     if (!ouvert && defileDeCote(ev.target)) return;
+    // bord gauche de l'écran : réservé au geste « retour » du téléphone (sinon l'écran restait décalé, page blanche)
+    if (!ouvert && t.clientX < 28) return;
     geste = { x0: t.clientX, y0: t.clientY, t0: performance.now(), base: ouvert ? largeur() : 0, actif: false, x: 0 };
   }
   function suivre(ev) {
@@ -188,6 +190,21 @@
   document.addEventListener("touchend", fin, { passive: true });
   document.addEventListener("touchcancel", fin, { passive: true });
   addEventListener("resize", () => { if (ouvert) poser(largeur(), false); });
+  // Remise à zéro de sécurité : changement d'écran, retour arrière, page restaurée ou remise au premier plan.
+  // Si le menu n'est pas ouvert, l'écran revient toujours à sa place (plus d'écran décalé ou blanc).
+  function remettre() {
+    geste = null;
+    if (ouvert) return;
+    ecran.style.transition = "none"; ecran.style.transform = "";
+    document.body.style.setProperty("--ouverture", "0");
+    tiroir.hidden = true; voile.hidden = true;
+    document.body.classList.remove("tiroir-visible", "tiroir-ouvert");
+    [ecran, ...flottants()].forEach((n) => n.removeAttribute("inert"));
+  }
+  addEventListener("hashchange", () => { if (ouvert) fermer(false); setTimeout(() => { if (!ouvert && !geste) remettre(); }, CALME ? 0 : 350); });
+  addEventListener("popstate", remettre);
+  addEventListener("pageshow", () => { ouvert = false; remettre(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !geste) remettre(); });
 
   // ---------------------------------------------------------------- cadeau : le parrainage
   const parr = $("#dlg-parrainage");

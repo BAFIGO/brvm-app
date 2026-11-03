@@ -287,9 +287,9 @@
       // creer = false : reconnexion seulement (erreur si aucun compte avec cette adresse)
       login: async (email, creer) => r(await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: !!creer, emailRedirectTo: location.origin + location.pathname } })),
       verify: async (email, token) => r(await sb.auth.verifyOtp({ email, token, type: "email" })),
-      logout: async () => { await sb.auth.signOut(); location.href = "../?deconnecte=1"; },   // retour à la page d'accueil
+      logout: async () => { await sb.auth.signOut(); sortir(); },   // retour à la page d'accueil, sans retour possible
       // tous les appareils : les jetons de renouvellement sont révoqués côté serveur (téléphone perdu, ordinateur partagé)
-      logoutPartout: async () => { await sb.auth.signOut({ scope: "global" }); location.href = "../?deconnecte=1"; },
+      logoutPartout: async () => { await sb.auth.signOut({ scope: "global" }); sortir(); },
       seanceRecente: async () => { const { data } = await sb.from("seances").select("date").order("date", { ascending: false }).limit(1); return data?.[0]?.date || null; },
       profil: async (uid) => r(await sb.from("profils").select("*").eq("id", uid).maybeSingle()),
       saveProfil: async (uid, p) => r(await sb.from("profils").update(p).eq("id", uid)),
@@ -453,6 +453,18 @@
     return { id: 100, projets, mv: DEMO_DEBUT ? [] : mv, profil: DEMO_DEBUT ? null : { mode: "simple", rythme: "mois", revenu: 400000, profil: "equilibre",
       objectif_nom: "Scolarité de septembre", objectif_icone: "ecole", objectif_montant: 350000, jour_paie: new Date().getDate() } };
   })();
+  // Sortie de l'application après déconnexion : la page est REMPLACÉE (location.replace) et l'écran vidé,
+  // pour que la flèche « retour » du navigateur ne réaffiche pas l'application
+  function sortir() {
+    try { sessionStorage.clear(); } catch (e) { /* navigation privée */ }
+    document.querySelectorAll(".view").forEach((v) => (v.innerHTML = ""));
+    location.replace("../?deconnecte=1");
+  }
+  // Page restaurée depuis le cache du navigateur (flèche retour) : on vérifie que la session existe toujours
+  addEventListener("pageshow", async (ev) => {
+    if (!ev.persisted || DEMO) return;
+    try { const s = await api.session(); if (!s?.user) sortir(); } catch (e) { /* hors ligne : l'écran de connexion s'affichera */ }
+  });
   function demoApi() {
     let data = null, nextId = 10000;
     const load = async () => (data ??= debutDemo(await (await fetch("demo.json")).json()));
@@ -1517,18 +1529,38 @@
       indices: Object.values(derniers).map((i) => ({ code: i.code, date: i.date, cloture: i.cloture, variation: i.variation })),
       meilleures_analyses: { actions: top(S.mk.actions, 5), obligations: top(S.mk.obligations, 3), opcvm: top(S.mk.opcvm, 3) },
       titres_cites: titresCites(question),
+      // budget, coffre et projets (budget.js), épargne, cercles : BafiBot répond avec les vrais chiffres de l'utilisateur
+      budget: window.BafiBudget?.contexte?.() || null,
+      epargne: (() => { const e = epargne(); return e ? { solde_du_coffre: Math.round(e.solde || 0), serie: e.serie || 0, plan: e.plan || null } : null; })(),
+      cercles: (window.BafiBudget?.cercles?.() || []).slice(0, 3).map((c) => ({ nom: c.nom, membres: (c.membres || []).length,
+        ont_garde_aujourd_hui: (c.membres || []).filter((m) => String(m.maj_le || "").slice(0, 10) === today()).length })),
+      ecran_actuel: tab(),
+      ecrans_de_l_application: {
+        "Aujourd'hui": "menu ☰ > Aujourd'hui : ce que je peux dépenser aujourd'hui, les boutons J'ai gagné / J'ai dépensé / Je garde, mon coffre, mon cercle",
+        "Mon budget": "menu ☰ > Mon budget : le mois (gagné, dépensé, reste), les enveloppes, les dernières opérations, les réglages du budget",
+        "Mes objectifs": "menu ☰ > Mes objectifs : sécurité, mes projets (bouton « Ajouter un projet »), faire grandir",
+        "Mon coffre": "menu ☰ > Mon coffre : l'épargne mise de côté, son historique et ses réglages",
+        "Mes cercles": "menu ☰ > Mes cercles : épargner avec des proches",
+        "Mon avenir": "menu ☰ > Mon avenir : l'âge de liberté financière estimé",
+        "Mes placements": "menu ☰ > Mes placements : les titres détenus chez la SGI",
+        "Simuler un placement": "menu ☰ > Simuler un placement", "Performance": "menu ☰ > Performance", "Marché": "menu ☰ > Marché",
+        "Profil et réglages": "avatar en haut à droite : profil, rappels, abonnement, déconnexion",
+        "Affichage simple ou détaillé": "bascule « Simple | Détaillé » en haut de l'écran Aujourd'hui",
+      },
     };
   }
   function suggestionsAssistant() {
     const L = replay(S.ops);
-    const s = [L.positions.length ? "Où en est mon portefeuille ?" : "Par où commencer avec mon budget ?", "Comment va le marché aujourd'hui ?"];
+    const bud = window.BafiBudget?.mode?.() && window.BafiBudget?.contexte?.()?.budget_configure;
+    const s = bud ? ["Combien puis-je dépenser aujourd'hui ?", "Où en sont mes projets ?"] : [];
+    s.push(L.positions.length ? "Où en est mon portefeuille ?" : "Par où commencer avec mon budget ?", "Comment va le marché aujourd'hui ?");
     if ((S.alertes || []).length) s.push("Que faire de mes alertes ?");
     s.push(SIM() ? "Que dit la simulation du soir ?" : "Que me recommandez-vous ?");
     const act = L.positions.find((p) => S.classes.get(p.code) === "actions");
     if (act) s.push(`Perspectives de ${S.names.get(act.code) || act.code}`);
     const obl = L.positions.find((p) => S.classes.get(p.code) === "obligations");
     if (obl) s.push(`Que vaut mon obligation ${obl.code} ?`);
-    return s.slice(0, 5);
+    return s.slice(0, 6);
   }
   function signalerAssistant() { window.dispatchEvent(new Event("brvm:maj")); }
   let tutoDemo = {}, avisDemo = null, rappelsDemo = null;
@@ -3693,7 +3725,7 @@
     showAnnonce();
     chargerMode();
     try {
-      api.onAuth((s) => { if (s?.user) start(s.user); });
+      api.onAuth((s) => { if (s?.user) start(s.user); else if (S.user && !DEMO) sortir(); });
       const s = await api.session();
       if (s?.user) { start(s.user); signalerConnexion(); } else { showLogin(); attendreConnexionAilleurs(); }
     } catch (e) {

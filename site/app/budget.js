@@ -766,7 +766,29 @@
   const invitation = () => (S.charge && !S.erreur && !S.profil && !S.invitationFermee ? `<section class="card bu-invit"><span class="bu-tuile amb">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>')}</span>
       <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : BafiBourse vous dit ce que vous pouvez garder.</p>
         <a class="btn primary small" href="#budget">Commencer (1 minute)</a> <button type="button" class="btn link small" data-bu="fermer-invit">Plus tard</button></div></section>` : "");
-  window.BafiBudget = { render, renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
+  // Données du budget transmises à BafiBot (montants en F CFA ; aucune donnée d'un autre utilisateur)
+  function contexte() {
+    if (!S.charge || !S.profil) return { budget_configure: false, aide: "Le budget n'est pas encore configuré : menu ☰ > Mon budget, 1 minute." };
+    const c = calculs(), r = (x) => Math.round(+x || 0), a = avenir(c);
+    return {
+      budget_configure: true, affichage: c.p.mode === "complet" ? "détaillé" : "simple",
+      revenu: { rythme: c.jour ? "chaque jour (variable)" : "chaque mois (salaire)", montant_declare: r(c.p.revenu), jour_de_paie: c.p.jour_paie || null },
+      mois_en_cours: { mois: c.moisLib, gagne: r(c.revMois), depense: r(c.depMois), reste_a_vivre: r(c.reste), peut_depenser_aujourd_hui: r(c.duJour),
+        garde_ce_mois: r(c.garde), a_garder_ce_mois: r(c.epargneCible), jours_restants: c.joursRest },
+      enveloppes: { profil: (PROFILS[c.p.profil] || PROFILS.equilibre)[0] + " " + c.parts.slice(1).join("/"),
+        besoins: { depense: r(c.env.besoins), budget: r(c.revRef * c.part(1)) }, envies: { depense: r(c.env.envies), budget: r(c.revRef * c.part(2)) },
+        epargne: { garde: r(c.garde), budget: r(c.epargneCible) } },
+      depenses_du_mois_par_categorie: Object.fromEntries(Object.entries(S.mv.filter((m) => m.type === "depense" && m.date >= c.d0 && m.date <= c.d1)
+        .reduce((o, m) => { const k = libCat(m); o[k] = (o[k] || 0) + (+m.montant || 0); return o; }, {})).sort((x, y) => y[1] - x[1])),
+      dernieres_operations: S.mv.filter((m) => m.type !== "rien").slice(0, 8).map((m) => ({ date: m.date, type: m.type === "revenu" ? "gagné" : "dépensé", categorie: libCat(m), montant: r(m.montant) })),
+      depenses_de_chaque_mois: c.abonnements.map((m) => ({ categorie: libCat(m), montant: r(m.montant) })),
+      coffre: { total_garde: r(c.solde), securite: { garde: r(c.securite), objectif: r(c.securiteObj), pleine: c.securite >= c.securiteObj && c.securiteObj > 0 },
+        projets: c.projets.map((x) => ({ nom: x.nom, objectif: r(x.montant), garde: r(x.garde), pour: x.date_cible || null })) },
+      serie_jours_notes: c.serie,
+      mon_avenir: a ? { age: a.age, age_de_liberte_estime_si_place: a.agePlace, age_si_l_argent_dort: a.ageDort, hypothese: HYP[S.avenirHyp || "equilibre"][0] } : null,
+    };
+  }
+  window.BafiBudget = { render, contexte, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
     mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {

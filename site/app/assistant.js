@@ -31,6 +31,8 @@
         <span class="ia-avatar">${VISAGE}</span>
         <div class="ia-titres"><h2 id="ia-titre"><span class="marque-bot"><b class="mb-bafi">Bafi</b>Bot</span></h2>
           <p class="small muted">Votre assistant : il répond avec vos chiffres et l'actualité publiée</p></div>
+        <button type="button" class="ia-agrandir" aria-label="Agrandir la conversation" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <button type="button" class="ia-fermer" aria-label="Fermer BafiBot">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
@@ -54,6 +56,14 @@
     </dialog>`);
 
   const fab = $("#fab-ia"), dlg = $("#dlg-ia"), fil = $(".ia-fil", dlg), sugg = $(".ia-sugg", dlg);
+  // Agrandir / réduire : la conversation peut occuper tout l'écran pour lire confortablement les réponses
+  $(".ia-agrandir", dlg).addEventListener("click", (ev) => {
+    const b = ev.currentTarget, p = !dlg.classList.contains("plein");
+    dlg.classList.toggle("plein", p); b.setAttribute("aria-pressed", String(p));
+    b.setAttribute("aria-label", p ? "Réduire la conversation" : "Agrandir la conversation");
+    try { localStorage.setItem("bafibot-plein", p ? "1" : ""); } catch (e) { /* navigation privée */ }
+  });
+  try { if (localStorage.getItem("bafibot-plein")) { dlg.classList.add("plein"); $(".ia-agrandir", dlg).setAttribute("aria-pressed", "true"); } } catch (e) { /* */ }
   const form = $(".ia-saisie", dlg), champ = $("#ia-q"), micro = $(".ia-micro", dlg), envoyer = $(".ia-envoyer", dlg);
   const histo = [];               // [{ role: "user" | "assistant", content }]
   let enCours = false, accueilFait = false, dernierCompte = 0;
