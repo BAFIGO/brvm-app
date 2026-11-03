@@ -1074,6 +1074,8 @@
     // Mode simple (budget.js) : Aujourd'hui devient l'accueil unique (budget du jour, coffre, cercle, placements, point du soir)
     if (window.BafiBudget?.accueilSimple?.()) { v.onclick = null; window.BafiBudget.renderAccueil(v); return; }
     vAujourdhuiClassique();
+    // Mode détaillé : même parcours (budget, coffre, cercle) ; le contenu boursier passe sous « Ma bourse aujourd'hui »
+    if (window.BafiBudget?.accueilDetaille?.()) { window.BafiBudget.enrichirDetaille(v); return; }
     // utilisateurs déjà installés, sans budget : une invitation discrète, sous le titre
     const inv = window.BafiBudget?.invitation?.();
     if (inv) (v.querySelector("h1") || v).insertAdjacentHTML(v.querySelector("h1") ? "afterend" : "afterbegin", inv);
@@ -3123,7 +3125,7 @@
   function majCoffre() {
     const t = tab(), o = S.ui.pfOnglet || "placements";
     // Sur l'accueil simple, « Je garde » est déjà l'un des trois gros boutons : pas de second bouton flottant
-    const simple = t === "aujourdhui" && window.BafiBudget?.accueilSimple?.();
+    const simple = t === "aujourdhui" && (window.BafiBudget?.accueilSimple?.() || window.BafiBudget?.accueilDetaille?.());
     const fab = $("#fab-coffre"), showFab = !!S.coffre && !simple && (t === "aujourdhui" || (t === "portefeuille" && (o === "epargne" || o === "cercles")));
     fab.hidden = !showFab;
     document.body.classList.toggle("has-fab", showFab);

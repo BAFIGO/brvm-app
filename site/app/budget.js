@@ -196,9 +196,15 @@
       </ul>${c.serie >= 7 ? `<p class="small">Vous êtes un épargnant régulier : ${c.serie} jours d'affilée.</p>` : ""}
       <p class="small"><a href="#budget">Voir mon budget du mois</a></p></details>`;
   }
+  // Bascule « Simple / Détaillé » : visible en haut de l'accueil et du budget ; on touche ou on fait glisser le curseur
+  const bascule = () => { const det = S.profil?.mode === "complet";
+    return `<div class="bu-bascule" role="radiogroup" aria-label="Affichage">
+      <button type="button" role="radio" aria-checked="${!det}" data-bu="mode" data-v="simple">Simple</button>
+      <button type="button" role="radio" aria-checked="${det}" data-bu="mode" data-v="complet">Détaillé</button>
+      <span class="bu-curseur${det ? " droite" : ""}" aria-hidden="true"></span></div>`; };
   // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
   function vueAccueil(c) {
-    return `${blocRetour(c)}${blocPaie(c)}
+    return `${bascule()}${blocRetour(c)}${blocPaie(c)}
       ${c.jour && !c.revMois ? `<section class="bu-phrase"><span class="small">Bienvenue</span><b style="font-size:1.35rem">Notez votre recette du jour</b>
           <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
@@ -206,6 +212,18 @@
       ${troisBoutons()}${blocRecette(c)}
       ${blocRecurrents()}
       ${blocCoffre(c)}${blocCercle()}${blocPlacements()}${blocSoir(c)}${blocSemaine(c)}`;
+  }
+  function vueAccueilDetaille(c) {
+    const env = (nom, v, max, cls) => `<div class="bu-env mini"><div class="bu-ligne small"><span>${nom}</span><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
+    return `${bascule()}${blocRetour(c)}${blocPaie(c)}
+      <section class="bu-phrase large"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
+        <span class="small">Reste à vivre du mois : ${F(Math.max(0, c.reste))} · gagné ${F(c.revMois)} · dépensé ${F(c.depMois)}</span>
+        ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
+      <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
+        ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.revRef * c.part(3), "amb")}</section>
+      ${troisBoutons()}${blocRecette(c)}${blocRecurrents()}
+      ${blocCoffre(c)}${blocCercle()}${blocSoir(c)}${blocSemaine(c)}
+      <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}`;
   }
   const troisBoutons = () => `<div class="bu-trois">
         <button type="button" class="bu-gros-b gagne" data-bu="saisir" data-v="revenu"><span class="bu-tuile">${ic(P.plus, "#fff")}</span>J'ai gagné</button>
@@ -333,8 +351,7 @@
           ${simple ? "" : ""}
           <a href="#profil" class="small">Régler l'heure de mon rappel</a>
         </div></details>
-      <p class="bu-mode small">${simple ? `<button type="button" class="btn link small" data-bu="mode" data-v="complet">Passer au mode complet (enveloppes, profils)</button>`
-        : `<button type="button" class="btn link small" data-bu="mode" data-v="simple">Revenir au mode simple</button>`}</p>`;
+`;
   }
 
   // « Mon budget » (détail du mois), dans les deux modes
@@ -345,7 +362,7 @@
     if (!S.charge) { v.innerHTML = t("Mon budget") + `<p class="muted">Chargement…</p>`; charger(); return; }
     if (S.erreur === "installer") { v.innerHTML = t("Mon budget") + `<div class="notice">Le budget arrive bientôt sur votre compte.</div>`; return; }
     if (!S.profil) { v.innerHTML = t("Mon budget") + `<div class="bu-demarrage">${demarrage()}</div>`; brancherDemarrage(v); return; }
-    v.innerHTML = t("Mon budget") + vueBudget(calculs(), S.profil.mode !== "complet");
+    v.innerHTML = t("Mon budget") + bascule() + vueBudget(calculs(), S.profil.mode !== "complet");
   }
   // Accueil du mode simple (onglet Aujourd'hui)
   const accueilSimple = () => S.charge && !S.erreur && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
@@ -540,7 +557,7 @@
       try { await app().budget.supprimer(+v); S.mv = S.mv.filter((m) => String(m.id) !== String(v)); app().toast("Opération supprimée."); rendre(); }
       catch (e) { app().toast("Impossible : " + (e.message || e)); }
     }
-    else if (a === "mode") { await sauver({ mode: v }); app().toast(v === "complet" ? "Budget détaillé activé." : "Budget simple activé."); }
+    else if (a === "mode") { if ((S.profil?.mode || "simple") !== v) { await sauver({ mode: v }); app().toast(v === "complet" ? "Affichage détaillé : enveloppes et bourse." : "Affichage simple : l'essentiel."); } }
     else if (a === "reglages") {
       await sauver({ revenu: lireNombre($("#bu-r-rev").value), rythme: $("#bu-r-ry").value, objectif_nom: $("#bu-r-obj").value.trim() || null,
                      jour_paie: Math.min(31, lireNombre($("#bu-r-paie")?.value)) || null,
@@ -548,17 +565,37 @@
       app().toast("Réglages enregistrés.");
     }
   });
+  let gl = null;
+  document.addEventListener("pointerdown", (ev) => { const b = ev.target.closest(".bu-bascule"); if (b) gl = { x: ev.clientX, b }; });
+  document.addEventListener("pointerup", (ev) => {
+    if (!gl) return; const dx = ev.clientX - gl.x, det = S.profil?.mode === "complet"; gl = null;
+    if (Math.abs(dx) > 24 && (dx > 0) !== det) { ev.preventDefault(); sauver({ mode: dx > 0 ? "complet" : "simple" }); }
+  });
   document.addEventListener("change", async (ev) => { if (ev.target.matches?.("[data-bu='profil']")) { await sauver({ profil: ev.target.value }); } });
   async function sauver(x) {
     try { await app().budget.sauverProfil({ ...S.profil, ...x }); S.profil = { ...S.profil, ...x }; rendre(); window.dispatchEvent(new Event("brvm:budget")); }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); }
   }
 
+  const accueilDetaille = () => S.charge && !S.erreur && S.profil?.mode === "complet";
+  function enrichirDetaille(v) {
+    const h1 = v.querySelector("h1");
+    const bourse = document.createElement("details");
+    bourse.className = "card bu-bourse";
+    bourse.innerHTML = `<summary><span class="bu-tuile clair petit">${ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>')}</span><b>Ma bourse aujourd'hui</b><small>alertes, récap du soir, marché</small></summary>`;
+    [...v.children].filter((n) => n !== h1).forEach((n) => bourse.appendChild(n));
+    const haut = document.createElement("div");
+    haut.className = "bu-acc-det";
+    haut.innerHTML = vueAccueilDetaille(calculs());
+    v.appendChild(haut);
+    if (bourse.children.length > 1) haut.appendChild(bourse);
+    if (!S.cerclesCharges) { S.cerclesCharges = true; app().cercles?.().then((l) => { S.cercles = l || []; if (location.hash.slice(1) === "aujourdhui" || !location.hash) rendre(); }).catch(() => {}); }
+  }
   // invitation sur l'ancien accueil (personnes déjà installées, sans budget) : un seul geste pour commencer
   const invitation = () => (S.charge && !S.erreur && !S.profil && !S.invitationFermee ? `<section class="card bu-invit"><span class="bu-tuile amb">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>')}</span>
       <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : BafiBourse vous dit ce que vous pouvez garder.</p>
         <a class="btn primary small" href="#budget">Commencer (1 minute)</a> <button type="button" class="btn link small" data-bu="fermer-invit">Plus tard</button></div></section>` : "");
-  window.BafiBudget = { render, renderAccueil, renderObjectifs, accueilSimple, invitation,
+  window.BafiBudget = { render, renderAccueil, renderObjectifs, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
     mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {
