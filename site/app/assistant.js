@@ -300,3 +300,20 @@
   window.addEventListener("brvm:maj", majBouton);
   if (window.BRVM_APP) majBouton();
 })();
+
+// Les boutons flottants (BafiBot, coffre) se replient quand on fait défiler vers le bas — ils ne masquent plus
+// les montants — et reviennent dès qu'on remonte, ou en haut et en bas de page.
+(() => {
+  let y0 = scrollY, tic = false;
+  addEventListener("scroll", () => {
+    if (tic) return; tic = true;
+    requestAnimationFrame(() => {
+      const y = scrollY, dy = y - y0, bas = innerHeight + y >= document.documentElement.scrollHeight - 40;
+      if (y < 120 || bas || dy < -6) document.body.classList.remove("fab-cache");
+      else if (dy > 6) document.body.classList.add("fab-cache");
+      if (Math.abs(dy) > 6) y0 = y;
+      tic = false;
+    });
+  }, { passive: true });
+  addEventListener("hashchange", () => document.body.classList.remove("fab-cache"));
+})();

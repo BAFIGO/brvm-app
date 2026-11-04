@@ -7,12 +7,12 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   // [clé, titre, ordre, reconnaissance de la carte]
   const RUBRIQUES = [
-    ["abo", "Mon abonnement", 0, (c) => c.classList.contains("abo-carte")],
-    ["plan", "Mon épargne", 1, (c) => c.id === "f-plan"],
+    ["coord", "Mes informations", 0, (c) => c.id === "f-identite"],
+    ["abo", "Mon abonnement", 1, (c) => c.classList.contains("abo-carte")],
     ["rappels", "Mes rappels du soir", 2, (c) => c.classList.contains("rp-carte")],
-    ["invest", "Mon profil d'investisseur", 3, (c) => c.id === "f-profil"],
-    ["comptes", "Mes comptes et placements", 4, (c) => c.id === "f-univers"],
-    ["coord", "Mes informations", 5, (c) => c.id === "f-identite"],
+    ["plan", "Mon rythme pour garder", 3, (c) => c.id === "f-plan"],
+    ["invest", "Mon profil d'investisseur", 4, (c) => c.id === "f-profil"],
+    ["comptes", "Mes comptes et placements", 5, (c) => c.id === "f-univers"],
     ["aide", "Aide et prise en main", 6, (c) => c.classList.contains("tuto-aide")],
     ["avis", "Donner mon avis", 7, (c) => c.classList.contains("av-profil")],
     ["demo", "Essayer les félicitations", 8, (c) => /félicitations/i.test(c.querySelector("h2")?.textContent || "") && !c.id],
@@ -61,6 +61,13 @@
         try { sessionStorage.setItem("brvm-rubrique", k); } catch (e) { /* rien */ }
         som.querySelectorAll("details.rubrique[open]").forEach((x) => x !== d && (x.open = false));   // une seule ouverte
       });
+    }
+    // trois groupes, lus d'un coup d'œil : Mon compte, Mes réglages, Aide
+    som.querySelectorAll(".rub-groupe").forEach((x) => x.remove());
+    let gPrec = "";
+    for (const d of som.querySelectorAll("details.rubrique")) {
+      const o = +d.dataset.ordre, g = o <= 1 ? "Mon compte" : o <= 5 ? "Mes réglages" : "Aide et informations";
+      if (g !== gPrec) { const h = document.createElement("h2"); h.className = "rub-groupe"; h.textContent = g; som.insertBefore(h, d); gPrec = g; }
     }
     // mettre à jour les états (après un enregistrement, par exemple)
     som.querySelectorAll("details.rubrique").forEach((d) => { const c = d.querySelector(".card"); if (c) d.querySelector(".rub-e").textContent = etat(d.dataset.rub, c); });

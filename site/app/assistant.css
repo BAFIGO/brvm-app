@@ -181,3 +181,10 @@ dialog.ia.plein .ia-tete { padding-top: calc(12px + env(safe-area-inset-top, 0px
 .iq-appro input[type="checkbox"] { appearance: auto; -webkit-appearance: checkbox; width: 18px !important; height: 18px !important; min-height: 0 !important; margin: 0; padding: 0; border-radius: 4px; flex: none; accent-color: var(--accent); }
 .iq-appro-n { font-weight: 400; color: var(--muted); }
 .ia-avert { flex: none; }
+
+/* boutons flottants repliés pendant le défilement vers le bas */
+.fab-ia, .fab { transition: transform .25s ease, opacity .25s ease; }
+body.fab-cache .fab-ia, body.fab-cache .fab { transform: translateY(160%); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .fab-ia, .fab { transition: opacity .1s; } }
+/* de la place en bas de page : le dernier montant n'est jamais caché sous un bouton */
+main .view:not([hidden]) { padding-bottom: 96px; }

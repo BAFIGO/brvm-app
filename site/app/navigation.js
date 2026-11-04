@@ -20,8 +20,6 @@
       ic: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>') },
     { id: "budget", esp: 1, nom: "Mon budget", href: "#budget", simple: true,
       ic: ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>') },
-    { id: "objectifs", esp: 2, simple: true, nom: "Mes objectifs", href: "#objectifs",
-      ic: ic('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>') },
     { id: "pf:epargne", esp: 2, simple: true, nom: "Mon coffre", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
     { id: "pf:cercles", esp: 2, simple: true, nom: "Mes cercles", ic: ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>') },
     { id: "avenir", esp: 2, simple: true, nom: "Mon avenir", href: "#avenir",
@@ -31,7 +29,7 @@
     { id: "performance", esp: 3, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
     { id: "marche", esp: 3, nom: "Marché", href: "#marche", ic: ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>') },
   ];
-  const NOMS_PF = { placements: "Mes placements", epargne: "Mon épargne", cercles: "Mes cercles", simulateur: "Simulateur" };
+  const NOMS_PF = { placements: "Mes placements", epargne: "Mon coffre", cercles: "Mes cercles", simulateur: "Simuler un placement" };
   // trois espaces, dans l'ordre du parcours : budget → épargne et cercles → bourse
   const ESPACES = { 1: "Mon argent au quotidien", 2: "Je garde", 3: "Je fais grandir" };
   const TITRES = { objectifs: "Mes objectifs", avenir: "Mon avenir", aujourdhui: "Aujourd'hui", budget: "Mon budget", portefeuille: "Portefeuille", performance: "Performance", marche: "Marché", profil: "Profil et réglages" };
@@ -205,6 +203,18 @@
   addEventListener("popstate", remettre);
   addEventListener("pageshow", () => { ouvert = false; remettre(); });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !geste) remettre(); });
+
+  // ---------------------------------------------------------------- boutons flottants : ils s'effacent quand on lit
+  // On fait défiler vers le bas : BafiBot et le coffre glissent hors de l'écran (ils ne cachent plus les montants) ;
+  // on remonte un peu, ou on arrive en bas de la page : ils reviennent.
+  let yPrec = scrollY;
+  addEventListener("scroll", () => {
+    const y = scrollY, dy = y - yPrec, bas = innerHeight + y >= document.documentElement.scrollHeight - 40;
+    if (dy > 10 && y > 120 && !bas) document.body.classList.add("fab-cache");
+    else if (dy < -10 || bas || y < 60) document.body.classList.remove("fab-cache");
+    if (Math.abs(dy) > 10) yPrec = y;
+  }, { passive: true });
+  addEventListener("hashchange", () => document.body.classList.remove("fab-cache"));
 
   // ---------------------------------------------------------------- cadeau : le parrainage
   const parr = $("#dlg-parrainage");

@@ -168,3 +168,8 @@ html:has(body.nav-tiroir), body.nav-tiroir { overflow-x: clip; }
 html:has(body.tiroir-visible), body.tiroir-visible { overflow: hidden; }
 #tiroir .ti-esp { padding: 14px 14px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); list-style: none; }
 #tiroir .ti-esp:first-child { padding-top: 4px; }
+/* boutons flottants qui s'effacent pendant la lecture */
+.fab-ia, .fab { transition: transform .25s ease, opacity .25s ease; }
+body.fab-cache .fab-ia, body.fab-cache .fab { transform: translateY(150%); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .fab-ia, .fab { transition: none; } }
+main .view:not([hidden]) { padding-bottom: 96px; }

@@ -66,6 +66,8 @@
   function annoter(racine) {
     if (!racine || !actif()) return;
     const vus = new Set([...racine.querySelectorAll(".gl")].map((b) => b.dataset.gl));   // déjà soulignés dans cet écran
+    // Mode simple : au plus 3 mots soulignés par écran (un « ? » après chaque mot technique alourdit la lecture)
+    const plafond = window.BafiBudget?.mode?.() === "simple" ? 3 : Infinity;
     const w = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (n.nodeValue.trim().length > 2 && !n.parentElement?.closest(EXCLUS) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
     });
@@ -75,6 +77,7 @@
       let m, garde = 0;
       while (n && (m = RE.exec(n.nodeValue)) && garde++ < 6) {
         const t = terme(m[1]);
+        if (vus.size >= plafond) return;                      // mode simple : quelques mots expliqués par écran, pas plus
         if (!t || vus.has(t)) {                                // déjà souligné dans cet écran : on passe la suite du texte
           const reste = n.nodeValue.slice(m.index + m[1].length);
           if (!RE.test(reste)) break;

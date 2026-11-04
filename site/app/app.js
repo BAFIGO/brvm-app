@@ -1321,14 +1321,14 @@
 
     // 1. Où j'en suis, et la seule action qui compte
     h += `<div class="ep2-tete"><h2 class="ep2-etat">${ep.aFaire
-        ? `Mettez de côté <b>${F(pl.montant)}</b> ${periode}`
+        ? `Gardez <b>${F(pl.montant)}</b> ${periode}`
         : `Vous êtes à jour ${periode} <span class="ep2-ok" aria-hidden="true">✓</span>`}</h2>
       <p class="ep2-plan small muted">Mon plan : ${F(pl.montant)} ${RYTHMES[r][0]} · <button type="button" class="btn link small" data-coffre="plan">modifier</button></p></div>`;
     if (ep.objectif) h += `<div class="ep2-objectif">
-        <div class="ep2-chiffres"><span><b class="num">${F(ep.verse)}</b> épargnés sur ${F(ep.objectif)}</span><b class="num">${Math.round(pc)} %</b></div>
+        <div class="ep2-chiffres"><span><b class="num">${F(ep.verse)}</b> gardés sur ${F(ep.objectif)}</span><b class="num">${Math.round(pc)} %</b></div>
         <div class="ep2-barre" role="progressbar" aria-label="Progression vers l'objectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pc)}"><i style="width:${pc.toFixed(1)}%"></i></div>
         <p class="small muted">${ep.objectifLe ? `Objectif atteint vers le ${D(ep.objectifLe)} à ce rythme` : "Objectif atteint, bravo !"}</p></div>`;
-    h += `<button class="btn primary ep2-cta" data-coffre="verser">J'ai épargné</button>`;
+    h += `<button class="btn primary ep2-cta" data-coffre="verser">Je garde</button>`;
 
     // 2. Une seule ligne de motivation (série, record et prochain trophée réunis)
     if (debutant) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🏅</span><span>Votre premier trophée, <b>Premier pas</b>, dès votre premier versement.</span></p>`;
@@ -1338,10 +1338,10 @@
     // 3. L'argent mis de côté et pas encore envoyé : seulement s'il y en a
     if (ep.solde > 0) {
       const pret = ep.solde >= seuil();
-      h += `<div class="ep2-cote${pret ? " pret" : ""}"><div><span class="small muted">Mis de côté, pas encore envoyé à votre SGI</span><b class="num">${F(ep.solde)}</b>
+      h += `<div class="ep2-cote${pret ? " pret" : ""}"><div><span class="small muted">Gardé, pas encore envoyé à votre SGI</span><b class="num">${F(ep.solde)}</b>
           <span class="small">${pret ? "Prêt à investir : vous pouvez l'envoyer à votre SGI." : `Investissement possible ${delai(ep.seuilDans)} (à partir de ${F(seuil())}, pour limiter les frais).`}</span></div>
         <div class="ep2-cote-act"><button class="btn${pret ? " primary" : ""} small" data-coffre="transfert">J'ai envoyé à ma SGI</button>
-          <button class="btn link small" data-coffre="reprendre">J'ai repris de mon épargne</button></div></div>`;
+          <button class="btn link small" data-coffre="reprendre">J'ai repris</button></div></div>`;
     }
 
     // Mes trophées : aperçu des médailles gagnées, la galerie complète se déplie
@@ -1570,8 +1570,7 @@
       ecrans_de_l_application: {
         "Aujourd'hui": "menu ☰ > Aujourd'hui : ce que je peux dépenser aujourd'hui, les boutons J'ai gagné / J'ai dépensé / Je garde, mon coffre, mon cercle",
         "Mon budget": "menu ☰ > Mon budget : le mois (gagné, dépensé, reste), les enveloppes, les dernières opérations, les réglages du budget",
-        "Mes objectifs": "menu ☰ > Mes objectifs : sécurité, mes projets (bouton « Ajouter un projet »), faire grandir",
-        "Mon coffre": "menu ☰ > Mon coffre : l'épargne mise de côté, son historique et ses réglages",
+        "Mon coffre": "menu ☰ > Mon coffre : l'argent gardé, la sécurité, mes projets (bouton « Ajouter un projet »), faire grandir, la série, les trophées, l'historique",
         "Mes cercles": "menu ☰ > Mes cercles : épargner avec des proches",
         "Mon avenir": "menu ☰ > Mon avenir : l'âge de liberté financière estimé",
         "Mes placements": "menu ☰ > Mes placements : les titres détenus chez la SGI",
@@ -1637,10 +1636,10 @@
     const v = $("#v-portefeuille");
     const L = replay(S.ops);
     const ep = epargne(), cote = ep ? Math.max(0, ep.solde) : 0;
-    const total = cote + Math.max(0, L.cash) + L.investi;
+    const total = Math.max(0, L.cash) + L.investi;      // l'argent de la bourse (le coffre a sa page)
     const seg = (v, col) => (total > 0 && v > 0 ? `<i style="width:${(100 * v / total).toFixed(2)}%;background:${col}"></i>` : "");
     const onglet = S.ui.pfOnglet || "placements";
-    let h = `<h1 id="h-pf">${{ placements: "Mes placements", epargne: "Mon épargne", cercles: "Mes cercles", simulateur: "Simulateur" }[onglet] || "Portefeuille"}</h1>`;
+    let h = `<h1 id="h-pf">${{ placements: "Mes placements", epargne: "Mon coffre", cercles: "Mes cercles", simulateur: "Simulateur" }[onglet] || "Portefeuille"}</h1>`;
     h += `<div class="seg pf-onglets" role="tablist" aria-label="Rubriques du portefeuille">
         <button type="button" role="tab" data-pfo="placements" aria-selected="${onglet === "placements"}" aria-pressed="${onglet === "placements"}">Placements</button>
         <button type="button" role="tab" data-pfo="epargne" aria-selected="${onglet === "epargne"}" aria-pressed="${onglet === "epargne"}">Épargne${ep?.serie > 0 ? ` · 🔥${ep.serie}` : ""}</button>
@@ -1659,7 +1658,8 @@
       return;
     }
     if (onglet === "epargne") {
-      // l'épargne au quotidien : coffre, série, trophées, cercles (cercles.js s'insère avant l'ancre)
+      // Mon coffre : une seule page pour l'argent gardé — les étages (sécurité, projets, faire grandir), puis le rythme, la série, les trophées
+      h += window.BafiBudget?.coffreHtml?.() || "";
       h += ep ? carteEpargne(ep) : `<div class="card epargne ep2"><h2 class="ep2-etat">Fixez-vous un rythme d'épargne</h2><p>Suivez votre régularité et gagnez vos premiers trophées.</p>
         <button type="button" class="btn primary ep2-cta" data-coffre="plan">Choisir mon rythme d'épargne</button></div>`;
       v.innerHTML = h;
@@ -1667,17 +1667,22 @@
       v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
       return;
     }
+    // En tête : une phrase (ce que valent mes placements, et la variation du jour), puis ce qu'il faut regarder.
+    // Le coffre a sa propre page : il n'est plus mêlé à l'argent de la bourse.
+    const plj = window.BRVM_APP?.placements?.(), vj = plj?.varJour;
+    const aRegarder = (S.alertes || []).filter((a) => ["ROUGE", "ORANGE", "JAUNE"].includes(a.alerte)).slice(0, 3);
     h += `
-      <div class="card argent">
-        <div class="lbl">Mon argent pour la bourse</div><div class="val num big" data-count="${total}">${F(total)}</div>
-        <div class="bar3" aria-hidden="true">${seg(cote, "var(--s2)")}${seg(Math.max(0, L.cash), "var(--s3)")}${seg(L.investi, "var(--s1)")}</div>
+      <div class="card argent pl-tete">
+        <p class="pl-phrase">Vos placements valent <b class="num" data-count="${L.valeur}">${F(L.valeur)}</b>${ok(vj) && L.investi > 0
+          ? (Math.abs(vj) < 0.0005 ? ", stables aujourd'hui." : `, <span class="${vj >= 0 ? "good" : "bad"}">${vj >= 0 ? "+" : ""}${(vj * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} % aujourd'hui</span>.`) : "."}</p>
+        ${aRegarder.length ? `<div class="pl-regarder"><b>À regarder</b><ul>${aRegarder.map((a) => `<li><a href="#pos-${esc(a.ticker)}">${esc(S.names.get(a.ticker) || a.ticker)}</a> · ${esc(motifAlerte(a.motif))}</li>`).join("")}</ul></div>`
+          : `<p class="small muted pl-calme">Rien d'urgent à regarder ce soir.</p>`}
+        <div class="bar3" aria-hidden="true">${seg(Math.max(0, L.cash), "var(--s3)")}${seg(L.investi, "var(--s1)")}</div>
         <ul class="legende">
-          ${ep ? `<li><span class="pt" style="background:var(--s2)"></span><span>Mis de côté</span><b class="num">${F(cote)}</b></li>` : ""}
           <li><span class="pt" style="background:var(--s3)"></span><span>Disponible chez ma SGI</span><b class="num">${F(L.cash)}</b></li>
           <li><span class="pt" style="background:var(--s1)"></span><span>Placé en bourse</span><b class="num">${F(L.investi)}</b></li>
         </ul>
         <details class="aide"><summary>Que veulent dire ces montants ?</summary><dl>
-          ${ep ? `<dt>Mis de côté</dt><dd>L'argent que vous gardez pour la bourse (espèces, banque, mobile money), pas encore envoyé à votre SGI.</dd>` : ""}
           <dt>Disponible chez ma SGI</dt><dd>L'argent déjà envoyé à votre SGI, prêt pour vos prochains achats.</dd>
           <dt>Placé en bourse</dt><dd>Ce que valent vos actions, obligations et OPCVM au cours de la dernière séance.</dd>
           <dt>Total chez ma SGI</dt><dd>Disponible + placé en bourse : ${F(L.valeur)}.</dd></dl></details>
@@ -1707,14 +1712,14 @@
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
         const ep1 = estEpingle(p.code);
-        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}${act?.analyse?.note ? ` ${diagMot(act.analyse.note, true)}` : ""}</div>
+        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
-          <div class="sub etats"><button type="button" class="epingler" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
-            aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}">${ICONE_EPINGLE}<span>${ep1 ? "Épinglé" : "Épingler"}</span></button>${chip(d)}${pastille(al)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
+          <div class="sub etats">${al ? pastille(al) : chip(d)}<button type="button" class="epingler icone" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
+            aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}" title="${ep1 ? "Épinglé dans le menu" : "Épingler dans le menu"}">${ICONE_EPINGLE}</button>${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.
-        « Épingler » place un titre dans le menu, pour y revenir en un geste.</p>`;
+        L'épingle place un titre dans le menu, pour y revenir en un geste.</p>`;
     }
     h += `</div>`;
     {
@@ -1783,6 +1788,11 @@
             : `<b>${esc(PROFILS[u.profil]?.t || "")}</b> <span class="small muted">(votre profil)</span>`}</div>
       </div></div>`;
     if (!r) return h + `<div class="card sim-zone"><p class="muted">Chargement des cibles du profil…</p></div>`;
+    // le résultat d'abord, en une phrase ; le détail (répartition, ajustements) ensuite
+    h += `<div class="card sim-zone sim-resultat">${badge}<p class="sim-phrase">Avec <b>${F(u.montant)}</b> en profil <b>${esc(PROFILS[u.profil]?.t || u.profil)}</b>${ok(r.rdt)
+        ? ` : environ <b>${P(r.rdt, false)}</b> de rendement attendu par an` : ""}${r.ordres.length
+        ? `, en ${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour y arriver.` : ". Vos placements y sont déjà."}</p>
+      <p class="small muted">Une estimation, pas une promesse ni une recommandation.</p></div>`;
     // répartition : le réel en trait plein, la simulation en pointillés
     h += `<div class="card sim-zone">${badge}<h2>Répartition</h2>
       ${reel ? `<p class="rep-lbl">Aujourd'hui (réel)</p>${classBar(L.positions.filter((p) => p.valeur > 0 && CLASSES[p.classe]).map((p) => ({ classe: p.classe, montant: p.valeur })).concat(L.cash > 0 ? [{ classe: "liquidites", montant: L.cash }] : []))}` : ""}
@@ -1792,14 +1802,14 @@
         · part en actions ${Math.round(PART(r.cible, "actions") * 100)} %</p></div>`;
     // ajustements : un résumé et les principaux, sans bouton d'enregistrement (on n'enregistre que le réel)
     const top = r.ordres.slice().sort((a, b) => b.quantite * b.prix_limite - a.quantite * a.prix_limite).slice(0, 6);
-    h += `<div class="card sim-zone">${badge}<h2>Ajustements simulés</h2>
+    h += `<details class="card sim-zone sim-ajust"${S.ui.simAjust ? " open" : ""}><summary>${badge}<h2>Ajustements simulés</h2><span class="small muted">le détail des achats et ventes</span></summary>
       ${r.ordres.length ? `<p>${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour se rapprocher de cette répartition :</p>
         <ul class="list">${top.map((o) => `<li><div class="main"><div class="name">${o.sens === "VENTE" ? "Vente" : "Achat"} · ${esc(nomLisible(o.libelle || o.code))}</div>
           <div class="sub">${esc(o.motif || "")}</div></div><div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">vers ${F(o.prix_limite)}</div></div></li>`).join("")}</ul>
         ${r.ordres.length > top.length ? `<p class="small muted">et ${r.ordres.length - top.length} autre${r.ordres.length - top.length > 1 ? "s" : ""}, plus petit${r.ordres.length - top.length > 1 ? "s" : ""}.</p>` : ""}`
       : `<p>Rien à ajuster : vos placements sont déjà proches de cette répartition.</p>`}
       <p class="small muted">Une estimation pour éclairer vos décisions, pas une recommandation. Si vous passez un ordre chez votre SGI, importez ensuite l'avis :
-        votre portefeuille réel se met à jour.</p></div>`;
+        votre portefeuille réel se met à jour.</p></details>`;
     // Investisseur : les trois profils côte à côte
     if (acces(2)) {
       const lignes = Object.keys(PROFILS).map((k) => { const c = k === S.profil?.profil ? S.cibles : S.ciblesPar?.[k];
@@ -2764,7 +2774,12 @@
     h += `<div class="seg scroll" role="group" aria-label="Période">${PERIODES.map(([k, t]) => !acces(1) && k === 0
       ? `<button type="button" data-formules aria-label="${t} : disponible avec Essentiel">🔒 ${t}</button>`
       : `<button type="button" data-perf="${k}" aria-pressed="${S.ui.perf === k}">${t}</button>`).join("")}</div>
-      <div class="card"><p class="small muted">Sur ${per}</p>
+      <div class="card"><p class="perf-phrase">${(() => {
+          // la phrase d'abord : gagné ou perdu, et comparé au marché, en mots simples
+          const g = gain > 0 ? `Vous avez gagné <b class="good">${F(gain)}</b>` : gain < 0 ? `Vous avez perdu <b class="bad">${F(-gain)}</b>` : "Votre portefeuille n'a pas bougé";
+          const cmp = ok(pf) && ok(bc) ? (Math.abs(pf - bc) < 0.0005 ? ", comme le marché." : pf > bc ? ", <b>mieux que le marché</b>." : ", moins bien que le marché.") : ".";
+          return g + cmp;
+        })()}</p><p class="small muted">Sur ${per}</p>
         <div class="kpi"><div class="lbl">Gain ou perte du portefeuille</div>
           <div class="val num ${cls(gain)}">${gain > 0 ? "+" : ""}${F(gain)}</div></div>
         <div class="cmp" style="margin-top:10px">
@@ -2795,14 +2810,15 @@
         <p class="small muted">Performance cumulée${chartRows === rows ? "" : " sur le dernier mois"}, en partant de 0 %. Touchez le graphique pour le détail d'un jour.</p></div>`;
     }
     const nTab = S.ui.perfRows || 10, tab = hist.slice(-nTab).reverse();
-    h += `<div class="card"><h2>Jour par jour</h2><div class="tbl" role="region" aria-label="Gain par séance" tabindex="0"><table>
+    // le détail chiffré, replié : la phrase et la courbe d'abord, le tableau à la demande
+    h += `<details class="card perf-jours"${S.ui.perfJours ? " open" : ""}><summary><h2>Jour par jour</h2><span class="small muted">le détail de chaque séance</span></summary><div class="tbl" role="region" aria-label="Gain par séance" tabindex="0"><table>
       <thead><tr><th scope="col">Séance</th><th scope="col">Gain (F)</th><th scope="col">Portef.</th><th scope="col">BRVM 30</th><th scope="col">Compos.</th></tr></thead>
       <tbody>${tab.map((r) => { const a = ix.BRVM30?.get(r.date)?.variation, c2 = ix.BRVMC?.get(r.date)?.variation;
         return `<tr><th scope="row">${Dc(r.date)}</th><td class="${cls(r.gain)}">${ok(r.gain) ? (r.gain > 0 ? "+" : "") + N(r.gain) : "–"}</td><td class="${cls(r.pct)}">${P2(r.pct)}</td><td>${P2(a)}</td><td>${P2(c2)}</td></tr>`; }).join("")}</tbody></table></div>
       ${hist.length > nTab ? `<div class="actions"><button class="btn small" id="perf-more">Afficher plus de séances</button></div>` : ""}
       ${typeof S.prop?.contenu?.historique_recalcule === "string" ? `<div class="notice small">Les séances depuis le <b>${D(S.prop.contenu.historique_recalcule)}</b>
         ont été recalculées ce soir : une opération de cette date a été ajoutée, modifiée ou supprimée dans votre journal. Les séances antérieures n'ont pas changé.</div>` : ""}
-      <p class="small muted">Chaque séance publiée reste figée. Elle n'est recalculée que si vous ajoutez, modifiez ou supprimez une opération de cette date ou d'avant.</p></div>`;
+      <p class="small muted">Chaque séance publiée reste figée. Elle n'est recalculée que si vous ajoutez, modifiez ou supprimez une opération de cette date ou d'avant.</p></details>`;
     v.innerHTML = h;
     v.querySelectorAll("[data-perf]").forEach((b) => b.addEventListener("click", () => { S.ui.perf = +b.dataset.perf; vPerformance(); }));
     $("#perf-more", v)?.addEventListener("click", () => { S.ui.perfRows = (S.ui.perfRows || 10) + 20; vPerformance(); });
@@ -2833,7 +2849,8 @@
     if (window.BafiBudget) window.BafiBudget.render(v);
     else v.innerHTML = `<h1 id="h-bud">Mon budget</h1><p class="muted">Chargement…</p>`;
   };
-  const vObjectifs = () => { const v = $("#v-objectifs"); if (window.BafiBudget) window.BafiBudget.renderObjectifs(v); };
+  // « Mes objectifs » est désormais dans « Mon coffre » : l'ancienne adresse y mène
+  const vObjectifs = () => { allerPf("epargne"); };
   const vAvenir = () => { const v = $("#v-avenir"); if (window.BafiBudget) window.BafiBudget.renderAvenir(v); };
   const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, objectifs: vObjectifs, avenir: vAvenir, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
@@ -3225,7 +3242,7 @@
     const c = b.dataset.epingler, on = basculerEpingle(c), nom = S.names.get(c) || c;
     b.setAttribute("aria-pressed", String(on));
     b.setAttribute("aria-label", `${on ? "Retirer des épinglés" : "Épingler dans le menu"} : ${nom}`);
-    b.querySelector("span").textContent = on ? "Épinglé" : "Épingler";
+    const sp = b.querySelector("span"); if (sp) sp.textContent = on ? "Épinglé" : "Épingler";
     toast(on ? `${nom} est épinglé dans le menu.` : `${nom} n'est plus épinglé.`);
   });
   function allerPf(o, code) {

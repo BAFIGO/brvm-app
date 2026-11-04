@@ -355,13 +355,13 @@
     const pr = c.projets.slice(0, 2), autres = c.projets.length - pr.length;
     let avant = Math.max(0, c.securiteObj - c.securite);
     return `<section class="card bu-projet"><span class="bu-tuile amb">${ic(P.coffre)}</span>
-      <div class="bu-projet-c"><div class="bu-ligne"><span><b>Mon coffre</b><small class="bu-sous">${F(c.solde)} gardés</small></span><a href="#objectifs" class="small">Voir</a></div>
+      <div class="bu-projet-c"><div class="bu-ligne"><span><b>Mon coffre</b><small class="bu-sous">${F(c.solde)} gardés</small></span><a href="#portefeuille" data-bu="coffre" class="small">Voir</a></div>
         <div class="bu-ligne small"><span>${ic(P.securite)} Sécurité</span><span>${F(c.securite)} / ${F(c.securiteObj)}</span></div>${jauge(c.securite, c.securiteObj)}
         ${pr.map((x) => { const r = (+x.montant || 0) - x.garde, q = x.montant ? quand(avant + r, c.epargneCible) : ""; avant += Math.max(0, r);
           return `<div class="bu-ligne small"><span>${ic(P[x.icone] || P.coffre)} ${esc(x.nom)}</span><span>${F(x.garde)}${x.montant ? " / " + F(x.montant) : ""}</span></div>
           ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}${q ? `<p class="small muted">${q}</p>` : ""}`; }).join("")}
         ${autres > 0 ? `<p class="small muted">+ ${autres} autre${autres > 1 ? "s" : ""} projet${autres > 1 ? "s" : ""}</p>` : ""}
-        ${!c.projets.length ? `<p class="small"><a href="#objectifs">Ajouter un projet</a></p>` : ""}</div></section>`;
+        ${!c.projets.length ? `<p class="small"><a href="#portefeuille" data-bu="coffre">Ajouter un projet</a></p>` : ""}</div></section>`;
   }
   // Mon avenir (accueil) : l'âge de liberté estimé, ou l'invitation à le calculer
   function blocAvenir(c) {
@@ -491,9 +491,19 @@
     v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1>
       <div class="bu-poches" aria-label="Mes trois poches">
         <a href="#budget" class="bu-poche"><span class="bu-tuile clair petit">${ic(P.salaire)}</span><small>Pour vivre</small><b>${F(Math.max(0, c.reste))}</b></a>
-        <a href="#objectifs" class="bu-poche"><span class="bu-tuile amb petit">${ic(P.coffre)}</span><small>Je garde</small><b>${F(c.solde)}</b></a>
+        <a href="#portefeuille" data-bu="coffre" class="bu-poche"><span class="bu-tuile amb petit">${ic(P.coffre)}</span><small>Je garde</small><b>${F(c.solde)}</b></a>
         <a href="#portefeuille" data-bu="placements" class="bu-poche"><span class="bu-tuile petit">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span><small>Je fais grandir</small><b>${F(pl?.valeur || 0)}</b></a></div>
-      <p class="bu-intro">Ce que vous gardez remplit les étages <b>dans l'ordre</b>.</p>
+${etagesHtml(c)}
+      <div class="bu-soir-b"><button type="button" class="btn primary" data-coffre="verser">Je garde</button><button type="button" class="btn" data-coffre="reprendre">J'ai repris</button></div>
+      <p class="small center"><a href="#portefeuille" data-bu="coffre">Historique et réglages du coffre</a></p>`;
+  }
+  // Les trois étages du coffre (sécurité, projets, faire grandir) : page Mes objectifs et page Mon coffre
+  function etagesHtml(c) {
+    const plein = c.securite >= c.securiteObj && c.securiteObj > 0;
+    const cible = c.epargneCible, versSecu = Math.min(cible, Math.max(0, c.securiteObj - c.securite)), versProjets = cible - versSecu;
+    const moisRestants = cible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / cible) : null;
+    let avant = Math.max(0, c.securiteObj - c.securite);
+    return `      <p class="bu-intro">Ce que vous gardez remplit les étages <b>dans l'ordre</b>.</p>
       ${cible > 0 ? `<section class="card"><b>À garder en ${esc(new Date().toLocaleDateString("fr-FR", { month: "long" }))} : ${F(cible)}</b>
         <div class="bu-repart" aria-hidden="true"><i style="flex:${versSecu || 0.001}"></i><i style="flex:${versProjets || 0.001}"></i></div>
         <div class="bu-ligne small"><span>${ic(P.securite)} Vers la sécurité</span><b>${F(versSecu)}</b></div>
@@ -517,9 +527,14 @@
         <div class="bu-ligne small"><span>Plan proposé</span><b>${F(cible)} ${c.jour ? "par mois" : "par mois, le jour de paie"}</b></div>
         <p class="small muted">${plein ? "Votre sécurité est pleine : vous pouvez commencer à placer." : moisRestants ? `Possible quand la sécurité sera pleine, dans environ ${moisRestants} mois.` : "Possible quand la sécurité sera pleine."}</p>
         ${plein ? `<button type="button" class="btn primary" data-coffre="sgi">J'ai envoyé à ma SGI</button>` : ""}
-        <p class="small"><a href="#avenir">Voir mon avenir</a></p></section>
-      <div class="bu-soir-b"><button type="button" class="btn primary" data-coffre="verser">Je garde</button><button type="button" class="btn" data-coffre="reprendre">J'ai repris</button></div>
-      <p class="small center"><a href="#portefeuille" data-bu="coffre">Historique et réglages du coffre</a></p>`;
+        <p class="small"><a href="#avenir">Voir mon avenir</a></p></section>`;
+  }
+  // Haut de la page « Mon coffre » (onglet épargne du portefeuille) : les étages, ou l'invitation à faire son budget
+  function coffreHtml() {
+    if (!S.charge) { charger(); return ""; }
+    if (!S.profil) return `<section class="card bu-invit"><span class="bu-tuile amb">${ic(P.coffre)}</span><div><b>Vos objectifs, étage par étage</b>
+      <p class="small">Faites votre budget (1 minute) : votre sécurité et vos projets se calculent tout seuls.</p><a class="btn primary small" href="#budget">Commencer mon budget</a></div></section>`;
+    return `<div class="bu-coffre">${etagesHtml(calculs())}</div>`;
   }
   // ajouter un projet (pictogramme, nom, montant, date)
   let dlgP = null, projIcone = "ecole";
@@ -677,7 +692,7 @@
   // ------------------------------------------------------------------ actions
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-bu]");
-    if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs, #v-avenir")) return;
+    if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs, #v-avenir, #v-portefeuille")) return;
     const a = b.dataset.bu, v = b.dataset.v;
     if (a === "rythme") { S.brouillon.rythme = v; S.etape = 2; rendre(); setTimeout(() => $("#bu-rev")?.focus(), 50); }
     else if (a === "rev-puce") { S.brouillon.revenu = +v; rendre(); }
@@ -788,7 +803,7 @@
       mon_avenir: a ? { age: a.age, age_de_liberte_estime_si_place: a.agePlace, age_si_l_argent_dort: a.ageDort, hypothese: HYP[S.avenirHyp || "equilibre"][0] } : null,
     };
   }
-  window.BafiBudget = { render, contexte, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
+  window.BafiBudget = { render, contexte, coffreHtml, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
     mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {

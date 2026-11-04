@@ -1088,3 +1088,22 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .nt-res ul { margin: 4px 0 0; padding-left: 18px; } .nt-res li { margin: 2px 0; }
 .nt-mini { font-size: 1.05rem; }
 .fin-sous { font-size: .95rem; margin: 12px 0 6px; color: var(--muted); }
+.sommaire .rub-groupe { margin: 18px 4px 6px; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); } .sommaire .rub-groupe:first-child { margin-top: 4px; }
+/* Mes placements : une phrase, puis ce qu'il faut regarder */
+.pl-tete .pl-phrase { margin: 0 0 10px; font-size: 1.15rem; line-height: 1.4; }
+.pl-tete .pl-phrase b { font-size: 1.5rem; font-weight: 800; }
+.pl-regarder { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--warn-bg, hsl(40 90% 94%)); }
+.pl-regarder ul { margin: 4px 0 0; padding-left: 18px; } .pl-regarder li { margin: 3px 0; font-size: .92rem; }
+.pl-calme { margin: 0 0 10px; }
+.epingler.icone { width: 36px; height: 36px; min-height: 36px; padding: 0; display: inline-grid; place-items: center; border-radius: 10px; }
+.epingler.icone svg { width: 18px; height: 18px; }
+.epingler.icone[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.perf-phrase { margin: 0 0 4px; font-size: 1.15rem; line-height: 1.4; }
+details.perf-jours > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+details.perf-jours > summary h2 { margin: 0; } details.perf-jours > summary::-webkit-details-marker { display: none; }
+details.perf-jours > summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+details.perf-jours[open] > summary::after { content: "▴"; }
+.sim-phrase { margin: 6px 0 4px; font-size: 1.1rem; line-height: 1.45; }
+details.sim-ajust > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+details.sim-ajust > summary h2 { margin: 0; } details.sim-ajust > summary::-webkit-details-marker { display: none; }
+details.sim-ajust > summary::after { content: "▾"; margin-left: auto; color: var(--muted); } details.sim-ajust[open] > summary::after { content: "▴"; }
