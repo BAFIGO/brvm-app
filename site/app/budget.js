@@ -629,9 +629,7 @@
   function dialogue() {
     if (dlg) return dlg;
     document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-budget" class="bu-dlg" aria-labelledby="bu-dlg-t"><form method="dialog" class="bu-form" novalidate>
-      <h2 id="bu-dlg-t" class="sr-only">Nouvelle opération</h2>
-      <div class="bu-type" role="radiogroup" aria-label="Type">
-        <button type="button" data-t="revenu" role="radio">J'ai gagné</button><button type="button" data-t="depense" role="radio">J'ai dépensé</button><button type="button" data-t="garde" role="radio">Je garde</button></div>
+      <h2 id="bu-dlg-t" class="bu-dlg-t"><span class="bu-tuile petit" aria-hidden="true"></span><span class="bu-dlg-tt">J'ai dépensé</span></h2>
       <label class="bu-montant"><span class="sr-only">Montant</span><input id="bu-m" inputmode="numeric" autocomplete="off" placeholder="0"><span>F</span></label>
       <div class="bu-habitude" id="bu-hab"></div>
       <div class="bu-puces" id="bu-mp"></div>
@@ -677,7 +675,9 @@
   }
   function peindre() {
     const complet = S.profil?.mode === "complet";
-    dlg.querySelectorAll("[data-t]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.t === saisie.type)));
+    const rev = saisie.type === "revenu", t = $(".bu-dlg-t", dlg);
+    $(".bu-dlg-tt", t).textContent = rev ? "J'ai gagné" : "J'ai dépensé";
+    const tu = $(".bu-tuile", t); tu.className = `bu-tuile petit${rev ? "" : " clair"}`; tu.innerHTML = ic(rev ? P.plus : P.moins, rev ? "#fff" : "currentColor");
     const prevus = Object.keys(prevu(S.profil).depenses);
     const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l])
       : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[3]))].map(([k, l]) => [k, l]);

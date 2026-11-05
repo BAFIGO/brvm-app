@@ -216,3 +216,7 @@ dialog.bu-dlg { max-height: calc(100dvh - 16px); overflow-y: auto; overflow-x: h
 .bu-freq button[aria-checked="true"] { background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); color: #fff; }
 .bu-besoin { color: hsl(30 85% 38%); font-size: 1.15rem; }
 .bu-hor td, .bu-hor th { white-space: nowrap; }
+/* bascule Simple / Détaillé centrée */
+.bu-bascule { align-self: center; margin-inline: auto; }
+/* fenêtre de saisie : un titre (le geste choisi) au lieu des onglets */
+.bu-dlg-t { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; font-size: 1.2rem; color: var(--brand); }
