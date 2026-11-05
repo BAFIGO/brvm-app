@@ -169,3 +169,50 @@ details.bu-bourse[open] > summary { margin-bottom: 12px; }
 .bu-habit-r { margin: 8px 0 0; } .bu-habit-r b { font-size: 1.4rem; color: var(--brand); }
 .bu-case { display: flex; gap: 10px; align-items: center; justify-content: center; min-height: 44px; }
 a.bu-av { text-decoration: none; }
+.bu-habit-l { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; } .bu-habit-l .bu-puces { justify-content: flex-start; }
+.bu-habit-l label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* fenêtres du budget : jamais plus hautes ni plus larges que l'écran ; cases à cocher de taille normale */
+dialog.bu-dlg { max-height: calc(100dvh - 16px); overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+.bu-form { box-sizing: border-box; max-width: 100%; }
+.bu-grille > * { min-width: 0; }
+.bu-plus-opt label, .bu-case, .cf-real, .cf-mo { display: flex !important; align-items: center; gap: 10px; min-height: 44px; font-size: 1rem; font-weight: 500; width: auto !important; }
+.bu-dlg input[type="checkbox"], .bu-case input[type="checkbox"], .cf-real input[type="checkbox"], .cf-mo input[type="radio"] {
+  appearance: auto; -webkit-appearance: checkbox; width: 22px !important; height: 22px !important; min-height: 0 !important;
+  margin: 0; padding: 0; flex: none; accent-color: var(--accent); }
+.cf-mo input[type="radio"] { -webkit-appearance: radio; }
+.cf-motifs { display: grid; gap: 4px; }
+.cf-mo { padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; }
+.cf-mo:has(input:checked) { border: 2px solid var(--accent); }
+@media (max-width: 759px) { .bu-form::before { content: ""; align-self: center; width: 44px; height: 5px; border-radius: 3px; background: var(--border); margin: -6px 0 2px; } }
+/* Mon budget prévu : pictogrammes, montants, ajout de lignes */
+.bu-pv-g { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 6px 0 12px; }
+@media (min-width: 640px) { .bu-pv-g { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.bu-pv-c { display: flex !important; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); text-align: center; }
+.bu-pv-n { font-size: .85rem; font-weight: 600; }
+.bu-pv-c input { width: 100% !important; min-height: 44px; text-align: center; font-weight: 700; font-size: 1rem; border-radius: 10px; }
+.bu-pv-plus { margin: 4px 0 12px; } .bu-pv-plus > summary { list-style: none; display: inline-flex; min-height: 44px; align-items: center; cursor: pointer; }
+.bu-pv-plus > summary::-webkit-details-marker { display: none; } .bu-pv-plus .bu-grille { margin-top: 10px; }
+.bu-prevu > .btn.primary { width: 100%; min-height: 48px; border-radius: 14px; }
+.bu-pv-l { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 10px; } .bu-pv-l li { display: flex; gap: 12px; align-items: center; }
+.bu-jauge.trop i { background: hsl(0 70% 50%); }
+/* itération 4 : bascule compacte avec flèches ; ligne « rien à noter » ; fenêtre de saisie finie */
+.bu-bascule { width: 196px; padding: 3px 22px; border-radius: 12px; }
+.bu-bascule button { min-height: 34px; font-size: .84rem; }
+.bu-curseur { left: 22px; width: calc(50% - 22px); top: 3px; bottom: 3px; border-radius: 9px; }
+.bu-curseur.droite { transform: translateX(100%); }
+.bu-fl { position: absolute; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--muted); opacity: .8; pointer-events: none; }
+.bu-fl.g { left: 4px; } .bu-fl.d { right: 4px; }
+.bu-fl svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.bu-rien-l { display: block; width: 100%; min-height: 40px; padding: 6px 10px; border: 1px dashed var(--border); border-radius: 12px; background: transparent;
+  color: var(--muted); font: inherit; font-size: .88rem; cursor: pointer; text-align: center; }
+.bu-rien-l b { color: var(--accent); }
+.bu-actions { display: grid; grid-template-columns: auto 1fr 1.4fr; gap: 10px; align-items: stretch; position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
+.bu-actions .bu-annuler { min-height: 54px; border-radius: 14px; font-weight: 700; }
+/* Mon avenir : montant + rythme sur une même ligne */
+.bu-av-saisie { display: flex; flex-direction: column; gap: 12px; }
+.bu-av-l { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.bu-freq { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 3px; border-radius: 12px; background: var(--surface-2); }
+.bu-freq button { min-height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--brand); font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.bu-freq button[aria-checked="true"] { background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); color: #fff; }
+.bu-besoin { color: hsl(30 85% 38%); font-size: 1.15rem; }
+.bu-hor td, .bu-hor th { white-space: nowrap; }

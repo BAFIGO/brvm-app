@@ -387,6 +387,7 @@
       budgetProjets: async () => r(await sb.from("budget_projets").select("*").order("ordre").order("id")),
       budgetAjouterProjet: async (x) => r(await sb.from("budget_projets").insert({ ...x, user_id: S.user.id }).select().single()),
       budgetSupprimerProjet: async (id) => r(await sb.from("budget_projets").delete().eq("id", id)),
+      budgetMajProjet: async (id, x) => r(await sb.from("budget_projets").update(x).eq("id", id)),
       encouragerCercle: async (id) => { const { error } = await sb.rpc("encourager_cercle", { p_cercle: id }); if (error) throw new Error(error.message); },
       sauverRappels: async (x) => { r(await sb.from("rappels").upsert({ ...x, user_id: S.user.id, modifie_le: new Date().toISOString() })); },
       abonnerPush: async (a) => { r(await sb.from("push_abonnements").upsert({ ...a, user_id: S.user.id, actif: true })); },
@@ -453,6 +454,22 @@
     return { id: 100, projets, mv: DEMO_DEBUT ? [] : mv, profil: DEMO_DEBUT ? null : { mode: "simple", rythme: "mois", revenu: 400000, profil: "equilibre",
       objectif_nom: "Scolarité de septembre", objectif_icone: "ecole", objectif_montant: 350000, jour_paie: new Date().getDate() } };
   })();
+  // Crayon d'une carte du Marché : noter l'achat (ou la vente) de ce titre, sans ouvrir ni fermer la carte
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest?.("[data-op-titre]");
+    if (b) { ev.preventDefault(); ev.stopPropagation(); openOp({ ticker: b.dataset.opTitre, type: b.dataset.opType || "ACHAT" }); return; }
+    const m = ev.target.closest?.("[data-vers-marche]");
+    if (m) { ev.preventDefault(); ev.stopPropagation(); versMarche(m.dataset.versMarche); }
+  }, true);
+  document.addEventListener("keydown", (ev) => { const m = ev.target.closest?.("li[data-vers-marche]"); if (m && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); versMarche(m.dataset.versMarche); } });
+  // Ouvre le titre au Marché (bonne rubrique, recherche sur son code, carte dépliée)
+  function versMarche(code) {
+    const cat = catDe(code) || "actions";
+    Object.assign(S.ui, { mkTab: cat, mkQuery: code, mkFilter: "all", mkShow: 30, mkOuvrir: code });
+    if (location.hash === "#marche") render(); else location.hash = "marche";
+  }
+  // lien vers un onglet du portefeuille (ex. « Mon coffre » depuis Mes placements)
+  document.addEventListener("click", (ev) => { const a = ev.target.closest?.("[data-pfo-lien]"); if (a) { ev.preventDefault(); allerPf(a.dataset.pfoLien); } });
   // Sortie de l'application après déconnexion : la page est REMPLACÉE (location.replace) et l'écran vidé,
   // pour que la flèche « retour » du navigateur ne réaffiche pas l'application
   function sortir() {
@@ -582,6 +599,7 @@
       budgetProjets: async () => [...budgetDemo.projets],
       budgetAjouterProjet: async (x) => { const y = { ...x, id: ++budgetDemo.id }; budgetDemo.projets.push(y); return y; },
       budgetSupprimerProjet: async (id) => { budgetDemo.projets = budgetDemo.projets.filter((p) => p.id !== id); },
+      budgetMajProjet: async (id, x) => { budgetDemo.projets = budgetDemo.projets.map((p) => (p.id === id ? { ...p, ...x } : p)); },
       encouragerCercle: async (id) => { const c = cerclesDemo.find((x) => x.id === id); if (c) c.jai_encourage = true; },
       cercles: async () => cerclesDemo,
       maFormule: async () => ({ formule: new URLSearchParams(location.search).get("formule") || "essentiel", souscrite: "essentiel", essai: true,
@@ -1190,7 +1208,7 @@
         const ligne = ({ o, i }) => `<li><div class="main"><div class="name">${mq(o.code)}${esc(nomLisible(o.libelle || o.code))}</div>
             <div class="sub">${esc(o.code)}${o.motif ? " · " + esc(o.motif) : ""}${ok(o.seances) && o.seances > 1 ? ` · ~${N(o.seances)} séances` : ""}</div></div>
             <div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">limite ${F(o.prix_limite)}</div>
-            <button class="btn small" data-ordre="${i}">J'ai passé l'ordre</button></div></li>`;
+            <button class="btn small" data-vers-marche="${esc(o.code)}">Voir au Marché</button></div></li>`;
         const groupe = (titre, liste) => {
           if (!liste.length) return "";
           const total = liste.reduce((a, { o }) => a + (+o.quantite || 0) * (+o.prix_limite || 0), 0);
@@ -1319,30 +1337,22 @@
     const pc = ep.objectif ? Math.min(100, (100 * ep.verse) / ep.objectif) : 0;
     let h = `<div class="card epargne ep2" id="mon-epargne">`;
 
-    // 1. Où j'en suis, et la seule action qui compte
-    h += `<div class="ep2-tete"><h2 class="ep2-etat">${ep.aFaire
-        ? `Gardez <b>${F(pl.montant)}</b> ${periode}`
-        : `Vous êtes à jour ${periode} <span class="ep2-ok" aria-hidden="true">✓</span>`}</h2>
-      <p class="ep2-plan small muted">Mon plan : ${F(pl.montant)} ${RYTHMES[r][0]} · <button type="button" class="btn link small" data-coffre="plan">modifier</button></p></div>`;
-    if (ep.objectif) h += `<div class="ep2-objectif">
-        <div class="ep2-chiffres"><span><b class="num">${F(ep.verse)}</b> gardés sur ${F(ep.objectif)}</span><b class="num">${Math.round(pc)} %</b></div>
-        <div class="ep2-barre" role="progressbar" aria-label="Progression vers l'objectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pc)}"><i style="width:${pc.toFixed(1)}%"></i></div>
-        <p class="small muted">${ep.objectifLe ? `Objectif atteint vers le ${D(ep.objectifLe)} à ce rythme` : "Objectif atteint, bravo !"}</p></div>`;
+    // 1. Ce qu'il y a dans mon coffre, où j'en suis ce mois-ci, et la seule action qui compte
+    h += `<div class="ep2-tete"><span class="small muted">Dans mon coffre</span><b class="ep2-solde num">${F(Math.max(0, ep.solde))}</b>
+      <p class="ep2-etat-l">${ep.aFaire ? `À garder ${periode} : <b>${F(pl.montant)}</b>` : `À jour ${periode} <span class="ep2-ok" aria-hidden="true">✓</span>`}
+        <span class="small muted"> · plan ${F(pl.montant)} ${RYTHMES[r][0]} · <button type="button" class="btn link small" data-coffre="plan">modifier</button></span></p></div>`;
     h += `<button class="btn primary ep2-cta" data-coffre="verser">Je garde</button>`;
+    if (ep.solde > 0) {
+      const pret = ep.solde >= seuil();
+      h += `<div class="ep2-deux"><button class="btn${pret ? " primary-lite" : ""}" data-coffre="transfert">Envoyer à ma SGI</button>
+        <button class="btn" data-coffre="reprendre">J'ai repris</button></div>
+        <p class="small muted ep2-note">${pret ? "Assez pour investir : vous pouvez l'envoyer à votre SGI." : `Envoi conseillé à partir de ${F(seuil())}, pour limiter les frais.`}</p>`;
+    }
 
     // 2. Une seule ligne de motivation (série, record et prochain trophée réunis)
     if (debutant) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🏅</span><span>Votre premier trophée, <b>Premier pas</b>, dès votre premier versement.</span></p>`;
     else if (ep.serie > 0) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🔥</span><span><b>${pluriel(ep.serie, ep.unite)} d'affilée</b>${suivant ? ` · prochain trophée dans ${pluriel(suivant.reste, suivant.unite)}` : ""}</span></p>`;
     else h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🌱</span><span>Une nouvelle série commence${ep.record > 1 ? ` · votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre` : ""}</span></p>`;
-
-    // 3. L'argent mis de côté et pas encore envoyé : seulement s'il y en a
-    if (ep.solde > 0) {
-      const pret = ep.solde >= seuil();
-      h += `<div class="ep2-cote${pret ? " pret" : ""}"><div><span class="small muted">Gardé, pas encore envoyé à votre SGI</span><b class="num">${F(ep.solde)}</b>
-          <span class="small">${pret ? "Prêt à investir : vous pouvez l'envoyer à votre SGI." : `Investissement possible ${delai(ep.seuilDans)} (à partir de ${F(seuil())}, pour limiter les frais).`}</span></div>
-        <div class="ep2-cote-act"><button class="btn${pret ? " primary" : ""} small" data-coffre="transfert">J'ai envoyé à ma SGI</button>
-          <button class="btn link small" data-coffre="reprendre">J'ai repris</button></div></div>`;
-    }
 
     // Mes trophées : aperçu des médailles gagnées, la galerie complète se déplie
     if (!debutant) {
@@ -1659,9 +1669,9 @@
     }
     if (onglet === "epargne") {
       // Mon coffre : une seule page pour l'argent gardé — les étages (sécurité, projets, faire grandir), puis le rythme, la série, les trophées
-      h += window.BafiBudget?.coffreHtml?.() || "";
       h += ep ? carteEpargne(ep) : `<div class="card epargne ep2"><h2 class="ep2-etat">Fixez-vous un rythme d'épargne</h2><p>Suivez votre régularité et gagnez vos premiers trophées.</p>
         <button type="button" class="btn primary ep2-cta" data-coffre="plan">Choisir mon rythme d'épargne</button></div>`;
+      h += window.BafiBudget?.coffreHtml?.() || "";
       v.innerHTML = h;
       $(".ep2-trophees", v)?.addEventListener("toggle", (ev) => (S.ui.epTrophees = ev.target.open));
       v.querySelectorAll("[data-pfo]").forEach((b) => b.addEventListener("click", () => { S.ui.pfOnglet = b.dataset.pfo; vPortefeuille(); window.dispatchEvent(new Event("brvm:maj")); }));
@@ -1687,13 +1697,19 @@
           <dt>Placé en bourse</dt><dd>Ce que valent vos actions, obligations et OPCVM au cours de la dernière séance.</dd>
           <dt>Total chez ma SGI</dt><dd>Disponible + placé en bourse : ${F(L.valeur)}.</dd></dl></details>
       </div>
-      <div class="card kpis">
-        <div class="kpi"><div class="lbl">Total envoyé à ma SGI</div><div class="val num">${F(L.apports)}</div><div class="small muted">dépôts moins retraits</div></div>
-        <div class="kpi"><div class="lbl">Gain total depuis le début</div><div class="val num ${cls(L.gainTotal)}">${L.gainTotal > 0 ? "+" : ""}${F(L.gainTotal)}</div><div class="small muted">dividendes et ventes compris${(() => {
-          const c2 = S.prop?.contenu, b = S.prop?.date === S.seance?.date && !journalChanged(L, c2) ? c2?.performance?.bench_total : null;
-          return ok(b) ? ` · marché ${P(b)} sur la période` : "";
-        })()}</div></div>
-        <div class="kpi" style="align-self:center"><button class="btn small" id="gain-aide">Comprendre mon gain</button></div>
+      <div class="card chemin">
+        <h2 class="chemin-t">Le chemin de mon argent</h2>
+        <ol class="chemin-l">
+          <li><span>J'ai envoyé à ma SGI</span><b class="num">${F(L.apports)}</b><small>dépôts moins retraits</small></li>
+          <li><span>Aujourd'hui, chez ma SGI</span><b class="num">${F(L.valeur)}</b><small>placé ${F(L.investi)} + disponible ${F(L.cash)}</small></li>
+          <li class="chemin-res"><span>Mon gain depuis le début</span><b class="num ${cls(L.gainTotal)}">${L.gainTotal > 0 ? "+" : ""}${F(L.gainTotal)}${L.apports > 0 ? ` <small>(${L.gainTotal > 0 ? "+" : ""}${(100 * L.gainTotal / L.apports).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %)</small>` : ""}</b>
+            <small>dividendes et ventes compris${(() => {
+              const c2 = S.prop?.contenu, b = S.prop?.date === S.seance?.date && !journalChanged(L, c2) ? c2?.performance?.bench_total : null;
+              return ok(b) ? ` · marché ${P(b)} sur la période` : "";
+            })()}</small></li>
+        </ol>
+        ${epargne()?.solde > 0 ? `<p class="small chemin-coffre">En plus, <b>${F(epargne().solde)}</b> attendent dans votre coffre (pas encore envoyés). <a href="#portefeuille" data-pfo-lien="epargne">Mon coffre</a></p>` : ""}
+        <button class="btn small" id="gain-aide">Comprendre mon gain</button>
       </div>`;
     // Ajouter une opération : l'import d'un avis ou d'un relevé est l'action principale, la saisie l'alternative
     h += `<div class="card ajout-op" aria-labelledby="h-ajout"><h2 id="h-ajout">Ajouter une opération</h2>
@@ -1714,7 +1730,8 @@
         const ep1 = estEpingle(p.code);
         h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}</div>
           <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
-          <div class="sub etats">${al ? pastille(al) : chip(d)}<button type="button" class="epingler icone" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
+          <div class="sub etats">${al ? pastille(al) : chip(d)}<button type="button" class="mk-op pos-op" data-op-titre="${esc(p.code)}" data-op-type="VENTE"
+            aria-label="Noter une opération : ${esc(S.names.get(p.code) || p.code)} (vente, achat, dividende)" title="Noter une vente, un achat ou un dividende"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><button type="button" class="epingler icone" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
             aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}" title="${ep1 ? "Épinglé dans le menu" : "Épingler dans le menu"}">${ICONE_EPINGLE}</button>${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
@@ -1789,8 +1806,7 @@
       </div></div>`;
     if (!r) return h + `<div class="card sim-zone"><p class="muted">Chargement des cibles du profil…</p></div>`;
     // le résultat d'abord, en une phrase ; le détail (répartition, ajustements) ensuite
-    h += `<div class="card sim-zone sim-resultat">${badge}<p class="sim-phrase">Avec <b>${F(u.montant)}</b> en profil <b>${esc(PROFILS[u.profil]?.t || u.profil)}</b>${ok(r.rdt)
-        ? ` : environ <b>${P(r.rdt, false)}</b> de rendement attendu par an` : ""}${r.ordres.length
+    h += `<div class="card sim-zone sim-resultat">${badge}<p class="sim-phrase">Avec <b>${F(u.montant)}</b> en profil <b>${esc(PROFILS[u.profil]?.t || u.profil)}</b>${r.ordres.length
         ? `, en ${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour y arriver.` : ". Vos placements y sont déjà."}</p>
       <p class="small muted">Une estimation, pas une promesse ni une recommandation.</p></div>`;
     // répartition : le réel en trait plein, la simulation en pointillés
@@ -1798,28 +1814,28 @@
       ${reel ? `<p class="rep-lbl">Aujourd'hui (réel)</p>${classBar(L.positions.filter((p) => p.valeur > 0 && CLASSES[p.classe]).map((p) => ({ classe: p.classe, montant: p.valeur })).concat(L.cash > 0 ? [{ classe: "liquidites", montant: L.cash }] : []))}` : ""}
       <p class="rep-lbl">Simulée · profil ${esc(PROFILS[u.profil]?.t || "")}${ecart ? ` · ${ecart > 0 ? "avec un apport de" : "avec un retrait de"} ${F(Math.abs(ecart))}` : ""}</p>
       <div class="sim-barre">${classBar(r.cible)}</div>
-      <p class="small">${ok(r.rdt) ? `Rendement attendu estimé : <b>${P(r.rdt, false)}</b> par an · ` : ""}${r.cible.length} ligne${r.cible.length > 1 ? "s" : ""}
+      <p class="small">${r.cible.length} ligne${r.cible.length > 1 ? "s" : ""}
         · part en actions ${Math.round(PART(r.cible, "actions") * 100)} %</p></div>`;
     // ajustements : un résumé et les principaux, sans bouton d'enregistrement (on n'enregistre que le réel)
     const top = r.ordres.slice().sort((a, b) => b.quantite * b.prix_limite - a.quantite * a.prix_limite).slice(0, 6);
     h += `<details class="card sim-zone sim-ajust"${S.ui.simAjust ? " open" : ""}><summary>${badge}<h2>Ajustements simulés</h2><span class="small muted">le détail des achats et ventes</span></summary>
       ${r.ordres.length ? `<p>${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour se rapprocher de cette répartition :</p>
-        <ul class="list">${top.map((o) => `<li><div class="main"><div class="name">${o.sens === "VENTE" ? "Vente" : "Achat"} · ${esc(nomLisible(o.libelle || o.code))}</div>
+        <ul class="list">${top.map((o) => `<li class="vers-mk" data-vers-marche="${esc(o.code)}" tabindex="0" role="link" aria-label="Voir ${esc(nomLisible(o.libelle || o.code))} au Marché"><div class="main"><div class="name">${o.sens === "VENTE" ? "Vente" : "Achat"} · ${esc(nomLisible(o.libelle || o.code))} <span class="vers-mk-f" aria-hidden="true">›</span></div>
           <div class="sub">${esc(o.motif || "")}</div></div><div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">vers ${F(o.prix_limite)}</div></div></li>`).join("")}</ul>
         ${r.ordres.length > top.length ? `<p class="small muted">et ${r.ordres.length - top.length} autre${r.ordres.length - top.length > 1 ? "s" : ""}, plus petit${r.ordres.length - top.length > 1 ? "s" : ""}.</p>` : ""}`
       : `<p>Rien à ajuster : vos placements sont déjà proches de cette répartition.</p>`}
-      <p class="small muted">Une estimation pour éclairer vos décisions, pas une recommandation. Si vous passez un ordre chez votre SGI, importez ensuite l'avis :
-        votre portefeuille réel se met à jour.</p></details>`;
+      <p class="small muted">Touchez un titre pour l'analyser au Marché ; c'est là que vous notez un achat ou une vente fait chez votre SGI.
+        Une estimation pour éclairer vos décisions, pas une recommandation.</p></details>`;
     // Investisseur : les trois profils côte à côte
     if (acces(2)) {
       const lignes = Object.keys(PROFILS).map((k) => { const c = k === S.profil?.profil ? S.cibles : S.ciblesPar?.[k];
         return [k, c ? instantOrders(L.valeur > 0 ? L : { valeur: 0, cash: 0, positions: [] }, { montant: u.montant, cibles: c }) : null]; });
       h += `<div class="card sim-zone">${badge}<h2>Comparer les profils</h2><p class="small muted">Pour ${F(u.montant)}, avec les cibles de ce soir.</p>
-        <div class="scroll-x"><table class="dtable sim-comp"><thead><tr><th>Profil</th><th class="num">Actions</th><th class="num">Oblig.</th><th class="num c-opcvm">OPCVM</th><th class="num" title="Rendement attendu par an">Rend.</th></tr></thead>
+        <div class="scroll-x"><table class="dtable sim-comp"><thead><tr><th>Profil</th><th class="num">Actions</th><th class="num">Oblig.</th><th class="num c-opcvm">OPCVM</th><th title="Ampleur des variations à attendre">Variations</th></tr></thead>
         <tbody>${lignes.map(([k, x]) => `<tr class="${k === u.profil ? "on" : ""}"><td><b>${esc(PROFILS[k].t)}</b>${k === S.profil?.profil ? ` <span aria-label="mon profil">★</span>` : ""}</td>
           ${x ? `<td class="num">${Math.round(PART(x.cible, "actions") * 100)} %</td><td class="num">${Math.round(PART(x.cible, "obligations") * 100)} %</td>
-          <td class="num c-opcvm">${Math.round(PART(x.cible, "opcvm") * 100)} %</td><td class="num">${ok(x.rdt) ? P(x.rdt, false) : "–"}</td>` : `<td colspan="4" class="muted">…</td>`}</tr>`).join("")}</tbody></table></div>
-        <p class="small muted">★ : votre profil. Plus de part en actions : un rendement attendu plus élevé, mais des variations plus fortes. Pour changer de profil : Profil › Mon profil d'investisseur.</p></div>`;
+          <td class="num c-opcvm">${Math.round(PART(x.cible, "opcvm") * 100)} %</td><td>${(() => { const a = PART(x.cible, "actions"); return a >= 0.45 ? "Fortes" : a >= 0.25 ? "Moyennes" : "Faibles"; })()}</td>` : `<td colspan="4" class="muted">…</td>`}</tr>`).join("")}</tbody></table></div>
+        <p class="small muted">★ : votre profil. Plus de part en actions : plus de potentiel sur le long terme, mais des variations plus fortes. Aucun rendement n'est garanti. Pour changer de profil : Profil › Mon profil d'investisseur.</p></div>`;
     } else h += `<div class="card sim-zone">${badge}<h2>Comparer les profils</h2>${verrou(2, "La comparaison des trois profils et la simulation d'un autre profil")}</div>`;
     return h;
   }
@@ -2189,10 +2205,12 @@
       const pxCourt = u.mkTab === "actions" ? `${F(r.cours)}<div class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</div>` : px;
       h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}</div>
           <div class="sub">${chipSante(r.decision, r.analyse?.note)}</div></div>
-          <div class="right num">${pxCourt}</div></summary>
+          <div class="right num">${pxCourt}</div>
+          <button type="button" class="mk-op" data-op-titre="${esc(r.code)}" aria-label="Noter un achat ou une vente : ${esc(r.nom || r.code)}" title="Noter un achat ou une vente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button></summary>
           <div class="why">${u.mkTab === "actions" ? reperes(r) + histoAnnuel(r.historique_annuel, "action") : `<p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100</p>`}
             ${u.mkTab === "opcvm" ? histoAnnuel(r.historique_annuel, "opcvm") : ""}
-            ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}<span class="small muted">${esc(r.code)} · 3 derniers mois</span></div>` : ""}${det}</div></details></li>`;
+            ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}<span class="small muted">${esc(r.code)} · 3 derniers mois</span></div>` : ""}${det}
+            <button type="button" class="btn mk-op-l" data-op-titre="${esc(r.code)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg> Noter un achat ou une vente</button></div></details></li>`;
     }
     h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
       ${tend ? `<details class="card tend-pli"${u.tendOuverte ? " open" : ""}><summary><span class="op-t">Tendance du marché</span>
@@ -2215,18 +2233,48 @@
     qi.addEventListener("input", () => { u.mkQuery = qi.value; u.mkShow = 30; vMarche(); $("#mk-q").focus(); const n = $("#mk-q"); n.setSelectionRange(n.value.length, n.value.length); });
     $("#mk-f", v).addEventListener("change", (e) => { u.mkFilter = e.target.value; vMarche(); });
     $("#mk-more", v)?.addEventListener("click", () => { u.mkShow += 30; vMarche(); });
+    // arrivée depuis le simulateur ou une proposition : la carte du titre s'ouvre
+    if (u.mkOuvrir) {
+      const c = u.mkOuvrir; u.mkOuvrir = null;
+      const d = v.querySelector(`[data-op-titre="${CSS.escape(c)}"]`)?.closest("details");
+      if (d) { d.open = true; setTimeout(() => d.scrollIntoView({ block: "start", behavior: "smooth" }), 80); }
+    }
   }
 
   function formPlan(pl) {
-    return `<form id="f-plan" class="card" novalidate><h2>Mon plan d'épargne</h2>
-      <p class="small muted">L'argent reste chez vous (espèces, banque, mobile money) : l'application vous aide seulement à suivre votre régularité.</p>
+    return `<form id="f-plan" class="bu-form" novalidate><h2>Mon plan pour garder</h2>
+      <p class="small muted">Un seul plan : il remplit, dans l'ordre, votre sécurité, vos projets, puis la bourse. L'argent reste chez vous.</p>
       <div class="grid2"><label>Montant (F)<input name="montant" type="number" min="0" step="500" inputmode="numeric" value="${pl.montant || ""}" placeholder="ex. 5000"></label>
         <label>Rythme<select name="rythme">${Object.entries({ quotidien: "Chaque jour", hebdo: "Chaque semaine", mensuel: "Chaque mois" })
           .map(([k, t]) => `<option value="${k}"${(pl.rythme || "mensuel") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label></div>
       <label class="switch" id="pl-ouvres"><input type="checkbox" name="jours_ouvres"${pl.jours_ouvres !== false ? " checked" : ""}> Du lundi au vendredi seulement</label>
-      <label>Objectif à atteindre (F, facultatif)<input name="objectif" type="number" min="0" step="10000" inputmode="numeric" value="${pl.objectif || ""}" placeholder="ex. 500000"></label>
-      <div class="actions"><button class="btn primary" type="submit">Enregistrer mon plan</button></div></form>`;
+      <p class="small muted pl-mois" aria-live="polite"></p>
+      <div class="actions"><button class="btn" type="button" data-fermer-plan>Annuler</button><button class="btn primary" type="submit">Enregistrer mon plan</button></div></form>`;
+  }  // Fenêtre « Mon plan pour garder » : le même formulaire, ouvert là où l'on en a besoin (objectifs, coffre, accueil)
+  function openPlan() {
+    if (!S.coffre) return;
+    let d = $("#dlg-plan");
+    if (!d) { document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-plan" class="bu-dlg" aria-labelledby="pl-t"></dialog>`); d = $("#dlg-plan"); }
+    d.innerHTML = formPlan(S.coffre.plan || {}).replace("<h2>", '<h2 id="pl-t">');
+    const fp = $("#f-plan", d);
+    const sync = () => {
+      $("#pl-ouvres", fp).hidden = fp.rythme.value !== "quotidien";
+      const m = Math.round(+fp.montant.value || 0) * ({ quotidien: fp.jours_ouvres.checked ? 21.7 : 30.4, hebdo: 4.33, mensuel: 1 })[fp.rythme.value];
+      $(".pl-mois", fp).textContent = m > 0 ? `Soit environ ${F(Math.round(m))} par mois.` : "";
+    };
+    fp.addEventListener("input", sync); fp.addEventListener("change", sync); sync();
+    $("[data-fermer-plan]", fp).addEventListener("click", () => d.close());
+    fp.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const montant = Math.round(+fp.montant.value || 0);
+      if (montant <= 0) { toast("Indiquez le montant à garder."); return; }
+      const plan = { montant, rythme: fp.rythme.value, jours_ouvres: fp.jours_ouvres.checked, objectif: null, debut: S.coffre.plan?.debut || today() };
+      try { await api.savePlan(plan); S.coffre.plan = plan; d.close(); toast("Votre plan est enregistré.", { detail: "Il remplit votre sécurité, puis vos projets." }); render(); }
+      catch (e) { toast("Enregistrement impossible : " + e.message); }
+    });
+    d.showModal(); setTimeout(() => fp.montant.focus(), 60);
   }
+
 
   const radios = (name, opts, cur) => `<div class="radios">${Object.entries(opts).map(([k, [t, d]]) => `<label><input type="radio" name="${name}" value="${k}"${cur === k ? " checked" : ""}>
       <span><b>${t}</b>${d ? `<br><span class="small muted">${d}</span>` : ""}</span></label>`).join("")}</div>`;
@@ -2357,6 +2405,25 @@
   }
 
   // Assistant en 5 étapes : chaque étape est enregistrée tout de suite (reprise là où on s'est arrêté)
+  // Profil d'épargnant : 4 questions simples, avant le profil d'investisseur. Il propose un rythme et un montant de départ.
+  const QUESTIONS_EP = [
+    { id: "ep_revenu", q: "Comment gagnez-vous votre argent ?", r: [["jour", "Chaque jour (commerce, activité)"], ["mois", "Chaque mois (salaire)"], ["irregulier", "De temps en temps"]] },
+    { id: "ep_habitude", q: "Aujourd'hui, mettez-vous de l'argent de côté ?", r: [["jamais", "Rarement ou jamais"], ["parfois", "Parfois, quand il en reste"], ["regulier", "Oui, régulièrement"]] },
+    { id: "ep_imprevu", q: "Si une grosse dépense imprévue arrive…", r: [["emprunt", "Je dois emprunter"], ["un_peu", "J'ai un peu de côté"], ["tenir", "Je peux tenir plusieurs mois"]] },
+    { id: "ep_but", q: "Votre priorité pour cet argent :", r: [["imprevus", "Faire face aux imprévus"], ["projet", "Réaliser un projet"], ["avenir", "Préparer l'avenir, le faire grandir"]] },
+  ];
+  const PROFILS_EP = {
+    debutant: { t: "Épargnant qui démarre", d: "Commencez petit et souvent : l'habitude compte plus que le montant. Priorité à votre sécurité.", part: 0.10 },
+    regulier: { t: "Épargnant régulier", d: "Vous avez l'habitude : fixons un rythme qui remplit votre sécurité, puis vos projets.", part: 0.15 },
+    batisseur: { t: "Bâtisseur", d: "Votre base est solide : votre épargne peut viser vos projets et la bourse.", part: 0.20 },
+  };
+  function profilEpargnant(r) {
+    let pts = 0;
+    pts += { jamais: 0, parfois: 1, regulier: 2 }[r.ep_habitude] ?? 0;
+    pts += { emprunt: 0, un_peu: 1, tenir: 2 }[r.ep_imprevu] ?? 0;
+    pts += r.ep_but === "avenir" ? 1 : 0;
+    return pts <= 1 ? "debutant" : pts <= 3 ? "regulier" : "batisseur";
+  }
   async function onboarding(completer = false) {
     const v = $("#v-onboarding"), p = S.profil;
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = true));
@@ -2365,15 +2432,16 @@
     v.innerHTML = `<p class="center muted">Chargement…</p>`;
     const lib = await chargerTel();
     const toutes = [
-      { n: 1, titre: "Vous", oblig: true },
-      { n: 2, titre: "Votre profil d'investisseur", oblig: true },
-      { n: 3, titre: "Votre épargne" },
-      ...(S.univ ? [{ n: 4, titre: "Vos comptes" }] : []),
-      { n: 5, titre: "Vos préférences", oblig: true }];
+      { n: 1, o: 1, titre: "Vous", oblig: true },
+      { n: 6, o: 2, titre: "Votre profil d'épargnant", oblig: true },
+      { n: 3, o: 3, titre: "Votre épargne" },
+      { n: 2, o: 4, titre: "Votre profil d'investisseur", oblig: true },
+      ...(S.univ ? [{ n: 4, o: 6, titre: "Vos comptes" }] : []),
+      { n: 5, o: 5, titre: "Vos préférences", oblig: true }];
     const etapes = completer
-      ? toutes.filter((e) => (e.n === 1 && !p.prenom) || e.n === 2 || e.n === 4)
-      : toutes.filter((e) => [1, 3, 5].includes(e.n));
-    let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.n > (+p.onboarding_etape || 0)));
+      ? toutes.filter((e) => (e.n === 1 && !p.prenom) || e.n === 6 || e.n === 2 || e.n === 4)
+      : toutes.filter((e) => [1, 6, 3, 2, 5].includes(e.n));
+    let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.o > (+p.onboarding_etape || 0)));
     const rep = { ...(p.questionnaire || {}) };
     return new Promise((fini) => {
       const finir = (msg) => {
@@ -2386,15 +2454,24 @@
       };
       const corps = (e) => {
         if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace. Votre adresse : <b>${esc(S.user.email || p.email || "")}</b></p>` + champsIdentite(p, lib);
+        if (e.n === 6) return `<p class="small muted">Quatre questions pour vous proposer un rythme d'épargne à votre mesure. Vous pourrez tout changer.</p>`
+          + QUESTIONS_EP.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
+          + `<label>Combien gagnez-vous à peu près ${rep.ep_revenu === "jour" ? "par jour" : "par mois"} ? <small class="muted">(facultatif)</small>
+              <input name="ep_gain" type="number" min="0" step="500" inputmode="numeric" value="${rep.ep_gain || ""}" placeholder="${rep.ep_revenu === "jour" ? "ex. 10000" : "ex. 200000"}"></label>`
+          + `<p class="notice info small" id="ob-ep"${rep.ep_habitude && rep.ep_imprevu && rep.ep_but ? "" : " hidden"}></p>`;
         if (e.n === 2) return QUESTIONS.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
           + `<p class="notice info small" id="ob-profil"${rep.horizon && rep.baisse && rep.priorite ? "" : " hidden"}></p>`;
         if (e.n === 3) {
-          const pl = S.coffre?.plan || {};
-          return (S.coffre ? `<p class="small muted">Mettez de côté un peu, régulièrement : c'est la clé. L'argent reste chez vous (espèces, banque, mobile money).</p>
+          const pr = PROFILS_EP[rep.ep_profil || profilEpargnant(rep)], gain = +rep.ep_gain || 0;
+          const rythmeP = rep.ep_revenu === "jour" ? "quotidien" : rep.ep_revenu === "irregulier" ? "hebdo" : "mensuel";
+          const montantP = gain ? Math.max(500, Math.round((gain * pr.part) / 500) * 500) : "";
+          const pl = S.coffre?.plan?.montant ? S.coffre.plan : { montant: montantP, rythme: rythmeP };
+          return (S.coffre ? `<p class="notice info small">Votre profil : <b>${esc(pr.t)}</b>. ${montantP ? `Nous vous proposons de garder <b>${F(montantP)}</b> ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[rythmeP]} (${Math.round(pr.part * 100)} % de ce que vous gagnez).` : "Choisissez un petit montant pour commencer."} Ajustez si besoin.${montantP && (+pl.montant !== montantP || pl.rythme !== rythmeP) ? ` <button type="button" class="btn small" data-ob-prop="${montantP}|${rythmeP}">Utiliser cette proposition</button>` : ""}</p>
+            <p class="small muted">Un seul plan : il remplit votre sécurité, puis vos projets, puis la bourse. L'argent reste chez vous (espèces, banque, mobile money).</p>
             <div class="grid2"><label>Je mets de côté (F)<input name="montant" type="number" min="0" step="500" inputmode="numeric" value="${pl.montant || ""}" placeholder="ex. 5000"></label>
               <label>Rythme<select name="rythme">${Object.entries({ quotidien: "Chaque jour", hebdo: "Chaque semaine", mensuel: "Chaque mois" })
                 .map(([k, t]) => `<option value="${k}"${(pl.rythme || "mensuel") === k ? " selected" : ""}>${t}</option>`).join("")}</select></label></div>
-            <label>Objectif à atteindre (F, facultatif)<input name="objectif" type="number" min="0" step="10000" inputmode="numeric" value="${pl.objectif || ""}" placeholder="ex. 500000"></label>` : "")
+            ` : "")
             + `<label>Montant que vous souhaitez investir en bourse (F, facultatif)<input name="budget" type="number" min="0" step="10000" inputmode="numeric" value="${+p.budget || ""}" placeholder="ex. 500000"></label>
             <p class="small muted">Vous pourrez le changer à tout moment${S.coffre ? ", ou le faire suivre automatiquement votre épargne (Profil)" : ""}.</p>`;
         }
@@ -2403,14 +2480,28 @@
           ${S.coffre && (DEMO || "felicitations" in p) ? `<label class="switch" style="margin-top:12px"><input type="checkbox" name="felicitations"${p.felicitations !== false ? " checked" : ""}> Animations de félicitations (confettis)</label>` : ""}
           <h3 style="margin-top:18px">Récapitulatif</h3><ul class="recap small">
             <li><b>${esc(p.prenom || "")}${p.nom ? " " + esc(p.nom) : ""}</b>${p.pays ? ` · ${drapeau(p.pays)} ${esc(nomPays(p.pays))}` : ""}</li>
+            ${p.questionnaire?.ep_profil ? `<li>Profil d'épargnant : <b>${esc(PROFILS_EP[p.questionnaire.ep_profil]?.t || "")}</b></li>` : ""}
             <li>Profil d'investisseur : <b>${esc(PROFILS[p.profil]?.t || "Équilibré")}</b>${p.questionnaire?.horizon ? "" : " (par défaut : vous l'affinerez en 1 minute)"}</li>
             ${S.coffre?.plan?.montant ? `<li>Épargne : <b>${F(S.coffre.plan.montant)}</b> ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[S.coffre.plan.rythme] || ""}</li>` : ""}
             ${+p.budget ? `<li>Montant à investir : <b>${F(p.budget)}</b></li>` : ""}
-            ${(p.mes_sgi || []).length ? `<li>SGI : <b>${esc(p.mes_sgi.join(", "))}</b></li>` : ""}</ul>
+            ${(p.mes_sgi || []).length ? `<li>SGI de votre pays : <b>${esc(p.mes_sgi.join(", "))}</b> <span class="muted">(à préciser dans Profil quand vous ouvrirez un compte)</span></li>` : ""}</ul>
           <p class="small muted">Tout se modifie ensuite dans l'onglet Profil.</p>`;
       };
       const lire = async (e, f) => {
-        if (e.n === 1) return lireIdentite(f, lib);
+        if (e.n === 1) {
+          const upd = await lireIdentite(f, lib);
+          if (typeof upd === "string") return upd;
+          // pas encore de compte-titres : les SGI de son pays sont cochées d'office (modifiable dans Profil › Mes comptes)
+          const pays = upd.pays || p.pays;
+          if (pays && S.univ && !(p.mes_sgi || []).length) upd.mes_sgi = S.univ.sgi.filter((n) => S.univ.paysSgi?.get(n) === pays);
+          return upd;
+        }
+        if (e.n === 6) {
+          for (const q of QUESTIONS_EP) { rep[q.id] = f[q.id].value; if (!rep[q.id]) return "Répondez aux quatre questions."; }
+          rep.ep_gain = Math.max(0, +f.ep_gain.value || 0) || null;
+          rep.ep_profil = profilEpargnant(rep);
+          return { questionnaire: { ...rep } };
+        }
         if (e.n === 2) {
           for (const q of QUESTIONS) { rep[q.id] = f[q.id].value; if (!rep[q.id]) return "Répondez aux trois questions."; }
           return { questionnaire: { ...rep }, profil: profilDepuis(rep) };
@@ -2419,7 +2510,7 @@
           const montant = S.coffre ? Math.max(0, +f.montant.value || 0) : 0;
           if (montant) {
             const pl = { ...(S.coffre.plan || {}), montant, rythme: f.rythme.value, jours_ouvres: S.coffre.plan?.jours_ouvres ?? true,
-              objectif: +f.objectif.value || null, debut: S.coffre.plan?.debut || new Date().toISOString().slice(0, 10) };
+              objectif: null, debut: S.coffre.plan?.debut || new Date().toISOString().slice(0, 10) };
             await api.savePlan(pl);
             S.coffre.plan = pl;
           }
@@ -2437,7 +2528,7 @@
       const afficher = () => {
         const e = etapes[i], dernier = i === etapes.length - 1;
         v.innerHTML = `<h1 id="h-ob">${completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
-          ${!completer && i === 0 ? `<p class="small">Trois petites étapes, une minute, puis votre portrait d'épargnant.</p>` : ""}
+          ${!completer && i === 0 ? `<p class="small">Cinq petites étapes, deux minutes : vous, votre façon d'épargner, votre plan, votre profil d'investisseur. Puis votre portrait.</p>` : ""}
           <div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
             <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
           <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
@@ -2448,6 +2539,21 @@
           ${i > 0 || completer ? `<p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard</button></p>` : ""}`;
         const f = $("#f-ob", v), msg = $(".msg", f);
         if (e.n === 1) brancherIdentite(f, lib);
+        if (e.n === 3) f.querySelector("[data-ob-prop]")?.addEventListener("click", (ev) => {
+          const [m, r] = ev.currentTarget.dataset.obProp.split("|"); f.montant.value = m; f.rythme.value = r; ev.currentTarget.remove();
+        });
+        if (e.n === 6) {
+          const majEp = () => {
+            QUESTIONS_EP.forEach((q) => { rep[q.id] = f[q.id].value || rep[q.id]; });
+            const lbl = f.querySelector("[name=ep_gain]")?.closest("label");
+            if (lbl?.firstChild) lbl.firstChild.textContent = `Combien gagnez-vous à peu près ${rep.ep_revenu === "jour" ? "par jour" : "par mois"} ? `;
+            const el = $("#ob-ep", f);
+            if (!(rep.ep_habitude && rep.ep_imprevu && rep.ep_but)) return;
+            const pr = PROFILS_EP[profilEpargnant(rep)];
+            el.hidden = false; el.innerHTML = `Votre profil d'épargnant : <b>${esc(pr.t)}</b>. ${esc(pr.d)}`;
+          };
+          f.addEventListener("change", majEp); majEp();
+        }
         if (e.n === 2) {
           const maj = () => {
             QUESTIONS.forEach((q) => { rep[q.id] = f[q.id].value || rep[q.id]; });
@@ -2466,7 +2572,7 @@
           try {
             const upd = await lire(e, f);
             if (typeof upd === "string") { msg.textContent = upd; b.disabled = false; return; }
-            if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.n);
+            if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.o);
             await api.saveProfil(S.user.id, upd);
             const avant = p.profil;
             Object.assign(p, upd);
@@ -2616,7 +2722,7 @@
       ${DEMO || "prenom" in p ? `<form id="f-identite" class="card" novalidate><h2>Mes coordonnées</h2><div class="ident"><p class="muted small">Chargement…</p></div>
         <p class="msg" role="status" aria-live="polite"></p><div class="actions"><button class="btn primary" type="submit">Enregistrer mes coordonnées</button></div></form>` : ""}
       ${S.univ && (DEMO || "mes_sgi" in p) ? formUnivers(p) : ""}
-      ${S.coffre ? formPlan(S.coffre.plan || {}) : ""}
+
       ${DEMO && S.coffre ? `<div class="card"><h2>Essayer les félicitations</h2><p class="small muted">Démonstration uniquement.</p>
         <div class="actions" style="justify-content:flex-start">
           <button class="btn small" data-essai="jour">Petite victoire</button><button class="btn small" data-essai="serie">Série de 7 jours</button>
@@ -2850,7 +2956,7 @@
     else v.innerHTML = `<h1 id="h-bud">Mon budget</h1><p class="muted">Chargement…</p>`;
   };
   // « Mes objectifs » est désormais dans « Mon coffre » : l'ancienne adresse y mène
-  const vObjectifs = () => { allerPf("epargne"); };
+  const vObjectifs = () => { const v = $("#v-objectifs"); if (window.BafiBudget) window.BafiBudget.renderObjectifs(v); };
   const vAvenir = () => { const v = $("#v-avenir"); if (window.BafiBudget) window.BafiBudget.renderAvenir(v); };
   const VIEWS = { aujourdhui: vAujourdhui, budget: vBudget, objectifs: vObjectifs, avenir: vAvenir, portefeuille: vPortefeuille, performance: vPerformance, marche: vMarche, profil: vProfil };
 
@@ -3117,6 +3223,19 @@
     fcf.montant.value = presets[0] > 0 ? presets[0] : "";
     $("#cf-presets [data-v]")?.setAttribute("aria-pressed", "true");
     $("#cf-src").hidden = !verser;
+    // Reprise : pour quoi ? (un imprévu, un projet réalisé, autre) — le motif est gardé avec le mouvement
+    let mo = $("#cf-motif");
+    if (!mo) { $("#cf-src").insertAdjacentHTML("afterend", `<fieldset class="fs" id="cf-motif" hidden><legend>Pour quoi ?</legend><div class="cf-motifs" role="radiogroup"></div>
+      <label class="cf-real" hidden><input type="checkbox" name="realise" checked> Ce projet est réalisé : le retirer de mes objectifs</label></fieldset>`); mo = $("#cf-motif"); }
+    mo.hidden = mode !== "reprendre";
+    if (mode === "reprendre") {
+      const pr = (window.BafiBudget?.projetsEnCours?.() || []);
+      const ch = [["imprevu", "Un imprévu"], ...pr.map((p) => ["projet:" + p.id, "Mon projet : " + p.nom]), ["autre", "Autre chose"]];
+      $(".cf-motifs", mo).innerHTML = ch.map(([v, l], i) => `<label class="cf-mo"><input type="radio" name="motif" value="${esc(String(v))}"${i ? "" : " checked"}><span>${esc(l)}</span></label>`).join("");
+      const maj = () => { const v = fcf.querySelector("[name=motif]:checked")?.value || ""; $(".cf-real", mo).hidden = !v.startsWith("projet:");
+        const p = pr.find((x) => "projet:" + x.id === v); if (p && p.garde > 0) fcf.montant.value = Math.round(Math.min(ep.solde, p.garde)); };
+      $(".cf-motifs", mo).onchange = maj; maj();
+    }
     $("#cf-ok").textContent = verser ? "Mettre de côté" : mode === "reprendre" ? "Confirmer" : "Confirmer l'envoi";
     dcf.showModal();
   }
@@ -3136,9 +3255,12 @@
         S.feteMontant = montant;
       } else if (cfMode === "reprendre") {
         if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté.`);
-        await api.addMouvement({ date, type: "RETRAIT", montant });
+        const motif = fcf.querySelector("[name=motif]:checked")?.value || null;
+        const pr = (window.BafiBudget?.projetsEnCours?.() || []).find((x) => "projet:" + x.id === motif);
+        await api.addMouvement({ date, type: "RETRAIT", montant, note: pr ? "Pour mon projet : " + pr.nom : motif === "imprevu" ? "Pour un imprévu" : motif === "autre" ? "Autre usage" : null });
         enregistre = true;
-        toast(`${F(montant)} repris de votre épargne.`);
+        if (pr && fcf.realise?.checked) { try { await window.BafiBudget?.realiserProjet?.(pr.id); } catch (e) { /* projet du profil : rien à retirer */ } }
+        toast(`${F(montant)} repris de votre épargne.`, { detail: pr ? (fcf.realise?.checked ? `Bravo : « ${pr.nom} » est réalisé !` : `Pour « ${pr.nom} ».`) : motif === "imprevu" ? "Votre sécurité a joué son rôle." : "" });
       } else {
         if (montant > ep.solde) return err(`Vous avez ${F(ep.solde)} mis de côté. Pour de l'argent venant d'ailleurs, utilisez « Opération chez ma SGI » → Argent versé à ma SGI.`);
         await api.envoyerSgi(date, montant);                     // une seule transaction : épargne et journal ensemble
@@ -3168,7 +3290,7 @@
     if (b.hasAttribute("data-export-journal")) return exporterJournal();
     if (b.id === "bravo-partager") return partagerTrophee(S.bravoTrophee);
     if (b.dataset.partager) return partagerTrophee(trophees(epargne()).find((x) => x.id === b.dataset.partager));
-    if (b.dataset.coffre === "plan") { location.hash = "profil"; setTimeout(() => { const f = $("#f-plan"); f?.closest("details")?.setAttribute("open", ""); f?.scrollIntoView({ block: "start" }); }, 120); }
+    if (b.dataset.coffre === "plan") { openPlan(); }
     else if (b.dataset.coffre) { if ($("#dlg-bravo").open) $("#dlg-bravo").close(); if ($("#dlg-recap")?.open) $("#dlg-recap").close(); openCoffre(b.dataset.coffre); }
     else if (b.dataset.alerte !== undefined) {
       const a = S.alertesMap?.get(b.dataset.alerte);
@@ -3507,7 +3629,8 @@
                         profil: () => S.profil, email: () => S.user?.email || "",
                         budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
                                   ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id),
-                                  projets: () => api.budgetProjets(), ajouterProjet: (x) => api.budgetAjouterProjet(x), supprimerProjet: (id) => api.budgetSupprimerProjet(id) },
+                                  projets: () => api.budgetProjets(), ajouterProjet: (x) => api.budgetAjouterProjet(x), supprimerProjet: (id) => api.budgetSupprimerProjet(id),
+                                  majProjet: (id, x) => api.budgetMajProjet(id, x) },
                         encouragerCercle: (id) => api.encouragerCercle(id), telephoneBudget: () => S.profil?.telephone || "",
                         // épargne mise de côté, résumée pour le budget (sécurité puis projet)
                         placements: () => {

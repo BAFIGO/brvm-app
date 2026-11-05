@@ -56,6 +56,14 @@
   const REV = [["salaire", "Salaire"], ["recette", "Recette du jour"], ["transfert", "Argent reçu"], ["autres", "Autres"]];
   const OBJ = [["ecole", "École"], ["tabaski", "Tabaski"], ["logement", "Maison"], ["commerce", "Commerce"], ["sante", "Santé"], ["securite", "Imprévus"]];
   const PROFILS = { equilibre: ["Équilibré", 50, 30, 20], batisseur: ["Bâtisseur", 50, 20, 30], fourmi: ["Fourmi", 40, 20, 40], serre: ["Serré", 60, 25, 15] };
+  // Budget prévu : { depenses: {catégorie: montant}, revenus: {catégorie: montant} } ; l'ancien format plat est converti
+  function prevu(p) {
+    const ch = p?.charges || {};
+    if (ch.depenses || ch.revenus) return { depenses: ch.depenses || {}, revenus: ch.revenus || {} };
+    const dep = {}; for (const [k, v] of Object.entries(ch)) if (+v) dep[k === "loyer" ? "logement" : k] = +v;
+    return { depenses: dep, revenus: {} };
+  }
+  const PRINCIPALES = ["logement", "nourriture", "transport", "famille"];
   const catDep = (k) => DEP.find((c) => c[0] === k) || DEP[DEP.length - 1];
   const libCat = (m) => (m.type === "revenu" ? (REV.find((r) => r[0] === m.categorie) || REV[3])[1] : catDep(m.categorie)[1]);
 
@@ -99,11 +107,12 @@
     for (const m of mois.filter((x) => x.type === "depense")) env[m.enveloppe || catDep(m.categorie)[2]] += +m.montant || 0;
     const ep = app().epargneResume?.() || null;
     const garde = ep ? ep.mv.filter((m) => m.type === "VERSEMENT" && m.date >= d0).reduce((a, m) => a + (+m.montant || 0), 0) : 0;
-    const fixes = p.charges && Object.values(p.charges).reduce((a, x) => a + (+x || 0), 0);
+    const pv = prevu(p);
+    const fixes = Object.entries(pv.depenses).filter(([k]) => catDep(k)[2] === "besoins").reduce((a, [, x]) => a + (+x || 0), 0);
     const securiteObj = Math.round((fixes > 0 ? fixes : revMensuelPrevu * part(1)) * (jour ? 6 : 3));
     const solde = ep?.solde || 0;
     const securite = Math.min(solde, securiteObj), projet = Math.max(0, solde - securiteObj);
-    const liste = (S.projets && S.projets.length) ? S.projets : (p.objectif_nom ? [{ id: "profil", nom: p.objectif_nom, icone: p.objectif_icone, montant: p.objectif_montant, date_cible: p.objectif_date }] : []);
+    const liste = (S.projets && S.projets.length) ? S.projets.filter((x) => !x.realise_le) : (p.objectif_nom ? [{ id: "profil", nom: p.objectif_nom, icone: p.objectif_icone, montant: p.objectif_montant, date_cible: p.objectif_date }] : []);
     let resteP = projet;
     const projets = liste.map((x) => { const g = x.montant ? Math.min(resteP, +x.montant) : resteP; resteP = Math.max(0, resteP - g); return { ...x, garde: g }; });
     // série : jours notés d'affilée (mouvement ou « rien aujourd'hui »), jusqu'à aujourd'hui ou hier
@@ -120,8 +129,10 @@
     const parJour = {}; for (const m of S.mv) if (m.type === "revenu" && m.date >= ilya(60)) parJour[m.date] = (parJour[m.date] || 0) + (+m.montant || 0);
     const vals = Object.values(parJour).sort((a, b) => a - b), basePrudente = vals.length >= 8 ? vals[Math.floor(vals.length / 4)] * 26 : null;
     const abonnements = (() => { const vus = new Map(); for (const m of S.mv) if (m.recurrent && m.type === "depense") vus.set(m.categorie + "|" + m.montant, m); return [...vus.values()]; })();
-    return { p, projets, fixes, parts, jour, revMois, depMois, recAuj, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
-             derniere, joursRest, epargneCible: revRef * part(3),
+    const pl = ep?.plan, planMensuel = pl?.montant ? Math.round(+pl.montant * ({ quotidien: 30.4, hebdo: 4.33, mensuel: 1 })[pl.rythme] || 0) : 0;
+    const depParCat = {}; for (const m of mois) if (m.type === "depense") depParCat[m.categorie] = (depParCat[m.categorie] || 0) + (+m.montant || 0);
+    return { p, pv, depParCat, projets, fixes, parts, jour, revMois, depMois, recAuj, planMensuel, plan: pl || null, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
+             derniere, joursRest, epargneCible: planMensuel || revRef * part(3), epargneBudget: revRef * part(3),
              semaine: { dep: somme(s1, "depense"), depAvant: somme(s0, "depense"), garde: gardeSem, jours: new Set(s1.map((m) => m.date)).size } };
   }
 
@@ -161,36 +172,63 @@
       <path d="${trace(a.dort.points)}" class="dort"/><path d="${trace(a.place.points)}" class="place"/>
       <text x="24" y="168">${a.age} ans</text><text x="314" y="168" text-anchor="end">${a.age + n - 1} ans</text></svg>`;
   }
+  // Mon avenir : quatre chiffres (âge, je garde, je dépense, j'ai déjà) — montants au jour, à la semaine, au mois ou à l'année —
+  // et le résultat se recalcule à chaque frappe : âge de liberté, montant qu'il faut, ce qu'on aura dans 10 à 40 ans.
+  const FREQ = { jour: ["par jour", 30.4], semaine: ["par semaine", 4.33], mois: ["par mois", 1], an: ["par an", 1 / 12] };
+  const parMoisDe = (m, f) => Math.round((+m || 0) * FREQ[f || "mois"][1]);
   function renderAvenir(v) {
     S.vue = v; S.decal = 0;
     if (!S.charge) { v.innerHTML = `<h1 id="h-av">Mon avenir</h1><p class="muted">Chargement…</p>`; charger(); return; }
     if (!S.profil) { v.innerHTML = `<h1 id="h-av">Mon avenir</h1><div class="notice">Commencez par votre budget : votre avenir se calcule à partir de lui.<p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
-    const c = calculs(), a = avenir(c), hyp = S.avenirHyp || "equilibre";
-    const pl = app().placements?.();
+    const c = calculs(), pl = app().placements?.(), hyp = S.avenirHyp || "equilibre";
+    const pmF = S.avenirPmF || "mois", depF = S.avenirDepF || "mois";
+    const pm0 = S.avenirPmBrut ?? Math.round(c.epargneCible), dep0 = S.avenirDepBrut ?? Math.max(0, Math.round(c.revRef - c.epargneCible));
+    const freq = (nom, cur) => `<div class="bu-freq" role="radiogroup" aria-label="Rythme">${Object.entries(FREQ).map(([k, [l]]) =>
+      `<button type="button" role="radio" aria-checked="${cur === k}" data-bu="${nom}" data-v="${k}">${l.replace("par ", "")}</button>`).join("")}</div>`;
     v.innerHTML = `<h1 id="h-av">Mon avenir</h1>
-      <section class="card bu-av-saisie"><div class="bu-2col">
-        <label class="bu-champ">Mon âge<input id="av-age" inputmode="numeric" placeholder="ex. 32" value="${a ? a.age : ""}"></label>
-        <label class="bu-champ">Je garde par mois<input id="av-pm" inputmode="numeric" value="${nf.format(a ? a.parMois : Math.round(c.epargneCible))}"></label>
-        <label class="bu-champ">J'ai déjà<input id="av-pat" inputmode="numeric" value="${nf.format(a ? a.patrimoine : c.solde + (pl?.valeur || 0))}"></label>
-        <label class="bu-champ">Je dépense par mois<input id="av-dep" inputmode="numeric" value="${nf.format(a ? a.dep : Math.max(0, Math.round(c.revRef - c.epargneCible)))}"></label></div>
-        <p class="small muted">Repris de votre budget, de votre coffre et de vos placements. Vous pouvez les changer.</p>
+      <section class="card bu-av-saisie">
+        <label class="bu-champ">Mon âge<input id="av-age" inputmode="numeric" placeholder="ex. 32" value="${S.avenirAge || c.p.age || ""}"></label>
+        <div class="bu-av-l"><label class="bu-champ">Je garde<input id="av-pm" inputmode="numeric" value="${nf.format(pm0)}"></label>${freq("av-pmf", pmF)}</div>
+        <div class="bu-av-l"><label class="bu-champ">Je dépense<input id="av-dep" inputmode="numeric" value="${nf.format(dep0)}"></label>${freq("av-depf", depF)}</div>
+        <label class="bu-champ">J'ai déjà<input id="av-pat" inputmode="numeric" value="${nf.format(S.avenirPat ?? (c.solde + (pl?.valeur || 0)))}"></label>
+        <p class="small muted">Repris de votre budget, de votre coffre et de vos placements : changez-les librement, le résultat suit.</p>
         <div class="bu-puces" role="radiogroup" aria-label="Hypothèse de rendement">${Object.entries(HYP).map(([k, [l, r]]) => `<button type="button" class="bu-puce" role="radio" aria-checked="${hyp === k}" aria-pressed="${hyp === k}" data-bu="hyp" data-v="${k}">${l} · ${Math.round(r * 100)} %</button>`).join("")}</div>
-        <button type="button" class="btn primary" data-bu="avenir-calc">Calculer</button></section>
-      ${a ? `<section class="bu-phrase large"><span class="small">Mon âge de liberté estimé</span><b>${a.agePlace ? a.agePlace + " ans" : "au-delà de 90 ans"}</b>
-          <span class="small">si votre épargne est placée (${HYP[hyp][0]}). Laissée à dormir : ${a.ageDort ? a.ageDort + " ans" : "jamais"}.</span></section>
-        ${a.moisGagnes ? `<section class="card"><b>🎉 ${a.moisGagnes} mois gagnés</b><p class="small">grâce à ce que vous avez gardé ce mois-ci.</p></section>` : ""}
-        <section class="card"><h2 class="bu-h2">Deux chemins</h2>${courbe(a)}
-          <div class="bu-legende small"><span><i class="place"></i>Argent placé</span><span><i class="dort"></i>Argent qui dort</span><span><i class="besoin"></i>Vivre de son patrimoine</span></div></section>
-        <section class="card"><b>Et si vous attendiez 10 ans ?</b><p class="small">${a.agePlace && a.ageRetard ? `Commencer dans 10 ans repousse votre liberté à ${a.ageRetard} ans, soit ${a.ageRetard - a.agePlace} an${a.ageRetard - a.agePlace > 1 ? "s" : ""} plus tard.` : "Commencer tôt compte plus que le montant : chaque année d'avance travaille pour vous."}</p></section>
-        <section class="card bu-habit"><b>Le pouvoir des petites habitudes</b>
-          <label class="small">Chaque jour <input id="av-hab" inputmode="numeric" value="1 000"> F, pendant 20 ans, placés :</label>
-          <p class="bu-habit-r"><b id="av-hab-r"></b> <span class="small">en francs d'aujourd'hui</span></p></section>` : `<p class="small muted">Indiquez votre âge, puis touchez « Calculer ».</p>`}
-      <a class="btn" href="#portefeuille" data-bu="simuler">Simuler un placement à la BRVM</a>
+      </section>
+      <div id="av-res" aria-live="polite"></div>
+      <p class="small"><a href="#portefeuille" data-bu="simuler">Comment placer cet argent ? Simuler un placement à la BRVM</a></p>
       <p class="small muted">Simulation, pas une promesse : rendement annuel supposé ${Math.round(HYP[hyp][1] * 100)} % (${HYP[hyp][0]}), inflation de ${(INFLATION * 100).toLocaleString("fr-FR")} % par an déduite ;
         on considère qu'on peut vivre de son patrimoine quand 4 % par an couvrent les dépenses. Les performances passées ne préjugent pas des performances futures.</p>`;
-    const hab = () => { const j = lireNombre($("#av-hab", v)?.value); const t = trajectoire(30, 0, j * 30.4, 1, HYP[hyp][1]); const r = $("#av-hab-r", v); if (r) r.textContent = F(t.points[20] || 0); };
-    $("#av-hab", v)?.addEventListener("input", hab); hab();
+    const maj = () => {
+      const n = (id) => lireNombre($(id, v)?.value);
+      const age = Math.min(90, n("#av-age")); S.avenirAge = age || null;
+      S.avenirPmBrut = n("#av-pm"); S.avenirDepBrut = n("#av-dep"); S.avenirPat = n("#av-pat");
+      S.avenirPm = parMoisDe(S.avenirPmBrut, S.avenirPmF); S.avenirDep = Math.max(1, parMoisDe(S.avenirDepBrut, S.avenirDepF));
+      const res = $("#av-res", v);
+      if (!age) { res.innerHTML = `<p class="small muted">Indiquez votre âge : le résultat s'affiche aussitôt.</p>`; return; }
+      const a = avenir(c, { age, parMois: S.avenirPm, depenses: S.avenirDep, patrimoine: S.avenirPat });
+      const horizons = [10, 20, 30, 40].filter((h) => age + h <= 90);
+      res.innerHTML = `<section class="bu-phrase large"><span class="small">Mon âge de liberté estimé</span><b>${a.agePlace ? a.agePlace + " ans" : "au-delà de 90 ans"}</b>
+          <span class="small">si votre épargne est placée (${HYP[hyp][0]}). Laissée à dormir : ${a.ageDort ? a.ageDort + " ans" : "jamais"}.</span></section>
+        <section class="card"><div class="bu-ligne"><b>Ce qu'il me faut</b><b class="bu-besoin">${F(a.place.besoin)}</b></div>
+          <p class="small muted">Le patrimoine qui permet de payer ${F(S.avenirDep)} de dépenses par mois sans travailler (4 % par an). C'est la ligne en pointillés.</p></section>
+        <section class="card"><h2 class="bu-h2">Deux chemins</h2>${courbe(a)}
+          <div class="bu-legende small"><span><i class="place"></i>Argent placé</span><span><i class="dort"></i>Argent qui dort</span><span><i class="besoin"></i>Ce qu'il me faut</span></div></section>
+        <section class="card"><h2 class="bu-h2">Ce que j'aurai</h2>
+          <div class="scroll-x"><table class="dtable bu-hor"><thead><tr><th>Dans</th><th class="num">Placé</th><th class="num">Qui dort</th></tr></thead><tbody>
+          ${horizons.map((h) => `<tr><td>${h} ans <small class="muted">(${age + h} ans)</small></td><td class="num"><b>${F(a.place.points[h] || 0)}</b></td><td class="num">${F(a.dort.points[h] || 0)}</td></tr>`).join("")}</tbody></table></div>
+          <p class="small muted">En francs d'aujourd'hui, avec ${F(S.avenirPm)} gardés par mois. Vous aurez versé ${F(S.avenirPm * 12 * (horizons[1] || horizons[0] || 10))} en ${horizons[1] || horizons[0] || 10} ans : le reste, c'est votre argent qui l'a fait grandir.</p></section>
+        ${a.moisGagnes ? `<section class="card"><b>🎉 ${a.moisGagnes} mois gagnés</b><p class="small">grâce à ce que vous avez gardé ce mois-ci.</p></section>` : ""}
+        <section class="card"><b>Et si vous attendiez 10 ans ?</b><p class="small">${a.agePlace && a.ageRetard ? `Commencer dans 10 ans repousse votre liberté à ${a.ageRetard} ans, soit ${a.ageRetard - a.agePlace} an${a.ageRetard - a.agePlace > 1 ? "s" : ""} plus tard.` : "Commencer tôt compte plus que le montant : chaque année d'avance travaille pour vous."}</p></section>`;
+    };
+    let t = null;
+    v.querySelectorAll("#av-age, #av-pm, #av-dep, #av-pat").forEach((i) => i.addEventListener("input", () => {
+      if (i.id !== "av-age") { const x = lireNombre(i.value); i.value = x ? nf.format(x) : ""; }
+      clearTimeout(t); t = setTimeout(maj, 250);
+      if (i.id === "av-age") { clearTimeout(S.tAge); S.tAge = setTimeout(() => { const age = Math.min(90, lireNombre(i.value)); if (age && age !== +S.profil.age) { S.profil.age = age; app().budget.sauverProfil({ ...S.profil, age }).catch(() => {}); } }, 1200); }
+    }));
+    maj();
   }
+
 
   // ------------------------------------------------------------------ démarrage en images (3 écrans)
   function demarrage() {
@@ -277,9 +315,11 @@
   }
   // Bascule « Simple / Détaillé » : visible en haut de l'accueil et du budget ; on touche ou on fait glisser le curseur
   const bascule = () => { const det = S.profil?.mode === "complet";
-    return `<div class="bu-bascule" role="radiogroup" aria-label="Affichage">
+    return `<div class="bu-bascule" role="radiogroup" aria-label="Affichage : glissez ou touchez">
+      <span class="bu-fl g" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
       <button type="button" role="radio" aria-checked="${!det}" data-bu="mode" data-v="simple">Simple</button>
       <button type="button" role="radio" aria-checked="${det}" data-bu="mode" data-v="complet">Détaillé</button>
+      <span class="bu-fl d" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
       <span class="bu-curseur${det ? " droite" : ""}" aria-hidden="true"></span></div>`; };
   // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
   function vueAccueil(c) {
@@ -288,8 +328,8 @@
           <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      ${troisBoutons()}${blocRecette(c)}
-      ${blocRecurrents()}${blocSoir(c)}</div>
+      ${troisBoutons()}${blocSoir(c)}${blocRecette(c)}
+      ${blocRecurrents()}</div>
       <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocPlacements()}${blocSemaine(c)}</div></div>`;
   }
   function vueAccueilDetaille(c) {
@@ -299,8 +339,8 @@
         <span class="small">Reste à vivre du mois : ${F(Math.max(0, c.reste))} · gagné ${F(c.revMois)} · dépensé ${F(c.depMois)}</span>
         ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
-        ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.revRef * c.part(3), "amb")}</section>
-      ${troisBoutons()}${blocRecette(c)}${blocRecurrents()}${blocSoir(c)}</div>
+        ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.epargneCible, "amb")}</section>
+      ${troisBoutons()}${blocSoir(c)}${blocRecette(c)}${blocRecurrents()}</div>
       <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocSemaine(c)}
       <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}<div class="bu-place-bourse"></div></div></div>`;
   }
@@ -394,11 +434,36 @@
     return `<a class="card bu-pl" href="#portefeuille" data-bu="placements"><span class="bu-tuile clair petit">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}</span>
       <span class="bu-op-l"><b>Mes placements</b><small>${F(pl.valeur)}${pl.varJour != null && Math.abs(pl.varJour) < 0.0005 ? " · stable aujourd'hui" : ""}${pl.varJour != null && Math.abs(pl.varJour) >= 0.0005 ? ` · <span class="${pl.varJour >= 0 ? "good" : "bad"}">${pl.varJour >= 0 ? "+" : ""}${(pl.varJour * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} % aujourd'hui</span>` : ""}</small></span><span aria-hidden="true">›</span></a>`;
   }
+  // Une journée sans dépense notable compte pour la série : une ligne discrète sous les trois boutons, pas une carte de plus
   function blocSoir(c) {
     return c.notéAujourdhui ? `<p class="small muted bu-ok">✓ Votre journée est notée.</p>`
-      : `<section class="card bu-soir"><div class="bu-ligne"><b>Mon point du jour</b></div>
-          <div class="bu-soir-b"><button type="button" class="btn primary" data-bu="saisir" data-v="depense">Noter une dépense</button>
-          <button type="button" class="btn" data-bu="rien">Rien de spécial</button></div></section>`;
+      : `<button type="button" class="bu-rien-l" data-bu="rien">Rien à noter aujourd'hui ? <b>Touchez ici</b> pour garder votre série</button>`;
+  }
+
+  // Mon budget prévu : chaque ligne avec son pictogramme (les mêmes qu'à la saisie) ; prévu et dépensé côte à côte.
+  // 4 lignes principales d'abord ; « Ajouter une ligne » propose les autres catégories (on n'ajoute que ce qui sert).
+  function blocPrevu(c) {
+    const dep = c.pv.depenses, rev = c.pv.revenus, edit = S.prevuEdit || !Object.keys(dep).length;
+    const lignes = [...new Set([...PRINCIPALES, ...Object.keys(dep), ...(S.prevuAjout || [])])];
+    const totP = Object.values(dep).reduce((a, x) => a + (+x || 0), 0), totR = Object.values(rev).reduce((a, x) => a + (+x || 0), 0);
+    if (!edit) return `<section class="card bu-prevu"><div class="bu-ligne"><h2 class="bu-h2">Mon budget prévu</h2><button type="button" class="btn link small" data-bu="prevu-edit">Modifier</button></div>
+      ${totR ? `<p class="small">Je prévois de gagner <b>${F(totR)}</b> et de dépenser <b>${F(totP)}</b> par mois.</p>` : ""}
+      <ul class="bu-pv-l">${Object.entries(dep).filter(([, x]) => +x > 0).map(([k, x]) => { const d = c.depParCat[k] || 0, trop = d > x;
+        return `<li><span class="bu-tuile clair petit">${ic(P[k] || P.autres)}</span><span class="bu-op-l"><span class="bu-ligne"><b>${esc(catDep(k)[1])}</b><span class="small${trop ? " bad" : ""}">${F(d)} / ${F(x)}</span></span>${jauge(d, x, trop ? "trop" : "")}</span></li>`; }).join("")}</ul>
+      <p class="small muted">Ce mois-ci : dépensé / prévu, ligne par ligne, avec les mêmes images qu'à la saisie.</p></section>`;
+    const champ = (k, lib, val, type) => `<label class="bu-pv-c"><span class="bu-tuile clair">${ic(P[k] || P.autres)}</span><span class="bu-pv-n">${esc(lib)}</span>
+      <input inputmode="numeric" data-prevu="${type}:${k}" value="${val ? nf.format(val) : ""}" placeholder="0" aria-label="${esc(lib)} par mois"></label>`;
+    const autres = DEP.filter(([k]) => !lignes.includes(k));
+    return `<section class="card bu-prevu"><h2 class="bu-h2">Mon budget prévu <small class="muted">par mois, à peu près</small></h2>
+      <p class="small muted">Ce que je gagne</p>
+      <div class="bu-pv-g">${(c.jour ? [["recette", "Recettes"]] : [["salaire", "Salaire"]]).concat([["transfert", "Argent reçu"]]).map(([k, l]) => champ(k, l, rev[k] || (k === "salaire" || k === "recette" ? (c.jour ? (+c.p.revenu || 0) * 26 : +c.p.revenu || 0) : 0), "rev")).join("")}</div>
+      <p class="small muted">Ce que je dépense</p>
+      <div class="bu-pv-g">${lignes.map((k) => champ(k, catDep(k)[1], dep[k], "dep")).join("")}</div>
+      ${autres.length ? `<details class="bu-pv-plus"><summary class="btn small">＋ Ajouter une ligne</summary><div class="bu-grille">${autres.map(([k, l]) =>
+        `<button type="button" class="bu-cat" data-bu="prevu-ajout" data-v="${k}"><span class="bu-tuile clair">${ic(P[k] || P.autres)}</span>${l}</button>`).join("")}</div></details>` : ""}
+      <button type="button" class="btn primary" data-bu="prevu-ok">Enregistrer mon budget prévu</button>
+      ${Object.keys(dep).length ? `<button type="button" class="btn link small" data-bu="prevu-annuler">Annuler</button>` : ""}
+      <p class="small muted">Les dépenses « besoins » (logement, nourriture, transport, famille, santé, école…) servent aussi à calculer votre sécurité.</p></section>`;
   }
   // dépenses qui reviennent chaque mois : à passer en revue tous les 6 mois
   function blocAbonnements(c) {
@@ -420,7 +485,7 @@
   function vueBudget(c, simple) {
     const mois = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
     const env = (nom, cle, i, cls) => {
-      const max = c.revRef * c.part(i), v = cle === "epargne" ? c.garde : c.env[cle];
+      const max = cle === "epargne" ? c.epargneCible : c.revRef * c.part(i), v = cle === "epargne" ? c.garde : c.env[cle];
       return `<div class="bu-env"><div class="bu-ligne"><b>${nom}</b><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
     };
     return `${blocRetour(c)}
@@ -447,14 +512,7 @@
           ${simple ? "" : ""}
           <a href="#profil" class="small">Régler l'heure de mon rappel</a>
         </div></details>
-      <details class="card"><summary><b>Affiner mon budget</b> <small class="muted">(2 minutes, facultatif)</small></summary>
-        <div class="bu-reg"><p class="small muted">Vos dépenses fixes de chaque mois, à peu près. Elles servent à calculer votre sécurité au plus juste.</p>
-          ${[["loyer", "Logement (loyer, eau, électricité)"], ["nourriture", "Nourriture"], ["transport", "Transport"], ["famille", "Famille et solidarité"]].map(([k, l]) =>
-            `<label>${l}<input data-charge="${k}" inputmode="numeric" value="${c.p.charges?.[k] ? nf.format(c.p.charges[k]) : ""}" placeholder="0"></label>`).join("")}
-          <button type="button" class="btn primary" data-bu="charges">Enregistrer</button>
-          ${c.fixes ? `<p class="small">Vos dépenses fixes : <b>${F(c.fixes)}</b> par mois. Votre sécurité vise ${c.jour ? 6 : 3} mois de ces dépenses.</p>` : ""}
-
-        </div></details>
+      ${blocPrevu(c)}
 `;
   }
 
@@ -478,63 +536,46 @@
     if (!S.profil) brancherDemarrage(v);
   }
   // Mes objectifs : les trois étages (sécurité, projet, faire grandir), reliés au budget et au coffre
+  // Page Mon coffre : une seule ligne qui dit où va l'argent gardé ; le détail est dans Mes objectifs
+  function coffreHtml() {
+    if (!S.charge) { charger(); return ""; }
+    if (!S.profil) return "";
+    const c = calculs(), pr = c.projets.reduce((x, y) => x + y.garde, 0);
+    return `<a class="card bu-ouva" href="#objectifs"><span class="bu-tuile petit">${ic(P.securite, "#fff")}</span>
+      <span class="bu-op-l"><b>Où va cet argent</b><small>Sécurité ${F(c.securite)} · projets ${F(pr)}</small></span><span class="small">Mes objectifs ›</span></a>`;
+  }
   function renderObjectifs(v) {
     S.vue = v;
     S.decal = 0;
     if (!S.charge) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><p class="muted">Chargement…</p>`; charger(); return; }
     if (!S.profil) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><div class="notice">Commencez par votre budget : vos objectifs se calculent à partir de lui.
       <p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
-    const c = calculs(), plein = c.securite >= c.securiteObj && c.securiteObj > 0, pl = app().placements?.();
-    const cible = c.epargneCible, versSecu = Math.min(cible, Math.max(0, c.securiteObj - c.securite)), versProjets = cible - versSecu;
+    const c = calculs(), plein = c.securite >= c.securiteObj && c.securiteObj > 0, cible = c.epargneCible;
     const moisRestants = cible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / cible) : null;
     let avant = Math.max(0, c.securiteObj - c.securite);
+    const etage = (n, titre, tuile, etat, corps) => `<section class="card bu-etage${etat === "en cours" ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t">${tuile}<b>${n} · ${titre}</b></span><span class="chip">${etat}</span></div>${corps}</section>`;
     v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1>
-      <div class="bu-poches" aria-label="Mes trois poches">
-        <a href="#budget" class="bu-poche"><span class="bu-tuile clair petit">${ic(P.salaire)}</span><small>Pour vivre</small><b>${F(Math.max(0, c.reste))}</b></a>
-        <a href="#portefeuille" data-bu="coffre" class="bu-poche"><span class="bu-tuile amb petit">${ic(P.coffre)}</span><small>Je garde</small><b>${F(c.solde)}</b></a>
-        <a href="#portefeuille" data-bu="placements" class="bu-poche"><span class="bu-tuile petit">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span><small>Je fais grandir</small><b>${F(pl?.valeur || 0)}</b></a></div>
-${etagesHtml(c)}
-      <div class="bu-soir-b"><button type="button" class="btn primary" data-coffre="verser">Je garde</button><button type="button" class="btn" data-coffre="reprendre">J'ai repris</button></div>
-      <p class="small center"><a href="#portefeuille" data-bu="coffre">Historique et réglages du coffre</a></p>`;
-  }
-  // Les trois étages du coffre (sécurité, projets, faire grandir) : page Mes objectifs et page Mon coffre
-  function etagesHtml(c) {
-    const plein = c.securite >= c.securiteObj && c.securiteObj > 0;
-    const cible = c.epargneCible, versSecu = Math.min(cible, Math.max(0, c.securiteObj - c.securite)), versProjets = cible - versSecu;
-    const moisRestants = cible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / cible) : null;
-    let avant = Math.max(0, c.securiteObj - c.securite);
-    return `      <p class="bu-intro">Ce que vous gardez remplit les étages <b>dans l'ordre</b>.</p>
-      ${cible > 0 ? `<section class="card"><b>À garder en ${esc(new Date().toLocaleDateString("fr-FR", { month: "long" }))} : ${F(cible)}</b>
-        <div class="bu-repart" aria-hidden="true"><i style="flex:${versSecu || 0.001}"></i><i style="flex:${versProjets || 0.001}"></i></div>
-        <div class="bu-ligne small"><span>${ic(P.securite)} Vers la sécurité</span><b>${F(versSecu)}</b></div>
-        <div class="bu-ligne small"><span>${ic(P.coffre)} Vers mes projets</span><b>${F(versProjets)}</b></div>
-        <div class="bu-ligne small muted"><span>Vers la bourse</span><span>${plein ? "quand vous le décidez" : "dès que la sécurité est pleine"}</span></div>
-        <p class="small muted">Déjà gardé ce mois-ci : ${F(c.garde)}.</p></section>` : ""}
-      <section class="card bu-etage${plein ? "" : " actif"}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile">${ic(P.securite, "#fff")}</span>
-        <span><b>1 · Sécurité</b><small>${c.fixes ? "d'après vos dépenses fixes" : `${c.jour ? "6" : "3"} mois de besoins, d'après votre budget`}</small></span></span><span class="chip">${plein ? "pleine ✓" : "en cours"}</span></div>
-        <div class="bu-ligne small"><span>${F(c.securite)}</span><b>${F(c.securiteObj)}</b></div>${jauge(c.securite, c.securiteObj)}</section>
-      <section class="card bu-etage${plein ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile amb">${ic(P.coffre)}</span>
-        <span><b>2 · Mes projets</b><small>remplis l'un après l'autre</small></span></span><span class="chip">${plein ? "en cours" : "ensuite"}</span></div>
-        ${c.projets.length ? `<ul class="bu-ops">${c.projets.map((x) => { const r = (+x.montant || 0) - x.garde, q = x.montant ? quand(avant + r, cible) : ""; avant += Math.max(0, r);
+      <section class="bu-phrase"><span class="small">Mon plan, un seul pour tout</span>
+        <b style="font-size:1.6rem">${cible > 0 ? `${F(cible)} par mois` : "À fixer"}</b>
+        <span class="small">${c.plan ? `soit ${F(c.plan.montant)} ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[c.plan.rythme] || ""}` : "d'après votre budget"} · réparti tout seul, dans l'ordre : sécurité, projets, bourse</span>
+        <button type="button" class="btn small bu-plan-b" data-coffre="plan">${c.plan ? "Modifier mon plan" : "Fixer mon plan"}</button></section>
+      ${etage(1, "Sécurité", `<span class="bu-tuile">${ic(P.securite, "#fff")}</span>`, plein ? "pleine ✓" : "en cours",
+        `<div class="bu-ligne small"><span>${F(c.securite)}</span><b>${F(c.securiteObj)}</b></div>${jauge(c.securite, c.securiteObj)}
+         <p class="small muted">${c.fixes ? "D'après vos dépenses fixes" : `${c.jour ? 6 : 3} mois de besoins`}${!plein && moisRestants ? ` · pleine dans environ ${moisRestants} mois` : ""}</p>`)}
+      ${etage(2, "Mes projets", `<span class="bu-tuile amb">${ic(P.coffre)}</span>`, plein ? "en cours" : "ensuite",
+        `${c.projets.length ? `<ul class="bu-ops">${c.projets.map((x) => { const r = (+x.montant || 0) - x.garde, q = x.montant ? quand(avant + r, cible) : ""; avant += Math.max(0, r);
           return `<li class="bu-proj"><span class="bu-tuile clair petit">${ic(P[x.icone] || P.coffre)}</span><div class="bu-op-l">
             <div class="bu-ligne"><b>${esc(x.nom)}</b><span class="small">${F(x.garde)}${x.montant ? " / " + F(x.montant) : ""}</span></div>
-            ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}<small>${q}${x.date_cible ? ` · pour ${new Date(x.date_cible).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}` : ""}</small></div>
+            ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}<small>${q}</small></div>
             ${x.id !== "profil" ? `<button type="button" class="bu-suppr" data-bu="suppr-projet" data-v="${x.id}" aria-label="Retirer le projet ${esc(x.nom)}">×</button>` : ""}</li>`; }).join("")}</ul>`
           : `<p class="small muted">Aucun projet pour l'instant.</p>`}
-        ${S.projetsOk !== false ? `<button type="button" class="btn" data-bu="ajout-projet">Ajouter un projet</button>` : ""}</section>
-      <section class="card bu-etage${plein ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t"><span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>
-        <span><b>3 · Faire grandir</b><small>Placer à la BRVM chez votre SGI</small></span></span><span class="chip">${plein ? "prêt" : "bientôt"}</span></div>
-        <div class="bu-ligne small"><span>Plan proposé</span><b>${F(cible)} ${c.jour ? "par mois" : "par mois, le jour de paie"}</b></div>
-        <p class="small muted">${plein ? "Votre sécurité est pleine : vous pouvez commencer à placer." : moisRestants ? `Possible quand la sécurité sera pleine, dans environ ${moisRestants} mois.` : "Possible quand la sécurité sera pleine."}</p>
-        ${plein ? `<button type="button" class="btn primary" data-coffre="sgi">J'ai envoyé à ma SGI</button>` : ""}
-        <p class="small"><a href="#avenir">Voir mon avenir</a></p></section>`;
-  }
-  // Haut de la page « Mon coffre » (onglet épargne du portefeuille) : les étages, ou l'invitation à faire son budget
-  function coffreHtml() {
-    if (!S.charge) { charger(); return ""; }
-    if (!S.profil) return `<section class="card bu-invit"><span class="bu-tuile amb">${ic(P.coffre)}</span><div><b>Vos objectifs, étage par étage</b>
-      <p class="small">Faites votre budget (1 minute) : votre sécurité et vos projets se calculent tout seuls.</p><a class="btn primary small" href="#budget">Commencer mon budget</a></div></section>`;
-    return `<div class="bu-coffre">${etagesHtml(calculs())}</div>`;
+        ${(S.projets || []).some((x) => x.realise_le) ? `<p class="small good">✓ Réalisé : ${esc((S.projets || []).filter((x) => x.realise_le).map((x) => x.nom).join(", "))}</p>` : ""}
+        ${S.projetsOk !== false ? `<button type="button" class="btn" data-bu="ajout-projet">Ajouter un projet</button>` : ""}`)}
+      ${etage(3, "Faire grandir", `<span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>`, plein ? "prêt" : "bientôt",
+        `<p class="small">${plein ? "Votre sécurité est pleine : le plan peut aller vers la bourse." : "Quand la sécurité sera pleine, le plan ira aussi vers la bourse."}</p>
+         <p class="small"><a href="#avenir">Voir mon avenir</a></p>`)}
+      <a class="card bu-ouva" href="#portefeuille" data-bu="coffre"><span class="bu-tuile amb petit">${ic(P.coffre)}</span>
+        <span class="bu-op-l"><b>Mon coffre</b><small>${F(c.solde)} gardés · pour garder, reprendre ou envoyer à ma SGI</small></span><span aria-hidden="true">›</span></a>`;
   }
   // ajouter un projet (pictogramme, nom, montant, date)
   let dlgP = null, projIcone = "ecole";
@@ -598,8 +639,8 @@ ${etagesHtml(c)}
       <div class="bu-plus-opt" id="bu-opt"></div>
       <p class="bu-voix-r small muted" aria-live="polite"></p>
       <div class="bu-actions"><button type="button" class="bu-micro" aria-label="Dicter (ex. : j'ai payé 2 500 de taxi)">${ic(P.micro)}</button>
-        <button type="submit" class="btn primary bu-ok-b" value="ok">Enregistrer</button></div>
-      <button type="button" class="btn link small bu-annuler" value="annuler">Annuler</button></form></dialog>`);
+        <button type="button" class="btn bu-annuler" value="annuler">Annuler</button>
+        <button type="submit" class="btn primary bu-ok-b" value="ok">Enregistrer</button></div></form></dialog>`);
     dlg = $("#dlg-budget");
     dlg.querySelector(".bu-annuler").addEventListener("click", () => dlg.close());
     dlg.addEventListener("click", (ev) => {
@@ -637,7 +678,9 @@ ${etagesHtml(c)}
   function peindre() {
     const complet = S.profil?.mode === "complet";
     dlg.querySelectorAll("[data-t]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.t === saisie.type)));
-    const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l]) : DEP.filter((c) => complet || c[3]).map(([k, l]) => [k, l]);
+    const prevus = Object.keys(prevu(S.profil).depenses);
+    const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l])
+      : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[3]))].map(([k, l]) => [k, l]);
     $("#bu-cats", dlg).innerHTML = cats.map(([k, l]) => `<button type="button" class="bu-cat" data-cat="${k}" aria-pressed="${saisie.cat === k}">
       <span class="bu-tuile ${saisie.cat === k ? "" : "clair"}">${ic(P[k] || P.autres, saisie.cat === k ? "#fff" : "currentColor")}</span>${l}</button>`).join("");
     const puces = saisie.type === "revenu" ? (S.profil?.rythme === "jour" ? [2000, 5000, 10000, 20000] : [50000, 100000, 200000, 400000]) : [500, 1000, 2500, 5000];
@@ -687,7 +730,9 @@ ${etagesHtml(c)}
     const n = (id) => { const e = document.getElementById(id); return e ? lireNombre(e.value) : undefined; };
     const age = n("av-age"); if (age !== undefined) S.avenirAge = Math.min(90, age) || S.avenirAge;
     const pm = n("av-pm"), pat = n("av-pat"), dep = n("av-dep");
-    if (pm !== undefined) S.avenirPm = pm; if (pat !== undefined) S.avenirPat = pat; if (dep !== undefined) S.avenirDep = dep || S.avenirDep;
+    if (pm !== undefined) { S.avenirPmBrut = pm; S.avenirPm = parMoisDe(pm, S.avenirPmF); }
+    if (dep !== undefined) { S.avenirDepBrut = dep; S.avenirDep = Math.max(1, parMoisDe(dep, S.avenirDepF)); }
+    if (pat !== undefined) S.avenirPat = pat;
   }
   // ------------------------------------------------------------------ actions
   document.addEventListener("click", async (ev) => {
@@ -711,6 +756,8 @@ ${etagesHtml(c)}
       try { await app().creerCercle(nom.slice(0, 40), 15); S.cerclesCharges = false; app().toast(`Cercle « ${nom} » créé.`, { detail: "Partagez son code depuis Mes cercles pour inviter vos proches." }); app().allerPf?.("cercles"); }
       catch (e) { app().toast("Impossible : " + (e.message || e)); }
     }
+    else if (a === "av-pmf" || a === "av-depf") { if (a === "av-pmf") S.avenirPmF = v; else S.avenirDepF = v; S.avenirPmBrut = lireNombre($("#av-pm")?.value); S.avenirDepBrut = lireNombre($("#av-dep")?.value); rendre(); }
+    else if (a === "hab-r" || a === "hab-n") { if (a === "hab-r") S.habR = v; else S.habN = +v; S.habM = lireNombre($("#av-hab")?.value) || S.habM; lireAvenir(); rendre(); }
     else if (a === "hyp") { S.avenirHyp = v; lireAvenir(); rendre(); }
     else if (a === "avenir-calc") {
       lireAvenir();
@@ -718,9 +765,20 @@ ${etagesHtml(c)}
       await sauver({ age: S.avenirAge });
     }
     else if (a === "simuler") { ev.preventDefault(); app().allerPf?.("simulateur"); }
-    else if (a === "charges") {
-      const ch = {}; document.querySelectorAll("[data-charge]").forEach((i) => { const n = lireNombre(i.value); if (n) ch[i.dataset.charge] = n; });
-      await sauver({ charges: Object.keys(ch).length ? ch : null }); app().toast("Dépenses fixes enregistrées.", { detail: "Votre sécurité est recalculée." });
+    else if (a === "prevu-edit") { S.prevuEdit = true; rendre(); }
+    else if (a === "prevu-annuler") { S.prevuEdit = false; S.prevuAjout = []; rendre(); }
+    else if (a === "prevu-ajout") {
+      const garde = {}; document.querySelectorAll("[data-prevu]").forEach((i) => (garde[i.dataset.prevu] = i.value));
+      S.prevuAjout = [...(S.prevuAjout || []), v]; S.prevuEdit = true; rendre();
+      document.querySelectorAll("[data-prevu]").forEach((i) => { if (garde[i.dataset.prevu] !== undefined) i.value = garde[i.dataset.prevu]; });
+      document.querySelector(`[data-prevu="dep:${v}"]`)?.focus();
+    }
+    else if (a === "prevu-ok") {
+      const dep = {}, rev = {};
+      document.querySelectorAll("[data-prevu]").forEach((i) => { const [t, k] = i.dataset.prevu.split(":"), n = lireNombre(i.value); if (n) (t === "dep" ? dep : rev)[k] = n; });
+      S.prevuEdit = false; S.prevuAjout = [];
+      await sauver({ charges: Object.keys(dep).length || Object.keys(rev).length ? { depenses: dep, revenus: rev } : null });
+      app().toast("Budget prévu enregistré.", { detail: "Vous verrez chaque mois le dépensé face au prévu." });
     }
 
     else if (a === "mois") { S.decal = Math.max(-2, Math.min(0, (S.decal || 0) + +v)); rendre(); }
@@ -796,6 +854,7 @@ ${etagesHtml(c)}
       depenses_du_mois_par_categorie: Object.fromEntries(Object.entries(S.mv.filter((m) => m.type === "depense" && m.date >= c.d0 && m.date <= c.d1)
         .reduce((o, m) => { const k = libCat(m); o[k] = (o[k] || 0) + (+m.montant || 0); return o; }, {})).sort((x, y) => y[1] - x[1])),
       dernieres_operations: S.mv.filter((m) => m.type !== "rien").slice(0, 8).map((m) => ({ date: m.date, type: m.type === "revenu" ? "gagné" : "dépensé", categorie: libCat(m), montant: r(m.montant) })),
+      budget_prevu_par_mois: { depenses: c.pv.depenses, revenus: c.pv.revenus },
       depenses_de_chaque_mois: c.abonnements.map((m) => ({ categorie: libCat(m), montant: r(m.montant) })),
       coffre: { total_garde: r(c.solde), securite: { garde: r(c.securite), objectif: r(c.securiteObj), pleine: c.securite >= c.securiteObj && c.securiteObj > 0 },
         projets: c.projets.map((x) => ({ nom: x.nom, objectif: r(x.montant), garde: r(x.garde), pour: x.date_cible || null })) },
@@ -803,7 +862,14 @@ ${etagesHtml(c)}
       mon_avenir: a ? { age: a.age, age_de_liberte_estime_si_place: a.agePlace, age_si_l_argent_dort: a.ageDort, hypothese: HYP[S.avenirHyp || "equilibre"][0] } : null,
     };
   }
-  window.BafiBudget = { render, contexte, coffreHtml, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
+  // projets en cours (pour la reprise d'épargne) ; un projet réalisé quitte les objectifs, il reste dans l'historique
+  const projetsEnCours = () => (S.charge && S.profil ? calculs().projets.filter((x) => x.id !== "profil") : []);
+  async function realiserProjet(id) {
+    try { await app().budget.majProjet(id, { realise_le: auj() }); S.projets = (S.projets || []).map((x) => (String(x.id) === String(id) ? { ...x, realise_le: auj() } : x)); }
+    catch (e) { await app().budget.supprimerProjet(id); S.projets = (S.projets || []).filter((x) => String(x.id) !== String(id)); }   // colonne absente : retiré
+    rendre();
+  }
+  window.BafiBudget = { render, contexte, projetsEnCours, realiserProjet, coffreHtml, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
     mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {

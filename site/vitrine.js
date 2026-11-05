@@ -421,8 +421,8 @@
     const session = cle && JSON.parse(localStorage.getItem(cle));
     if (session?.expires_at && session.expires_at * 1000 > Date.now() - 7 * 864e5) {   // jeton renouvelable
       // déjà inscrit : on l'emmène dans son espace, plus besoin de lui vendre une offre
-      $("[data-espace]").textContent = "Mon espace";
-      const o = $("[data-espace-offres]"); if (o) { o.innerHTML = '<span class="t-long">Ouvrir mon espace</span><span class="t-court">Mon espace</span>'; o.href = "app/"; }
+      // un seul « Mon espace » en haut ; le bouton « Offres » reste (changer d'offre, parrainer)
+      const e = $("[data-espace]"); if (e) { e.textContent = "Mon espace"; e.href = "app/"; }
       const h = $("[data-espace-cta]"); if (h) { h.textContent = "Ouvrir mon espace"; h.href = "app/"; }
     }
   } catch (e) { /* stockage indisponible : affichage par défaut */ }

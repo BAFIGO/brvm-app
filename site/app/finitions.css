@@ -1107,3 +1107,35 @@ details.perf-jours[open] > summary::after { content: "▴"; }
 details.sim-ajust > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
 details.sim-ajust > summary h2 { margin: 0; } details.sim-ajust > summary::-webkit-details-marker { display: none; }
 details.sim-ajust > summary::after { content: "▾"; margin-left: auto; color: var(--muted); } details.sim-ajust[open] > summary::after { content: "▴"; }
+/* Mes placements : le chemin de mon argent (envoyé → aujourd'hui → gain) */
+.chemin-t { margin: 0 0 10px; font-size: 1.05rem; }
+.chemin-l { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: ch; }
+.chemin-l li { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 10px 0 10px 30px; position: relative; border-top: 1px solid var(--border); }
+.chemin-l li:first-child { border-top: 0; }
+.chemin-l li::before { counter-increment: ch; content: counter(ch); position: absolute; left: 0; top: 10px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-size: .78rem; font-weight: 800; display: grid; place-items: center; }
+.chemin-l li > span { font-weight: 600; } .chemin-l li > b { text-align: right; font-size: 1.05rem; }
+.chemin-l li > small { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+.chemin-l li.chemin-res::before { content: "="; background: var(--brand); color: #fff; }
+.chemin-coffre { margin: 8px 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+/* Mon coffre : le montant gardé en tête, peu de texte, actions claires */
+.ep2-tete { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.ep2-solde { font-size: 2rem; font-weight: 800; letter-spacing: -.02em; color: var(--brand); }
+.ep2-etat-l { margin: 4px 0 0; font-size: 1rem; }
+.ep2-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; } .ep2-deux .btn { min-height: 48px; border-radius: 14px; }
+.ep2-deux .primary-lite { border: 2px solid var(--accent); color: var(--accent); font-weight: 700; }
+.ep2-note { margin: 6px 0 0; }
+a.bu-ouva { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+.bu-plan-b { align-self: flex-start; margin-top: 8px; background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.35); }
+/* Marché : le crayon « noter un achat ou une vente », visible carte fermée, sans gêner le dépliage */
+li.mk summary.row { align-items: center; }
+.mk-op { flex: none; width: 40px; height: 40px; margin-left: 6px; display: grid; place-items: center; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--accent); cursor: pointer; }
+.mk-op svg, .mk-op-l svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mk-op:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.mk-op-l { margin-top: 12px; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+/* simulateur → Marché ; crayon des positions */
+li.vers-mk { cursor: pointer; } li.vers-mk:hover, li.vers-mk:focus-visible { background: var(--surface-2); border-radius: 10px; outline: none; }
+.vers-mk-f { color: var(--accent); font-weight: 800; }
+.pos-op { width: 32px; height: 32px; border-radius: 10px; margin-left: 4px; }
+.pos-op svg { width: 16px; height: 16px; }

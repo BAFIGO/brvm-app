@@ -89,7 +89,10 @@
 
   // Trouve l'élément à montrer (après changement d'onglet si besoin), en attendant qu'il s'affiche
   async function trouver(etape) {
-    if (etape.tab && app.tab() !== etape.tab) { app.aller(etape.tab); await attendre(300); }
+    if (document.body.classList.contains("tiroir-ouvert")) { document.querySelector(".ecran-voile")?.click(); await attendre(320); }
+    if (etape.pf) {
+      if (app.tab() !== "portefeuille" || app.ongletPf?.() !== etape.pf) { app.allerPf?.(etape.pf); await attendre(500); }
+    } else if (etape.tab && app.tab() !== etape.tab) { app.aller(etape.tab); await attendre(400); }
     if ([].concat(etape.cible || []).some((c) => /fab/.test(c)) && document.body.classList.contains("fabs-caches")) {
       document.body.classList.remove("fabs-caches"); await attendre(260);              // le temps de son retour à l'écran
     }
@@ -153,20 +156,38 @@
   }
 
   // ---------------------------------------------------------------- 1. visite de bienvenue
+  // Visite guidée : le parcours du menu, dans l'ordre — 1. mon argent au quotidien, 2. je garde, 3. je fais grandir, puis BafiBot.
+  // Chaque étape sait se rendre seule à son écran (onglets du portefeuille compris) : la visite ne se coupe plus.
   const ETAPES_VISITE = () => [
-    { tab: "aujourdhui", cible: ["#v-aujourdhui .card.a-faire", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "Vos alertes",
-      texte: (c) => c?.matches(".a-faire")
-        ? "Chaque soir après la séance, vos alertes et ce qu'il y a à faire apparaissent ici. Une alerte est un signal à examiner, jamais une vente automatique."
-        : `Chaque soir après la séance : le point sur votre argent, puis vos alertes et ${app.sim() ? "la simulation" : "la proposition"} du jour juste en dessous.` },
-    { tab: "portefeuille", cible: ['#v-portefeuille .ajout-op', '#v-portefeuille [data-op=""]'], titre: "Ajouter vos opérations",
-      texte: "Le plus simple : photographiez l'avis ou le relevé de votre SGI, les opérations se remplissent toutes seules. Vous pouvez aussi les saisir à la main." },
-    { cible: "#fab-coffre", optionnel: true, titre: "Votre coffre",
-      texte: "Mettez de l'argent de côté avant de l'envoyer à votre SGI, et suivez votre régularité." },
-    { tab: "marche", cible: ["#v-marche .list > li:first-child", "#v-marche h1"], titre: "Le marché",
-      texte: "Chaque soir, l'analyse de chaque action, obligation et OPCVM de la BRVM. Touchez un titre, comme celui-ci, pour voir le détail et les raisons." },
+    { tab: "aujourdhui", cible: [".nav-ouvrir"], titre: "Le menu : trois étapes",
+      texte: "Touchez ici (ou glissez depuis la gauche) : 1. mon argent au quotidien, 2. je garde, 3. je fais grandir. La visite suit cet ordre." },
+    { tab: "aujourdhui", cible: ["#v-aujourdhui .bu-phrase", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "1 · Aujourd'hui",
+      texte: (c) => c?.matches(".bu-phrase") ? "Ce que vous pouvez dépenser aujourd'hui, sans toucher à votre épargne. La bascule Simple / Détaillé, au-dessus, change l'affichage."
+        : "Chaque soir après la séance : le point sur votre argent et ce qu'il y a à faire." },
+    { tab: "aujourdhui", cible: ["#v-aujourdhui .bu-trois"], optionnel: true, titre: "Trois gestes",
+      texte: "J'ai gagné, J'ai dépensé, Je garde : deux touches, ou la voix. Les pictogrammes sont les mêmes que dans votre budget." },
+    { tab: "budget", cible: ["#v-budget .bu-prevu", "#v-budget .bu-phrase", "#v-budget h1"], titre: "1 · Mon budget",
+      texte: "Préparez votre budget avec les mêmes images que la saisie, puis suivez chaque mois le dépensé face au prévu." },
+    { tab: "avenir", cible: ["#v-avenir .bu-av-saisie", "#v-avenir h1"], titre: "1 · Mon avenir",
+      texte: "Votre âge, ce que vous gardez et dépensez (par jour, semaine, mois ou an) : l'âge de liberté et ce qu'il vous faut se calculent aussitôt." },
+    { tab: "objectifs", cible: ["#v-objectifs .bu-phrase", "#v-objectifs h1"], titre: "2 · Mes objectifs",
+      texte: "Un seul plan pour tout : il remplit d'abord votre sécurité, puis vos projets, puis la bourse. Ici, on fixe et on suit." },
+    { pf: "epargne", cible: ["#v-portefeuille .ep2-cta", "#v-portefeuille .ep2-tete", "#v-portefeuille .epargne"], titre: "2 · Mon coffre",
+      texte: "Ici, on agit : Je garde, Envoyer à ma SGI, J'ai repris. Votre série et vos trophées suivent votre régularité." },
+    { pf: "cercles", cible: ["#v-portefeuille .cercle", "#v-portefeuille .card"], titre: "2 · Mes cercles",
+      texte: "Épargnez avec vos proches : chacun voit la régularité des autres, jamais les montants. On s'encourage d'un geste." },
+    { pf: "simulateur", cible: ["#v-portefeuille .sim-resultat", "#v-portefeuille .sim-zone"], titre: "3 · Simuler un placement",
+      texte: "Ce que donnerait votre profil d'investisseur avec un montant choisi. Touchez un titre proposé : il s'ouvre au Marché." },
+    { tab: "marche", cible: ["#v-marche li.mk", "#v-marche .list > li:first-child", "#v-marche h1"], titre: "3 · Le Marché",
+      texte: "L'analyse du soir de chaque titre : touchez une ligne pour la déplier. Le petit crayon note un achat fait chez votre SGI." },
+    { pf: "placements", cible: ["#v-portefeuille .pl-tete", "#v-portefeuille .ajout-op"], titre: "3 · Mes placements",
+      texte: "Vos titres au dernier cours, ce qu'il faut regarder, et le chemin de votre argent. Le crayon de chaque titre note une vente." },
+    { tab: "performance", cible: ["#v-performance .card", "#v-performance h1"], titre: "3 · Performance",
+      texte: "Votre résultat comparé au marché de la BRVM, dividendes compris." },
     { cible: "#fab-ia", optionnel: true, titre: "BafiBot, votre assistant",
-      texte: "Une question ? Demandez à BafiBot : il répond avec vos chiffres et l'actualité publiée." },
+      texte: "Une question sur votre budget, votre coffre ou un titre ? BafiBot répond avec vos propres chiffres. Il connaît aussi chaque écran." },
   ];
+
   async function lancerVisite(relance = false) {
     if (enCours) return;
     const e = etat();
@@ -175,13 +196,13 @@
     e.visite_commencee = 1; sauver(e);
     // La visite part d'Aujourd'hui ; le coffre et le robot ne sont montrés que s'ils sont affichés
     if (app.tab() !== "aujourdhui") { app.aller("aujourdhui"); await attendre(350); }
-    const etapes = ETAPES_VISITE().filter((s) => !s.optionnel || visible($(s.cible)));
+    const etapes = ETAPES_VISITE().filter((s) => !s.optionnel || [].concat(s.cible).some((c) => document.querySelector(c)));
     const fin = await derouler(etapes, {
       surEtape: (i) => noter("visite_etape", i + 1),
       surPasse: (i) => noter("visite_passee", i + 1),
     });
     const e2 = etat();
-    e2.astuces.portefeuille = 1; e2.astuces.marche = 1;        // déjà vus pendant la visite
+    e2.astuces.portefeuille = 1; e2.astuces.marche = 1; e2.astuces.performance = 1;        // déjà vus pendant la visite
     if (fin === "fin") {
       e2.visite = "terminee"; noter("visite_terminee");
       if (!e2.pas.alertes) { e2.pas.alertes = 1; noter("pas_termine", "alertes"); }   // la visite a montré les alertes
@@ -207,7 +228,7 @@
     for (let k = 0; k < 600 && document.querySelector("dialog[open]"); k++) await attendre(200);   // ex. choix de la démo
     const p = app.prenom();
     noter("visite_proposee");
-    const r = await derouler([{ titre: `Bienvenue${p ? " " + p : ""} !`, texte: "Découvrez l'essentiel de l'application en une minute, en cinq étapes." }],
+    const r = await derouler([{ titre: `Bienvenue${p ? " " + p : ""} !`, texte: "Découvrez le parcours en deux minutes : votre budget, votre épargne, puis la bourse, écran par écran." }],
       { passer: "Plus tard", terminer: "Commencer la visite" });
     if (r === "fin") lancerVisite();
     else { const e = etat(); e.visite = "plus_tard"; sauver(e); noter("visite_plus_tard"); app.render(); }
@@ -217,7 +238,16 @@
   const ouvrirAssistant = (question) => window.dispatchEvent(new CustomEvent("brvm:ouvrir-assistant", { detail: { question } }));
   function premiersPas() {
     const f = app.faits(), e = etat(), robot = !!$("#fab-ia");
+    const budgetFait = !!window.BafiBudget?.contexte?.()?.budget_configure;
     return [
+      // dans l'ordre du parcours : budget, plan d'épargne, puis la bourse
+      { id: "budget", t: "Préparer mon budget", duree: "1 min", fait: budgetFait,
+        guide: [{ tab: "budget", cible: ["#v-budget .bu-prevu", "#v-budget .bu-demarrage", "#v-budget h1"], titre: "Votre budget",
+                  texte: "Indiquez ce que vous gagnez et vos principales dépenses, avec les images : l'application calcule ce que vous pouvez dépenser chaque jour." }] },
+      ...(f.plan !== null ? [{ id: "epargne", t: "Choisir mon plan pour garder", duree: "30 s", fait: f.plan,
+        guide: [{ tab: "objectifs", cible: ["#v-objectifs .bu-plan-b", "#v-objectifs h1"], titre: "Votre plan pour garder",
+                  texte: "Un seul plan : combien garder et à quel rythme. Il remplit votre sécurité, puis vos projets, puis la bourse.",
+                  action: { label: "Choisir mon plan", fn: () => document.querySelector('#v-objectifs [data-coffre="plan"]')?.click() } }] }] : []),
       { id: "depot", t: "Noter l'argent versé à ma SGI", duree: "1 min", fait: f.depot,
         guide: [{ tab: "portefeuille", cible: '#v-portefeuille [data-op=""]', titre: "Noter l'argent versé",
                   texte: "Chaque fois que vous envoyez de l'argent à votre SGI, notez-le ici : c'est le point de départ de tous les calculs.",
@@ -233,10 +263,7 @@
                     : "Dès que vous détiendrez des titres, leurs alertes apparaîtront dans un bloc « À faire » sur cet écran. Une alerte est un signal à examiner, jamais une vente automatique." }] },
       ...(robot ? [{ id: "robot", t: "Poser une question à BafiBot", duree: "30 s", fait: !!e.pas.robot,
         guide: [{ cible: "#fab-ia", titre: "BafiBot, votre assistant", texte: "Il répond avec vos propres chiffres. Essayez avec une question toute prête : vous pourrez ensuite poser les vôtres.",
-                  action: { label: "Essayer : « Combien ai-je gagné ce mois-ci ? »", fn: () => ouvrirAssistant("Combien ai-je gagné ce mois-ci ?") } }] }] : []),
-      ...(f.plan !== null ? [{ id: "epargne", t: "Choisir mon rythme d'épargne", duree: "30 s", fait: f.plan,
-        guide: [{ tab: "profil", cible: ["#f-plan", "#v-profil h1"], titre: "Votre rythme d'épargne",
-                  texte: "Choisissez combien mettre de côté et à quel rythme : le coffre vous aide ensuite à le tenir." }] }] : []),
+                  action: { label: "Essayer : « Combien puis-je dépenser aujourd'hui ? »", fn: () => ouvrirAssistant("Combien puis-je dépenser aujourd'hui ?") } }] }] : []),
     ];
   }
   // Note chaque premier pas une seule fois, au moment où il devient fait

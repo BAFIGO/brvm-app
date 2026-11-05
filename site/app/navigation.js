@@ -20,18 +20,20 @@
       ic: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>') },
     { id: "budget", esp: 1, nom: "Mon budget", href: "#budget", simple: true,
       ic: ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>') },
+    { id: "avenir", esp: 1, simple: true, nom: "Mon avenir", href: "#avenir",
+      ic: ic('<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>') },
+    { id: "objectifs", esp: 2, simple: true, nom: "Mes objectifs", href: "#objectifs",
+      ic: ic('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/>') },
     { id: "pf:epargne", esp: 2, simple: true, nom: "Mon coffre", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
     { id: "pf:cercles", esp: 2, simple: true, nom: "Mes cercles", ic: ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>') },
-    { id: "avenir", esp: 2, simple: true, nom: "Mon avenir", href: "#avenir",
-      ic: ic('<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>') },
-    { id: "pf:placements", esp: 3, nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
     { id: "pf:simulateur", esp: 3, nom: "Simuler un placement", ic: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>') },
-    { id: "performance", esp: 3, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
     { id: "marche", esp: 3, nom: "Marché", href: "#marche", ic: ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>') },
+    { id: "pf:placements", esp: 3, nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
+    { id: "performance", esp: 3, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
   ];
   const NOMS_PF = { placements: "Mes placements", epargne: "Mon coffre", cercles: "Mes cercles", simulateur: "Simuler un placement" };
   // trois espaces, dans l'ordre du parcours : budget → épargne et cercles → bourse
-  const ESPACES = { 1: "Mon argent au quotidien", 2: "Je garde", 3: "Je fais grandir" };
+  const ESPACES = { 1: "1 · Mon argent au quotidien", 2: "2 · Je garde", 3: "3 · Je fais grandir" };
   const TITRES = { objectifs: "Mes objectifs", avenir: "Mon avenir", aujourdhui: "Aujourd'hui", budget: "Mon budget", portefeuille: "Portefeuille", performance: "Performance", marche: "Marché", profil: "Profil et réglages" };
 
   // ---------------------------------------------------------------- éléments (créés une seule fois)
@@ -349,4 +351,56 @@
   });
   window.addEventListener("hashchange", () => { if (!app) return; fermer(false); glisser(); entete(); });
   window.addEventListener("brvm:maj", entete);
+})();
+
+// Retour arrière : depuis un écran, il ramène à Aujourd'hui ; depuis Aujourd'hui, un message demande de confirmer
+// (« touchez encore retour pour quitter ») au lieu de sortir aussitôt vers la vitrine.
+(() => {
+  let quitter = 0;
+  try {
+    if (!history.state?.bafi) { history.replaceState({ bafi: "racine" }, "", location.href); history.pushState({ bafi: "app" }, "", location.href); }
+  } catch (e) { return; }
+  addEventListener("popstate", (ev) => {
+    if (ev.state?.bafi !== "racine") return;
+    const t = location.hash.slice(1) || "aujourdhui";
+    if (t !== "aujourdhui") { history.pushState({ bafi: "app" }, "", location.pathname + location.search + "#aujourdhui"); dispatchEvent(new HashChangeEvent("hashchange")); return; }
+    if (Date.now() - quitter < 3000) { history.back(); return; }
+    quitter = Date.now();
+    history.pushState({ bafi: "app" }, "", location.href);
+    window.BRVM_APP?.toast?.("Touchez encore « retour » pour quitter BafiBourse.");
+  });
+})();
+
+// Fenêtres « tiroir du bas » (avec le petit trait en haut) : on les ferme en les faisant glisser vers le bas avec le doigt.
+// Le geste part du haut de la fenêtre (trait, titre) ou de n'importe où quand son contenu est en haut de sa page.
+(() => {
+  let g = null;
+  const enBas = (d) => { const r = d.getBoundingClientRect(); return innerWidth < 760 && r.bottom >= innerHeight - 4; };
+  document.addEventListener("touchstart", (ev) => {
+    const d = ev.target.closest?.("dialog[open]");
+    if (!d || !enBas(d) || ev.touches.length !== 1) return;
+    if (ev.target.closest("input, textarea, select, [contenteditable], .ia-fil, .tbl, .scroll-x")) return;
+    const r = d.getBoundingClientRect(), y = ev.touches[0].clientY;
+    if (y - r.top > 72 && d.scrollTop > 0) return;                  // au milieu d'un contenu déjà défilé : on laisse défiler
+    g = { d, y0: y, t0: performance.now(), dy: 0, actif: false };
+  }, { passive: true });
+  document.addEventListener("touchmove", (ev) => {
+    if (!g) return;
+    const dy = ev.touches[0].clientY - g.y0;
+    if (!g.actif) { if (dy > 10 && g.d.scrollTop <= 0) { g.actif = true; g.d.style.transition = "none"; } else if (dy < -4) { g = null; return; } else return; }
+    g.dy = Math.max(0, dy); g.d.style.transform = `translateY(${g.dy}px)`;
+  }, { passive: true });
+  const fin = () => {
+    if (!g) return;
+    const { d, dy, t0, actif } = g; g = null;
+    if (!actif) return;
+    const vite = dy / Math.max(1, performance.now() - t0) > 0.6;
+    d.style.transition = "transform .22s ease";
+    if (dy > 110 || (vite && dy > 40)) {
+      d.style.transform = "translateY(100%)";
+      setTimeout(() => { d.close(); d.style.transform = ""; d.style.transition = ""; }, 200);
+    } else { d.style.transform = ""; setTimeout(() => (d.style.transition = ""), 230); }
+  };
+  document.addEventListener("touchend", fin);
+  document.addEventListener("touchcancel", fin);
 })();
