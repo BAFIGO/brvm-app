@@ -2424,7 +2424,7 @@
     pts += r.ep_but === "avenir" ? 1 : 0;
     return pts <= 1 ? "debutant" : pts <= 3 ? "regulier" : "batisseur";
   }
-  async function onboarding(completer = false) {
+  async function onboarding(completer = false, quandFini = null) {
     const v = $("#v-onboarding"), p = S.profil;
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = true));
     document.querySelectorAll("main > .view").forEach((n) => (n.hidden = n !== v));
@@ -2448,8 +2448,9 @@
         v.hidden = true;
         document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
         history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
-        render();
-        if (msg) toast(msg);
+        document.body.classList.remove("en-onboarding");
+        if (quandFini) { quandFini(); setTimeout(() => { if (msg) toast(msg); }, 300); }   // l'initialisation de l'application reprend
+        else { render(); if (msg) toast(msg); }
         fini();
       };
       const corps = (e) => {
@@ -2533,10 +2534,10 @@
             <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
           <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
           <form id="f-ob" class="card" novalidate><h2>${e.titre}</h2>${corps(e)}<p class="msg" role="status" aria-live="polite"></p>
-            <div class="actions">${i > 0 ? `<button class="btn" type="button" data-retour>Retour</button>` : ""}
+            <div class="actions ob-actions">${i > 0 ? `<button class="btn" type="button" data-retour>Retour</button>` : ""}
               ${e.oblig ? "" : `<button class="btn" type="button" data-passer>Passer</button>`}
               <button class="btn primary" type="submit">${dernier ? "Terminer" : "Continuer"}</button></div></form>
-          ${i > 0 || completer ? `<p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard</button></p>` : ""}`;
+          <p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard et entrer dans mon espace</button></p>`;
         const f = $("#f-ob", v), msg = $(".msg", f);
         if (e.n === 1) brancherIdentite(f, lib);
         if (e.n === 3) f.querySelector("[data-ob-prop]")?.addEventListener("click", (ev) => {
@@ -2571,7 +2572,14 @@
           b.disabled = true;
           try {
             const upd = await lire(e, f);
-            if (typeof upd === "string") { msg.textContent = upd; b.disabled = false; return; }
+            if (typeof upd === "string") {
+              msg.textContent = upd; b.disabled = false;
+              const vide = [...f.querySelectorAll("fieldset")].find((fs) => fs.querySelector("input[type=radio]") && !fs.querySelector("input[type=radio]:checked"));
+              f.querySelectorAll(".ob-manque").forEach((x) => x.classList.remove("ob-manque"));
+              if (vide) { vide.classList.add("ob-manque"); vide.scrollIntoView({ block: "center", behavior: "smooth" }); }
+              else msg.scrollIntoView({ block: "center", behavior: "smooth" });
+              return;
+            }
             if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.o);
             await api.saveProfil(S.user.id, upd);
             const avant = p.profil;
@@ -2580,7 +2588,7 @@
             if (dernier && completer) return finir("Profil complété.");
             if (dernier) {                                       // premier « waouh » : le portrait, avant d'entrer dans l'espace
               v.innerHTML = `<div class="portrait">${portraitHtml(true)}
-                <div class="actions"><button class="btn primary" type="button" data-entrer>Découvrir mon espace</button></div></div>`;
+                <div class="actions ob-actions"><button class="btn primary" type="button" data-entrer>Découvrir mon espace</button></div></div>`;
               window.scrollTo(0, 0);
               animerPortrait(v);
               $("[data-entrer]", v).addEventListener("click", () => finir(`Bienvenue${p.prenom ? ", " + p.prenom : ""} ! Votre espace est prêt.`));
@@ -3583,8 +3591,11 @@
     if (cgu && (+S.profil.cgu_version || 0) < cgu.version && !(await showCgu(cgu, true))) return;
     const plusTard = (() => { try { return sessionStorage.getItem("brvm-ob-plus-tard"); } catch (e) { return null; } })();
     if (("onboarding_etape" in S.profil && !S.profil.onboarding_fini_le && !plusTard) || (DEMO && new URLSearchParams(location.search).has("onboarding"))) {
-      await onboarding();
-      return;
+      // l'inscription se déroule seule à l'écran (pas de menu ni de bouton flottant : aucune impasse) ;
+      // quand elle se termine, l'application s'initialise normalement (menu, budget, BafiBot, visite)
+      document.body.classList.add("en-onboarding");
+      await new Promise((ok) => onboarding(false, ok));
+      document.body.classList.remove("en-onboarding");
     }
     if (inscription && S.profil.onboarding_fini_le) setTimeout(() => toast("Vous aviez déjà un compte avec cette adresse : bienvenue !"), 600);
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));

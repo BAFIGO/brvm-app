@@ -1139,3 +1139,9 @@ li.vers-mk { cursor: pointer; } li.vers-mk:hover, li.vers-mk:focus-visible { bac
 .vers-mk-f { color: var(--accent); font-weight: 800; }
 .pos-op { width: 32px; height: 32px; border-radius: 10px; margin-left: 4px; }
 .pos-op svg { width: 16px; height: 16px; }
+/* Inscription : pas d'impasse — pas de menu ni de bouton flottant pendant l'inscription ; les boutons restent visibles en bas */
+body.en-onboarding .nav-ouvrir, body.en-onboarding #fab-ia, body.en-onboarding #fab-coffre, body.en-onboarding .nav-info { display: none !important; }
+.ob-actions { position: sticky; bottom: 0; z-index: 2; background: var(--surface); padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+  margin-top: 12px; border-top: 1px solid var(--border); }
+.ob-actions .btn { min-height: 48px; }
+fieldset.ob-manque { border: 2px solid hsl(35 92% 55%) !important; border-radius: 14px; padding: 8px 10px; }
