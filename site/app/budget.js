@@ -42,7 +42,8 @@
     sablier: '<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>',
     deux: '<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M10 20c0-3 3-5 6-5s6 2 6 5"/>',
     cercle: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>', moins: '<path d="M5 12h14"/>', micro: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    autre_rev: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>', moins: '<path d="M5 12h14"/>', micro: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     soleil: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     calendrier: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     semaine: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M7 14h2M11 14h2M15 14h2"/>',
@@ -131,7 +132,9 @@
     const abonnements = (() => { const vus = new Map(); for (const m of S.mv) if (m.recurrent && m.type === "depense") vus.set(m.categorie + "|" + m.montant, m); return [...vus.values()]; })();
     const pl = ep?.plan, planMensuel = pl?.montant ? Math.round(+pl.montant * ({ quotidien: 30.4, hebdo: 4.33, mensuel: 1 })[pl.rythme] || 0) : 0;
     const depParCat = {}; for (const m of mois) if (m.type === "depense") depParCat[m.categorie] = (depParCat[m.categorie] || 0) + (+m.montant || 0);
-    return { p, pv, depParCat, projets, fixes, parts, jour, revMois, depMois, recAuj, planMensuel, plan: pl || null, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
+    const bourse = Math.max(0, resteP);                       // 3e poche : ce qui dépasse la sécurité et les projets attend d'aller à la SGI
+    const envoyeSgi = ep?.envoye ?? (ep?.mv || []).filter((m) => m.type === "TRANSFERT").reduce((x, m) => x + (+m.montant || 0), 0);
+    return { p, pv, depParCat, projets, fixes, bourse, envoyeSgi, parts, jour, revMois, depMois, recAuj, planMensuel, plan: pl || null, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
              derniere, joursRest, epargneCible: planMensuel || revRef * part(3), epargneBudget: revRef * part(3),
              semaine: { dep: somme(s1, "depense"), depAvant: somme(s0, "depense"), garde: gardeSem, jours: new Set(s1.map((m) => m.date)).size } };
   }
@@ -311,7 +314,7 @@
         <li><span class="bu-tuile amb petit">${ic(P.securite)}</span><span>Sécurité</span><b>${c.securiteObj ? (c.securite / (c.securiteObj / (c.jour ? 6 : 3))).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : 0} mois couverts</b></li>
         <li><span class="bu-tuile clair petit">${ic(P.ceremonie)}</span><span>Plaisirs du mois</span><b class="${c.env.envies <= c.revRef * c.part(2) ? "good" : "bad"}">${c.env.envies <= c.revRef * c.part(2) ? "dans le budget ✓" : "au-dessus du budget"}</b></li>
       </ul>${c.serie >= 7 ? `<p class="small">Vous êtes un épargnant régulier : ${c.serie} jours d'affilée.</p>` : ""}
-      <p class="small"><a href="#budget">Voir mon budget du mois</a></p></details>`;
+      <p class="small"><a href="#budget" data-bu="voir-budget">Voir mon budget du mois</a></p></details>`;
   }
   // Bascule « Simple / Détaillé » : visible en haut de l'accueil et du budget ; on touche ou on fait glisser le curseur
   const bascule = () => { const det = S.profil?.mode === "complet";
@@ -446,23 +449,33 @@
     const dep = c.pv.depenses, rev = c.pv.revenus, edit = S.prevuEdit || !Object.keys(dep).length;
     const lignes = [...new Set([...PRINCIPALES, ...Object.keys(dep), ...(S.prevuAjout || [])])];
     const totP = Object.values(dep).reduce((a, x) => a + (+x || 0), 0), totR = Object.values(rev).reduce((a, x) => a + (+x || 0), 0);
-    if (!edit) return `<section class="card bu-prevu"><div class="bu-ligne"><h2 class="bu-h2">Mon budget prévu</h2><button type="button" class="btn link small" data-bu="prevu-edit">Modifier</button></div>
-      ${totR ? `<p class="small">Je prévois de gagner <b>${F(totR)}</b> et de dépenser <b>${F(totP)}</b> par mois.</p>` : ""}
+    if (!edit) return `<section class="card bu-prevu"><div class="bu-ligne"><h2 class="bu-h2">Mon budget prévu</h2>
+        <button type="button" class="btn small bu-modif" data-bu="prevu-edit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg> Modifier mon budget</button></div>
+      <p class="small">Je gagne <b>${F(totR || c.revRef)}</b> par mois${c.jour ? " (recettes de chaque jour)" : c.p.jour_paie ? `, payé le ${c.p.jour_paie}` : ""} et je prévois de dépenser <b>${F(totP)}</b>.</p>
+      ${c.jour && c.basePrudente ? `<p class="small muted">Revenu de base prudent : <b>${F(c.basePrudente)}</b> par mois (vos mois les plus faibles). Votre budget s'appuie sur lui.</p>` : ""}
       <ul class="bu-pv-l">${Object.entries(dep).filter(([, x]) => +x > 0).map(([k, x]) => { const d = c.depParCat[k] || 0, trop = d > x;
         return `<li><span class="bu-tuile clair petit">${ic(P[k] || P.autres)}</span><span class="bu-op-l"><span class="bu-ligne"><b>${esc(catDep(k)[1])}</b><span class="small${trop ? " bad" : ""}">${F(d)} / ${F(x)}</span></span>${jauge(d, x, trop ? "trop" : "")}</span></li>`; }).join("")}</ul>
       <p class="small muted">Ce mois-ci : dépensé / prévu, ligne par ligne, avec les mêmes images qu'à la saisie.</p></section>`;
     const champ = (k, lib, val, type) => `<label class="bu-pv-c"><span class="bu-tuile clair">${ic(P[k] || P.autres)}</span><span class="bu-pv-n">${esc(lib)}</span>
       <input inputmode="numeric" data-prevu="${type}:${k}" value="${val ? nf.format(val) : ""}" placeholder="0" aria-label="${esc(lib)} par mois"></label>`;
     const autres = DEP.filter(([k]) => !lignes.includes(k));
+    const ry = S.prevuRythme || (c.jour ? "jour" : "mois");
+    const sources = [ry === "jour" ? ["recette", "Recettes"] : ["salaire", "Salaire"], ["transfert", "Argent reçu"], ["autre_rev", "Autres revenus"]];
+    const base = (k) => rev[k] || (k === "salaire" || k === "recette" ? (c.jour ? (+c.p.revenu || 0) * 26 : +c.p.revenu || 0) : 0);
     return `<section class="card bu-prevu"><h2 class="bu-h2">Mon budget prévu <small class="muted">par mois, à peu près</small></h2>
       <p class="small muted">Ce que je gagne</p>
-      <div class="bu-pv-g">${(c.jour ? [["recette", "Recettes"]] : [["salaire", "Salaire"]]).concat([["transfert", "Argent reçu"]]).map(([k, l]) => champ(k, l, rev[k] || (k === "salaire" || k === "recette" ? (c.jour ? (+c.p.revenu || 0) * 26 : +c.p.revenu || 0) : 0), "rev")).join("")}</div>
+      <div class="bu-freq bu-freq2" role="radiogroup" aria-label="Je gagne">
+        <button type="button" role="radio" aria-checked="${ry === "mois"}" data-bu="prevu-ry" data-v="mois">Chaque mois (salaire)</button>
+        <button type="button" role="radio" aria-checked="${ry === "jour"}" data-bu="prevu-ry" data-v="jour">Chaque jour (recettes)</button></div>
+      ${ry === "mois" ? `<label class="bu-champ bu-paie">Jour de paie <small class="muted">(facultatif)</small><input id="bu-r-paie" inputmode="numeric" placeholder="ex. 28" value="${c.p.jour_paie || ""}"></label>` : ""}
+      <div class="bu-pv-g">${sources.map(([k, l]) => champ(k, l, base(k), "rev")).join("")}</div>
       <p class="small muted">Ce que je dépense</p>
       <div class="bu-pv-g">${lignes.map((k) => champ(k, catDep(k)[1], dep[k], "dep")).join("")}</div>
       ${autres.length ? `<details class="bu-pv-plus"><summary class="btn small">＋ Ajouter une ligne</summary><div class="bu-grille">${autres.map(([k, l]) =>
         `<button type="button" class="bu-cat" data-bu="prevu-ajout" data-v="${k}"><span class="bu-tuile clair">${ic(P[k] || P.autres)}</span>${l}</button>`).join("")}</div></details>` : ""}
-      <button type="button" class="btn primary" data-bu="prevu-ok">Enregistrer mon budget prévu</button>
-      ${Object.keys(dep).length ? `<button type="button" class="btn link small" data-bu="prevu-annuler">Annuler</button>` : ""}
+      <div class="bu-pv-b">${Object.keys(dep).length ? `<button type="button" class="btn" data-bu="prevu-annuler">Annuler</button>` : ""}
+        <button type="button" class="btn primary" data-bu="prevu-ok">Enregistrer mon budget</button></div>
+      <p class="small"><a href="#profil">Régler l'heure de mon rappel</a></p>
       <p class="small muted">Les dépenses « besoins » (logement, nourriture, transport, famille, santé, école…) servent aussi à calculer votre sécurité.</p></section>`;
   }
   // dépenses qui reviennent chaque mois : à passer en revue tous les 6 mois
@@ -500,18 +513,6 @@
         <p class="small muted">Besoins : logement, nourriture, transport, santé, école, famille. Envies : sorties, habits, fêtes, abonnements.</p></section>
       ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
       ${blocCoffre(c)}${dernieres(8, c)}${blocAbonnements(c)}${S.decal ? "" : blocSemaine(c)}
-      <details class="card"><summary><b>Mes réglages de budget</b></summary>
-        <div class="bu-reg">
-          <label>Mon revenu ${c.jour ? "par jour" : "par mois"}<input id="bu-r-rev" inputmode="numeric" value="${nf.format(c.p.revenu || 0)}"></label>
-          ${c.jour && c.basePrudente ? `<p class="small muted">Revenu de base prudent : <b>${F(c.basePrudente)}</b> par mois (vos mois les plus faibles). Votre budget s'appuie sur lui.</p>` : ""}
-          <label>Je gagne<select id="bu-r-ry"><option value="mois"${c.jour ? "" : " selected"}>chaque mois</option><option value="jour"${c.jour ? " selected" : ""}>chaque jour (variable)</option></select></label>
-          ${c.jour ? "" : `<label>Jour de paie<input id="bu-r-paie" inputmode="numeric" placeholder="ex. 28" value="${c.p.jour_paie || ""}"></label>`}
-          <label>Mon projet<input id="bu-r-obj" value="${esc(c.p.objectif_nom || "")}"></label>
-          <label>Montant du projet<input id="bu-r-objm" inputmode="numeric" value="${c.p.objectif_montant ? nf.format(c.p.objectif_montant) : ""}"></label>
-          <button type="button" class="btn primary" data-bu="reglages">Enregistrer</button>
-          ${simple ? "" : ""}
-          <a href="#profil" class="small">Régler l'heure de mon rappel</a>
-        </div></details>
       ${blocPrevu(c)}
 `;
   }
@@ -542,7 +543,7 @@
     if (!S.profil) return "";
     const c = calculs(), pr = c.projets.reduce((x, y) => x + y.garde, 0);
     return `<a class="card bu-ouva" href="#objectifs"><span class="bu-tuile petit">${ic(P.securite, "#fff")}</span>
-      <span class="bu-op-l"><b>Où va cet argent</b><small>Sécurité ${F(c.securite)} · projets ${F(pr)}</small></span><span class="small">Mes objectifs ›</span></a>`;
+      <span class="bu-op-l"><b>Où va cet argent</b><small>Sécurité ${F(c.securite)} · projets ${F(pr)} · bourse ${F(c.bourse)}</small></span><span class="small">Mes objectifs ›</span></a>`;
   }
   function renderObjectifs(v) {
     S.vue = v;
@@ -550,14 +551,14 @@
     if (!S.charge) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><p class="muted">Chargement…</p>`; charger(); return; }
     if (!S.profil) { v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1><div class="notice">Commencez par votre budget : vos objectifs se calculent à partir de lui.
       <p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
-    const c = calculs(), plein = c.securite >= c.securiteObj && c.securiteObj > 0, cible = c.epargneCible;
+    const c = calculs(), plein = c.securite >= c.securiteObj && c.securiteObj > 0, cible = c.epargneCible, pl0 = app().placements?.();
     const moisRestants = cible > 0 ? Math.ceil(Math.max(0, c.securiteObj - c.securite) / cible) : null;
     let avant = Math.max(0, c.securiteObj - c.securite);
     const etage = (n, titre, tuile, etat, corps) => `<section class="card bu-etage${etat === "en cours" ? " actif" : ""}"><div class="bu-ligne"><span class="bu-etage-t">${tuile}<b>${n} · ${titre}</b></span><span class="chip">${etat}</span></div>${corps}</section>`;
     v.innerHTML = `<h1 id="h-obj">Mes objectifs</h1>
       <section class="bu-phrase"><span class="small">Mon plan, un seul pour tout</span>
         <b style="font-size:1.6rem">${cible > 0 ? `${F(cible)} par mois` : "À fixer"}</b>
-        <span class="small">${c.plan ? `soit ${F(c.plan.montant)} ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[c.plan.rythme] || ""}` : "d'après votre budget"} · réparti tout seul, dans l'ordre : sécurité, projets, bourse</span>
+        <span class="small">${c.plan ? `soit ${F(c.plan.montant)} ${({ quotidien: "par jour", hebdo: "par semaine", mensuel: "par mois" })[c.plan.rythme] || ""}` : "d'après votre budget"} · réparti tout seul, dans l'ordre : 1. sécurité, 2. projets, 3. poche bourse</span>
         <button type="button" class="btn small bu-plan-b" data-coffre="plan">${c.plan ? "Modifier mon plan" : "Fixer mon plan"}</button></section>
       ${etage(1, "Sécurité", `<span class="bu-tuile">${ic(P.securite, "#fff")}</span>`, plein ? "pleine ✓" : "en cours",
         `<div class="bu-ligne small"><span>${F(c.securite)}</span><b>${F(c.securiteObj)}</b></div>${jauge(c.securite, c.securiteObj)}
@@ -571,8 +572,12 @@
           : `<p class="small muted">Aucun projet pour l'instant.</p>`}
         ${(S.projets || []).some((x) => x.realise_le) ? `<p class="small good">✓ Réalisé : ${esc((S.projets || []).filter((x) => x.realise_le).map((x) => x.nom).join(", "))}</p>` : ""}
         ${S.projetsOk !== false ? `<button type="button" class="btn" data-bu="ajout-projet">Ajouter un projet</button>` : ""}`)}
-      ${etage(3, "Faire grandir", `<span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>`, plein ? "prêt" : "bientôt",
-        `<p class="small">${plein ? "Votre sécurité est pleine : le plan peut aller vers la bourse." : "Quand la sécurité sera pleine, le plan ira aussi vers la bourse."}</p>
+      ${etage(3, "Ma poche bourse", `<span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>`, c.bourse > 0 ? "à placer" : plein ? "prête" : "bientôt",
+        `<div class="bu-ligne small"><span>Gardé pour la bourse, pas encore envoyé</span><b>${F(c.bourse)}</b></div>
+         <div class="bu-ligne small"><span>Déjà envoyé à ma SGI</span><b>${F(c.envoyeSgi)}</b></div>
+         ${pl0?.valeur ? `<div class="bu-ligne small"><span>Placé aujourd'hui (valeur)</span><b>${F(pl0.valeur)}</b></div>` : ""}
+         <p class="small muted">${c.bourse > 0 ? "Cet argent attend dans votre coffre : envoyez-le à votre SGI depuis Mon coffre, quand vous le décidez."
+           : plein ? "Ce que vous gardez en plus de vos projets viendra ici, prêt à être placé." : "Elle se remplit quand la sécurité et vos projets sont couverts."}</p>
          <p class="small"><a href="#avenir">Voir mon avenir</a></p>`)}
       <a class="card bu-ouva" href="#portefeuille" data-bu="coffre"><span class="bu-tuile amb petit">${ic(P.coffre)}</span>
         <span class="bu-op-l"><b>Mon coffre</b><small>${F(c.solde)} gardés · pour garder, reprendre ou envoyer à ma SGI</small></span><span aria-hidden="true">›</span></a>`;
@@ -765,7 +770,14 @@
       await sauver({ age: S.avenirAge });
     }
     else if (a === "simuler") { ev.preventDefault(); app().allerPf?.("simulateur"); }
-    else if (a === "prevu-edit") { S.prevuEdit = true; rendre(); }
+    else if (a === "prevu-edit") { S.prevuEdit = true; rendre(); document.querySelector(".bu-prevu")?.scrollIntoView({ block: "start", behavior: "smooth" }); }
+    else if (a === "prevu-ry") {
+      const garde = {}; document.querySelectorAll("[data-prevu]").forEach((i) => (garde[i.dataset.prevu] = i.value));
+      S.prevuRythme = v; rendre();
+      document.querySelectorAll("[data-prevu]").forEach((i) => { if (garde[i.dataset.prevu] !== undefined) i.value = garde[i.dataset.prevu]; });
+      const r1 = garde["rev:salaire"] ?? garde["rev:recette"]; const c1 = document.querySelector(v === "jour" ? '[data-prevu="rev:recette"]' : '[data-prevu="rev:salaire"]'); if (c1 && r1) c1.value = r1;
+    }
+    else if (a === "voir-budget") { ev.preventDefault(); if (location.hash === "#budget") window.scrollTo({ top: 0, behavior: "smooth" }); else location.hash = "budget"; }
     else if (a === "prevu-annuler") { S.prevuEdit = false; S.prevuAjout = []; rendre(); }
     else if (a === "prevu-ajout") {
       const garde = {}; document.querySelectorAll("[data-prevu]").forEach((i) => (garde[i.dataset.prevu] = i.value));
@@ -776,8 +788,12 @@
     else if (a === "prevu-ok") {
       const dep = {}, rev = {};
       document.querySelectorAll("[data-prevu]").forEach((i) => { const [t, k] = i.dataset.prevu.split(":"), n = lireNombre(i.value); if (n) (t === "dep" ? dep : rev)[k] = n; });
-      S.prevuEdit = false; S.prevuAjout = [];
-      await sauver({ charges: Object.keys(dep).length || Object.keys(rev).length ? { depenses: dep, revenus: rev } : null });
+      const ry = S.prevuRythme || (S.profil.rythme === "jour" ? "jour" : "mois"), totRev = Object.values(rev).reduce((x, y) => x + y, 0);
+      const maj = { charges: Object.keys(dep).length || Object.keys(rev).length ? { depenses: dep, revenus: rev } : null, rythme: ry };
+      if (totRev) maj.revenu = ry === "jour" ? Math.round(totRev / 26) : totRev;           // revenu du profil = total prévu (par jour si recettes)
+      if (ry === "mois") maj.jour_paie = Math.min(31, lireNombre($("#bu-r-paie")?.value)) || null;
+      S.prevuEdit = false; S.prevuAjout = []; S.prevuRythme = null;
+      await sauver(maj);
       app().toast("Budget prévu enregistré.", { detail: "Vous verrez chaque mois le dépensé face au prévu." });
     }
 

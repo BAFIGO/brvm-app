@@ -220,3 +220,12 @@ dialog.bu-dlg { max-height: calc(100dvh - 16px); overflow-y: auto; overflow-x: h
 .bu-bascule { align-self: center; margin-inline: auto; }
 /* fenêtre de saisie : un titre (le geste choisi) au lieu des onglets */
 .bu-dlg-t { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; font-size: 1.2rem; color: var(--brand); }
+/* Mon budget prévu : bouton Modifier visible ; rythme du revenu ; boutons d'enregistrement */
+.bu-modif { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; border: 2px solid var(--accent); color: var(--accent); font-weight: 700; border-radius: 12px; }
+.bu-modif svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bu-freq2 { grid-template-columns: 1fr 1fr; margin: 4px 0 10px; } .bu-freq2 button { min-height: 44px; font-size: .85rem; }
+.bu-paie { max-width: 220px; margin-bottom: 8px; }
+.bu-pv-b { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; } .bu-pv-b .btn { min-height: 50px; border-radius: 14px; }
+.bu-pv-b .btn:only-child { grid-column: 1 / -1; }
+.bu-paie { display: flex !important; flex-direction: column; align-items: stretch; gap: 4px; font-weight: 600; }
+.bu-paie input { max-width: 140px; }

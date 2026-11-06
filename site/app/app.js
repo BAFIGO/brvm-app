@@ -461,6 +461,7 @@
     const m = ev.target.closest?.("[data-vers-marche]");
     if (m) { ev.preventDefault(); ev.stopPropagation(); versMarche(m.dataset.versMarche); }
   }, true);
+  document.addEventListener("click", (ev) => { if (ev.target.closest?.("[data-sim-tous]")) { S.ui.simTous = true; S.ui.simAjust = true; render(); } });
   document.addEventListener("keydown", (ev) => { const m = ev.target.closest?.("li[data-vers-marche]"); if (m && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); versMarche(m.dataset.versMarche); } });
   // Ouvre le titre au Marché (bonne rubrique, recherche sur son code, carte dépliée)
   function versMarche(code) {
@@ -1728,11 +1729,11 @@
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
         const ep1 = estEpingle(p.code);
-        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}</div>
-          <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
-          <div class="sub etats">${al ? pastille(al) : chip(d)}<button type="button" class="mk-op pos-op" data-op-titre="${esc(p.code)}" data-op-type="VENTE"
+        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="pos-acts"><button type="button" class="mk-op pos-op" data-op-titre="${esc(p.code)}" data-op-type="VENTE"
             aria-label="Noter une opération : ${esc(S.names.get(p.code) || p.code)} (vente, achat, dividende)" title="Noter une vente, un achat ou un dividende"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><button type="button" class="epingler icone" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
-            aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}" title="${ep1 ? "Épinglé dans le menu" : "Épingler dans le menu"}">${ICONE_EPINGLE}</button>${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
+            aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}" title="${ep1 ? "Épinglé dans le menu" : "Épingler dans le menu"}">${ICONE_EPINGLE}</button></div><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}</div>
+          <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
+          <div class="sub etats">${al ? pastille(al) : chip(d)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
           <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.
@@ -1817,12 +1818,13 @@
       <p class="small">${r.cible.length} ligne${r.cible.length > 1 ? "s" : ""}
         · part en actions ${Math.round(PART(r.cible, "actions") * 100)} %</p></div>`;
     // ajustements : un résumé et les principaux, sans bouton d'enregistrement (on n'enregistre que le réel)
-    const top = r.ordres.slice().sort((a, b) => b.quantite * b.prix_limite - a.quantite * a.prix_limite).slice(0, 6);
+    const tous = r.ordres.slice().sort((a, b) => b.quantite * b.prix_limite - a.quantite * a.prix_limite);
+    const top = S.ui.simTous ? tous : tous.slice(0, 6);
     h += `<details class="card sim-zone sim-ajust"${S.ui.simAjust ? " open" : ""}><summary>${badge}<h2>Ajustements simulés</h2><span class="small muted">le détail des achats et ventes</span></summary>
       ${r.ordres.length ? `<p>${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour se rapprocher de cette répartition :</p>
         <ul class="list">${top.map((o) => `<li class="vers-mk" data-vers-marche="${esc(o.code)}" tabindex="0" role="link" aria-label="Voir ${esc(nomLisible(o.libelle || o.code))} au Marché"><div class="main"><div class="name">${o.sens === "VENTE" ? "Vente" : "Achat"} · ${esc(nomLisible(o.libelle || o.code))} <span class="vers-mk-f" aria-hidden="true">›</span></div>
           <div class="sub">${esc(o.motif || "")}</div></div><div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">vers ${F(o.prix_limite)}</div></div></li>`).join("")}</ul>
-        ${r.ordres.length > top.length ? `<p class="small muted">et ${r.ordres.length - top.length} autre${r.ordres.length - top.length > 1 ? "s" : ""}, plus petit${r.ordres.length - top.length > 1 ? "s" : ""}.</p>` : ""}`
+        ${r.ordres.length > top.length ? `<button type="button" class="btn small" data-sim-tous>Voir les ${r.ordres.length - top.length} autre${r.ordres.length - top.length > 1 ? "s" : ""} (plus petits montants)</button>` : ""}`
       : `<p>Rien à ajuster : vos placements sont déjà proches de cette répartition.</p>`}
       <p class="small muted">Touchez un titre pour l'analyser au Marché ; c'est là que vous notez un achat ou une vente fait chez votre SGI.
         Une estimation pour éclairer vos décisions, pas une recommandation.</p></details>`;
@@ -2206,7 +2208,7 @@
       h += `<li class="mk"><details class="item"><summary class="row"><div class="main"><div class="name">${mq(r.code)}${esc(r.nom || r.code)}</div>
           <div class="sub">${chipSante(r.decision, r.analyse?.note)}</div></div>
           <div class="right num">${pxCourt}</div>
-          <button type="button" class="mk-op" data-op-titre="${esc(r.code)}" aria-label="Noter un achat ou une vente : ${esc(r.nom || r.code)}" title="Noter un achat ou une vente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button></summary>
+</summary>
           <div class="why">${u.mkTab === "actions" ? reperes(r) + histoAnnuel(r.historique_annuel, "action") : `<p class="small muted mk-id">${esc(r.code)} · score ${N(r.score)} sur 100</p>`}
             ${u.mkTab === "opcvm" ? histoAnnuel(r.historique_annuel, "opcvm") : ""}
             ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}<span class="small muted">${esc(r.code)} · 3 derniers mois</span></div>` : ""}${det}
@@ -3651,7 +3653,7 @@
                           for (const p of L.positions || []) { const v = act.get(p.code), val = +p.valeur || 0; titres += val; if (v !== undefined) delta += val * v / (1 + v); }
                           return { valeur: Math.max(0, L.valeur || 0), varJour: titres > 0 ? delta / (titres - delta) : null };
                         },
-                        epargneResume: () => { const e = epargne(); return e ? { solde: Math.max(0, e.solde || 0), serie: e.serie || 0, plan: e.plan || null,
+                        epargneResume: () => { const e = epargne(); return e ? { solde: Math.max(0, e.solde || 0), serie: e.serie || 0, plan: e.plan || null, envoye: +e.envoye || 0,
                           mv: (e.mv || []).map((m) => ({ date: m.date, type: m.type, montant: m.montant })) } : null; },
                         saveProfil: async (p) => { await api.saveProfil(S.user.id, p); Object.assign(S.profil, p); window.dispatchEvent(new Event("brvm:profil")); },
                         regularite: () => {
