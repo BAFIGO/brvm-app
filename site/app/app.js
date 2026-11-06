@@ -2746,6 +2746,7 @@
         ${S.docs?.avertissement ? `<div class="doc-texte small muted">${esc(S.docs.avertissement.texte)}</div>`
           : `<p class="small muted">${AVERT()} Les performances passées ne préjugent
           pas des performances futures. Vos données (profil, journal) ne sont visibles que par vous.</p>`}
+        <p class="small muted">Version de l'application : <b>${esc((document.querySelector('script[src*="budget.js"]')?.getAttribute("src") || "").split("v=")[1] || "?")}</b></p>
         ${S.docs?.cgu ? `<p class="small"><button class="btn link" type="button" id="voir-cgu">${esc(S.docs.cgu.titre)} (version ${esc(S.docs.cgu.version)})</button>
           ${p.cgu_acceptee_le ? `<span class="muted">acceptée le ${new Date(p.cgu_acceptee_le).toLocaleDateString("fr-FR")}</span>` : ""}</p>` : ""}
         <div class="actions"><button class="btn" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button>
