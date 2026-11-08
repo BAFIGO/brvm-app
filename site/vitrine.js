@@ -464,3 +464,21 @@
     if (td.children.length === 0) td.textContent = lisible(td.textContent);
   });
 })();
+
+// Invitation d'un proche (lien de parrainage) : on garde le code, on explique, et on propose d'abord la démo,
+// puis l'inscription (le code suit jusqu'à la création du compte).
+(() => {
+  const q = new URLSearchParams(location.search), code = (q.get("parrain") || "").toUpperCase().slice(0, 12);
+  if (code) { try { localStorage.setItem("brvm-parrain", code); } catch (e) { /* navigation privée */ } }
+  let enCours = ""; try { enCours = localStorage.getItem("brvm-parrain") || ""; } catch (e) { /* */ }
+  if (!code && !(enCours && location.hash === "#invitation")) return;
+  const hero = document.querySelector(".hero, main section");
+  if (!hero || document.getElementById("v-invite")) return;
+  hero.insertAdjacentHTML("beforebegin", `<section id="v-invite" class="v-invite" aria-labelledby="v-invite-t">
+    <div class="v-invite-in"><span class="v-invite-ic" aria-hidden="true">🎁</span>
+      <div><h2 id="v-invite-t">Un proche vous invite sur BafiBourse</h2>
+        <p>Votre invitation vous offre <b>14 jours de la formule Essentiel</b>. Prenez 2 minutes pour essayer l'application avec des données fictives, puis créez votre compte : l'invitation est gardée.</p>
+        <div class="v-invite-b"><a class="btn primary" href="app/?demo=1">Essayer la démo (2 minutes)</a>
+          <a class="btn" href="app/?offre=decouverte#inscription">Créer mon compte</a></div></div></div></section>`);
+  history.replaceState(null, "", location.pathname + "#invitation");
+})();

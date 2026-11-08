@@ -212,9 +212,13 @@
     app.render();
     if (fin === "fin" && app.demo) {
       await attendre(400);
-      const r = await derouler([{ titre: "Vous avez vu l'essentiel", texte: "Prêt à le faire avec votre propre argent ? Choisissez votre formule : gratuite pour commencer, 14 jours d'Essentiel offerts." }],
-        { passer: "Continuer la démo", terminer: "Voir les offres" });
-      if (r === "fin") location.href = "../#tarifs";
+      let invite = ""; try { invite = localStorage.getItem("brvm-parrain") || ""; } catch (e) { /* */ }
+      // fin de la démo : un invité va droit à l'inscription (son invitation est gardée) ; les autres voient les offres
+      const r = await derouler([{ titre: "Vous avez vu l'essentiel", texte: invite
+          ? "Prêt à le faire avec votre propre argent ? Créez votre compte : votre invitation vous offre 14 jours d'Essentiel."
+          : "Prêt à le faire avec votre propre argent ? Choisissez votre formule : gratuite pour commencer, 14 jours d'Essentiel offerts." }],
+        { passer: "Continuer la démo", terminer: invite ? "Créer mon compte" : "Voir les offres" });
+      if (r === "fin") location.href = invite ? "./?offre=decouverte#inscription" : "../#tarifs";
       return;
     }
     if (fin === "fin") {

@@ -90,16 +90,22 @@
     const d = q.decouverte, e = q.essentiel, i = q.investisseur;
     return [
       { k: "decouverte", nom: "Découverte", mois: 0, an: 0, pour: "Pour découvrir et prendre l'habitude",
-        points: ["Suivi réel de vos placements, coffre, séries, point du soir",
+        points: ["Mon budget : ce que je peux dépenser aujourd'hui, les trois gestes", "Budget prévu en images, dépensé face au prévu",
+                 "Mon coffre : un seul plan, trois poches (sécurité, projets, bourse)", "Mes objectifs, Mon avenir (âge de liberté)",
+                 "Séries, trophées, bilan de la semaine, rappel du soir", "1 cercle d'épargne",
+                 "Suivi réel de vos placements, point du soir", "Score, diagnostic financier et tendance de chaque titre",
                  d.questions_debut > d.questions ? `BafiBot : ${n(d.questions_debut)} questions la 1re semaine, puis ${n(d.questions)} par mois` : `BafiBot : ${n(d.questions)} questions par mois`,
-                 `${n(d.pages)} page${d.pages > 1 ? "s" : ""} importée${d.pages > 1 ? "s" : ""} par mois`, "Score, diagnostic financier et tendance de chaque action", "1 cercle d'épargne"] },
+                 `${n(d.pages)} page${d.pages > 1 ? "s" : ""} importée${d.pages > 1 ? "s" : ""} par mois`] },
       { k: "essentiel", nom: "Essentiel", mois: o.essentiel_mois?.[1], an: o.essentiel_an?.[1], pour: "Pour épargner et investir sereinement", reco: true,
-        points: [`BafiBot : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`, "Ce qui fait la note de chaque action",
-                 "Simulateur : la répartition de votre profil", "Performance complète, export, cercles illimités, WhatsApp"] },
+        plus: "Tout Découverte, plus :",
+        points: ["Affichage détaillé du budget : enveloppes, profil réglable", "Rappels par WhatsApp", "Cercles illimités et encouragements",
+                 "Simulateur : la répartition de votre profil", "Ce qui fait la note de chaque titre", "Performance complète et export",
+                 `BafiBot : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`] },
       { k: "investisseur", nom: "Investisseur", mois: o.investisseur_mois?.[1], an: o.investisseur_an?.[1], pour: "Pour suivre plusieurs lignes en détail",
-        points: [`BafiBot : ${n(i.questions)} questions${i.approfondies ? `, dont ${n(i.approfondies)} approfondies` : ""}`, `${n(i.pages)} pages importées par mois`,
-                 "Analyses financières complètes : ratios, états financiers", "Simulateur avancé : comparer les profils, tester un montant",
-                 "Comparateurs, rapport mensuel, seuils d'alerte personnalisés"] },
+        plus: "Tout Essentiel, plus :",
+        points: ["Analyses financières complètes et notations d'agences", "Simulateur avancé : comparer les profils, tester un montant",
+                 "Comparateurs, seuils d'alerte personnalisés, rapport mensuel",
+                 `BafiBot : ${n(i.questions)} questions${i.approfondies ? `, dont ${n(i.approfondies)} approfondies` : ""}`, `${n(i.pages)} pages importées par mois`] },
     ].filter((f) => f.k === "decouverte" || f.mois != null);
   }
   const libObjet = (k) => offres()[k]?.[0] || k;
@@ -130,7 +136,7 @@
     const etat = f === "decouverte" ? "Formule gratuite" : a.essai ? `Essai offert · encore ${jours(a.fin)} jour${jours(a.fin) > 1 ? "s" : ""}`
       : a.fin ? `Jusqu'au ${new Date(a.fin).toLocaleDateString("fr-FR")}` : "";
     const q = a.quotas || {}, u = a.usage || {}, c = a.credits || {};
-    const lien = `${location.origin}${location.pathname}?parrain=${encodeURIComponent(a.code_parrain || "")}`;
+    const lien = `${new URL("../", location.href).href}?parrain=${encodeURIComponent(a.code_parrain || "")}#invitation`;
     return `<div class="card abo-carte"><h2>Mon abonnement</h2>
       <div class="ab-hero f-${esc(f)}"><span class="ab-hero-ic">${SVG(ICO[f] || ICO.essentiel)}</span>
         <div><span class="ab-hero-lbl">Votre formule</span><b class="ab-hero-nom">${esc(nom)}</b><span class="ab-hero-etat">${esc(etat)}</span></div>
@@ -146,7 +152,7 @@
           ${x.reco ? `<span class="ab-reco">Le plus choisi</span>` : ""}
           <span class="ab-f-ic">${SVG(ICO[x.k])}</span><b class="ab-nom">${x.nom}</b><span class="ab-prix">${x.mois ? `${F(x.mois)}<small> / mois</small>` : "Gratuit"}</span>
           ${x.an ? `<span class="small muted">ou ${F(x.an)} par an${x.mois && x.an < 12 * x.mois ? ` (${Math.round(12 - x.an / x.mois)} mois offerts)` : ""}</span>` : x.mois ? "" : `<span class="small muted">Pour toujours</span>`}
-          <p class="small">${x.pour}</p><ul class="ab-points">${x.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+          <p class="small">${x.pour}</p>${x.plus ? `<p class="small ab-plus"><b>${esc(x.plus)}</b></p>` : ""}<ul class="ab-points">${x.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
           ${x.k === f && !a.essai ? `<span class="ab-actuel">✓ Votre formule</span>` : x.mois ? `<button type="button" class="btn${x.reco ? " primary" : ""}" data-abo="${x.k}">${x.k === f ? "Continuer après l'essai" : `Choisir ${x.nom}`}</button>` : ""}
         </div>`).join("")}</div>
       <h3>Les packs</h3>
@@ -239,7 +245,7 @@
     if (app.demo && (b.dataset.abo || b.dataset.aboObjet)) { location.href = `./?offre=${b.dataset.abo || "essentiel"}#inscription`; return; }
     if (b.dataset.abo) return ouvrir(b.dataset.abo);
     if (b.dataset.aboObjet) return ouvrir(null, b.dataset.aboObjet);
-    const lien = b.dataset.aboPartager, texte = `Je mets de côté chaque jour et je suis mes placements à la BRVM avec BafiBourse. Inscris-toi avec mon lien : ${lien}`;
+    const lien = b.dataset.aboPartager, texte = `Je tiens mon budget, je garde un peu chaque jour et je suis mes placements à la BRVM avec BafiBourse. Découvre-le en 2 minutes (démo gratuite), puis inscris-toi avec mon invitation : ${lien}`;
     try { if (navigator.share) return await navigator.share({ text: texte }); } catch (e) { if (e.name === "AbortError") return; }
     try { await navigator.clipboard.writeText(lien); app.toast("Lien de parrainage copié."); } catch (e) { window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener"); }
   });

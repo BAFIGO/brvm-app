@@ -611,3 +611,12 @@ html .v-foot .marque .m-bafi { color: hsl(35 92% 55%) !important; }
 .pc-barre i { display: block; height: 100%; }
 .pc-barre { gap: 3px; } .pc-barre i { transform-origin: left center; }
 .pc-barre i:nth-child(1) { flex: 50; } .pc-barre i:nth-child(2) { flex: 30; } .pc-barre i:nth-child(3) { flex: 20; }
+
+/* Invitation d'un proche */
+.v-invite { margin: 16px auto 0; max-width: 1100px; padding: 0 16px; }
+.v-invite-in { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border-radius: 20px; border: 2px solid var(--accent, #F69E23);
+  background: color-mix(in srgb, var(--accent, #F69E23) 10%, var(--surface, #fff)); }
+.v-invite-ic { font-size: 2rem; line-height: 1; }
+.v-invite h2 { margin: 0 0 6px; font-size: 1.2rem; } .v-invite p { margin: 0 0 12px; }
+.v-invite-b { display: flex; flex-wrap: wrap; gap: 10px; } .v-invite-b .btn { min-height: 48px; }
+.t-plus { margin: 4px 0 6px; font-weight: 700; color: var(--accent, #F69E23); font-size: .92rem; }

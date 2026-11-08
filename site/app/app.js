@@ -123,7 +123,7 @@
       ${n.ancienne ? `<p class="small muted">Notation de plus de 18 mois ou échue : elle est donnée pour mémoire, le diagnostic BafiBourse ci-dessous prend le relais.</p>` : ""}
       ${r && (r.plus?.length || r.moins?.length) ? `<div class="nt-res">${r.plus?.length ? `<div><b>Points forts relevés par l'agence</b><ul>${li(r.plus)}</ul></div>` : ""}
           ${r.moins?.length ? `<div><b>Points de vigilance</b><ul>${li(r.moins)}</ul></div>` : ""}</div>
-        <p class="small muted">Résumé rédigé par BafiBourse à partir du rapport de l'agence, relu par notre analyste.</p>` : ""}
+        <p class="small muted">Résumé rédigé par BafiBourse à partir du rapport de l'agence${r.periode && r.periode !== n.periode ? ` (${esc(r.periode)})` : ""}, relu par notre analyste.</p>` : ""}
       ${n.url && n.url !== "#" ? `<p class="small"><a href="${esc(n.url)}" target="_blank" rel="noopener">Lire le rapport de l'agence</a></p>` : ""}
       <p class="small muted">Notation délivrée par une agence agréée par l'AMF-UMOA. BafiBourse n'est pas une agence de notation.</p></div>`;
   }

@@ -222,7 +222,7 @@
   const parr = $("#dlg-parrainage");
   function lienParrain() {
     const code = app?.abo?.()?.code_parrain || "";
-    return code ? `${location.origin}${location.pathname}?parrain=${encodeURIComponent(code)}` : "";
+    return code ? `${new URL("../", location.href).href}?parrain=${encodeURIComponent(code)}#invitation` : "";
   }
   function ouvrirParrainage() {
     const a = app?.abo?.() || {}, lien = lienParrain();
@@ -237,7 +237,7 @@
   $(".parr-fermer", parr).addEventListener("click", () => parr.close());
   parr.addEventListener("click", (ev) => { if (ev.target === parr) parr.close(); });
   $(".parr-partager", parr).addEventListener("click", async () => {
-    const lien = lienParrain(), texte = `Je mets de côté chaque jour et je suis mes placements à la BRVM avec BafiBourse. Inscris-toi avec mon lien, tu as 14 jours d'Essentiel offerts : ${lien}`;
+    const lien = lienParrain(), texte = `Je tiens mon budget, je garde un peu chaque jour et je suis mes placements à la BRVM avec BafiBourse. Découvre-le en 2 minutes avec la démo, puis inscris-toi avec mon invitation : 14 jours d'Essentiel offerts. ${lien}`;
     try { if (navigator.share) { await navigator.share({ text: texte }); return; } } catch (e) { if (e.name === "AbortError") return; }
     window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener");
   });
