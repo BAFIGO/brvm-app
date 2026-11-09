@@ -21,6 +21,6 @@ window.BRVM_CONFIG = {
   // Sinon, l'application propose le paiement par Wave ou Orange Money aux numéros ci-dessous, activé depuis la console.
   paiement: { enLigne: false, wave: "", orange_money: "", beneficiaire: "BafiBourse" },
   // Contact et réseaux sociaux (pied de page de la vitrine) : seuls les liens remplis s'affichent.
-  contact: { email: "", whatsapp: "" },
+  contact: { email: "contact@bafigo.sn", whatsapp: "+221 77 338 80 68" },
   reseaux: { facebook: "", instagram: "", linkedin: "", tiktok: "", youtube: "", x: "" },
 };

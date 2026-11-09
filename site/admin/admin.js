@@ -9,7 +9,7 @@
   const QS = new URLSearchParams(location.search);
   const DEMO = QS.has("demo");
   // Écran → permission requise (doit refléter la matrice de supabase/admin.sql ; la base revérifie tout)
-  const NEED = { tableau: "dashboard.read", utilisateurs: "users.read", abonnements: "abonnements.manage", avis: "avis.moderate",
+  const NEED = { tableau: "dashboard.read", utilisateurs: "users.read", abonnements: "abonnements.manage", avis: "avis.moderate", messages: "qualite.read",
     qualite: "qualite.read", donnees: "market.read", traitements: "batch.read", moteur: "engine.params", univers: "engine.params", communication: "comms.manage",
     conformite: "compliance.manage", habilitations: "roles.read", audit: "audit.read" };
   const TABS = Object.keys(NEED);
@@ -88,6 +88,8 @@
       qPropositionsIA: () => rpc("admin_propositions_ia", { p_statut: "a_valider" }),
       qResumes: () => rpc("admin_resumes_notations", {}),
       qValiderResume: (id, plus, moins) => rpc("admin_valider_resume", { p_id: id, p_plus: plus, p_moins: moins }),
+      messages: () => rpc("admin_messages"),
+      majMessage: (id, statut, note) => rpc("admin_maj_message", { p_id: id, p_statut: statut, p_note: note ?? null }),
       qRejeterResume: (id, motif) => rpc("admin_rejeter_resume", { p_id: id, p_motif: motif }),
       qRefaireResume: (id) => rpc("admin_refaire_resume", { p_id: id }),
       qNotations: async () => { const { data, error } = await sb.from("notations_agences").select("*").order("code"); if (error) throw error; return data || []; },
@@ -254,6 +256,11 @@
         plus: ["Position de premier opérateur télécoms au Sénégal, avec une large base d'abonnés.", "Rentabilité élevée et régulière sur plusieurs exercices.", "Endettement faible au regard des flux générés."],
         moins: ["Pression réglementaire et fiscale sur le secteur des télécoms.", "Concurrence accrue sur les services de paiement mobile."] }],
       qValiderResume: async () => {}, qRejeterResume: async () => {}, qRefaireResume: async () => {},
+      messages: async () => [
+        { id: 3, cree_le: new Date().toISOString(), type: "contact", sujet: "Mon abonnement", nom: "Aminata", coordonnee: "+221 77 000 00 00", message: "Comment payer l'abonnement Essentiel avec Wave ?", depuis: "vitrine", statut: "nouveau" },
+        { id: 2, cree_le: new Date(Date.now() - 864e5).toISOString(), type: "probleme", message: "Le bouton Enregistrer ne réagit pas dans Mon budget.", ecran: "budget", version: "20261108b", appareil: "iPhone", depuis: "application", email_compte: "demo@exemple.org", statut: "en_cours" },
+        { id: 1, cree_le: new Date(Date.now() - 2 * 864e5).toISOString(), type: "avis_rapide", theme: "budget-prevu", message: "oui", depuis: "application", statut: "traite" }],
+      majMessage: async () => {},
       qLireIA: async () => {}, qNotations: async () => [
         { code: "SNTS", nom: "SONATEL SN", agence: "Bloomfield", periode: "Juin 2026", long_terme: "AAA", court_terme: "A1+", perspective: "Stable", ancienne: false, url: "#" },
         { code: "ORAC", nom: "ORANGE COTE D'IVOIRE", agence: "Bloomfield", periode: "Mai 2024", long_terme: "AA", court_terme: "A1", perspective: "Stable", ancienne: true },
@@ -1647,7 +1654,45 @@
     await afficherAvis("en_attente");
     afficherCerclesPublics();
   }
-  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, abonnements: vAbonnements, avis: vAvis, qualite: vQualite, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
+  // ------------------------------------------------------------ messages et retours (Nous contacter, problèmes, idées, petites questions)
+  const TYPES_MSG = { contact: "Contact", probleme: "Problème", idee: "Idée", avis_rapide: "Petite question" };
+  const STATUTS_MSG = { nouveau: "Nouveau", en_cours: "En cours", traite: "Traité" };
+  async function vMessages() {
+    const v = $("#v-messages");
+    v.innerHTML = `<h1 id="h-messages">Messages et retours</h1><p class="muted page-intro">Messages de la vitrine, de l'écran de connexion et de l'application,
+      avec ou sans compte. Une alerte part à contact@bafigo.sn pour chaque nouveau message (workflow « BRVM messages »).</p><div class="card" id="msg-liste"><p class="muted">Chargement…</p></div>`;
+    let l;
+    try { l = await api.messages(); } catch (e) { $("#msg-liste").innerHTML = `<div class="notice bad">${/admin_messages/.test(msgErr(e)) ? "Exécutez 28-contact-retours.sql dans Supabase." : esc(msgErr(e))}</div>`; return; }
+    const filtre = S.msgFiltre || "a_traiter";
+    const vus = l.filter((m) => filtre === "tous" ? true : filtre === "a_traiter" ? m.statut !== "traite" : m.type === filtre);
+    const n = (t) => l.filter((m) => m.type === t && m.statut !== "traite").length;
+    const q = l.filter((m) => m.type === "avis_rapide"), parTheme = {};
+    for (const m of q) { const k = m.theme || "?"; parTheme[k] = parTheme[k] || { oui: 0, un_peu: 0, non: 0 }; parTheme[k][m.message] = (parTheme[k][m.message] || 0) + 1; }
+    $("#msg-liste").innerHTML = `<div class="seg" role="group" aria-label="Filtre">${[["a_traiter", `À traiter (${l.filter((m) => m.statut !== "traite").length})`],
+        ["contact", `Contacts (${n("contact")})`], ["probleme", `Problèmes (${n("probleme")})`], ["idee", `Idées (${n("idee")})`], ["tous", "Tout"]].map(([k, t]) =>
+        `<button type="button" data-msg-f="${k}" aria-pressed="${filtre === k}">${t}</button>`).join("")}</div>
+      ${Object.keys(parTheme).length ? `<p class="small">Petites questions : ${Object.entries(parTheme).map(([k, c]) => `<b>${esc(k)}</b> oui ${c.oui || 0} · un peu ${c.un_peu || 0} · non ${c.non || 0}`).join(" — ")}</p>` : ""}
+      ${vus.length ? `<ul class="list msg-l">${vus.map((m) => `<li data-id="${m.id}"><div class="main">
+          <div class="name"><span class="chip">${esc(TYPES_MSG[m.type] || m.type)}</span> ${esc(m.sujet || m.theme || "")} <span class="small muted">· ${new Date(m.cree_le).toLocaleString("fr-FR")} · ${esc(m.depuis || "")}</span></div>
+          <p>${esc(m.message)}</p>
+          <div class="sub">${[m.nom, m.coordonnee, m.email_compte, m.ecran ? "écran " + m.ecran : "", m.version ? "version " + m.version : ""].filter(Boolean).map(esc).join(" · ")}</div>
+          ${m.note ? `<div class="sub">Note : ${esc(m.note)}</div>` : ""}</div>
+          <div class="right"><select data-msg-statut="${m.id}" aria-label="Statut">${Object.entries(STATUTS_MSG).map(([k, t]) => `<option value="${k}"${m.statut === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+          ${/@/.test(m.coordonnee || m.email_compte || "") ? `<a class="btn small" href="mailto:${esc(m.coordonnee && /@/.test(m.coordonnee) ? m.coordonnee : m.email_compte)}?subject=${encodeURIComponent("BafiBourse : votre message")}">Répondre</a>` : ""}
+          ${/\d{8,}/.test((m.coordonnee || "").replace(/\D/g, "")) ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${(m.coordonnee || "").replace(/\D/g, "")}">WhatsApp</a>` : ""}
+          <button type="button" class="btn small" data-msg-note="${m.id}">Note</button></div></li>`).join("")}</ul>` : `<p class="muted">Aucun message ici.</p>`}`;
+    $("#msg-liste").onclick = async (ev) => {
+      const f = ev.target.closest("[data-msg-f]"); if (f) { S.msgFiltre = f.dataset.msgF; return vMessages(); }
+      const b = ev.target.closest("[data-msg-note]");
+      if (b) { const m = l.find((x) => String(x.id) === b.dataset.msgNote), t = prompt("Note interne :", m?.note || ""); if (t === null) return;
+        try { await api.majMessage(m.id, m.statut, t); toast("Note enregistrée."); vMessages(); } catch (e) { toast("Impossible : " + msgErr(e)); } }
+    };
+    $("#msg-liste").onchange = async (ev) => {
+      const s2 = ev.target.closest("[data-msg-statut]"); if (!s2) return;
+      try { await api.majMessage(+s2.dataset.msgStatut, s2.value, null); toast("Statut mis à jour."); vMessages(); } catch (e) { toast("Impossible : " + msgErr(e)); }
+    };
+  }
+  const VIEWS = { tableau: vTableau, utilisateurs: vUtilisateurs, abonnements: vAbonnements, avis: vAvis, messages: vMessages, qualite: vQualite, donnees: vDonnees, traitements: vTraitements, moteur: vMoteur, univers: vUnivers,
     communication: vCommunication, conformite: vConformite, habilitations: vHabilitations, audit: vAudit };
 
   // ------------------------------------------------------------ navigation

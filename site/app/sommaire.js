@@ -14,6 +14,7 @@
     ["invest", "Mon profil d'investisseur", 4, (c) => c.id === "f-profil"],
     ["comptes", "Mes comptes et placements", 5, (c) => c.id === "f-univers"],
     ["aide", "Aide et prise en main", 6, (c) => c.classList.contains("tuto-aide")],
+    ["contact", "Nous contacter", 6.5, (c) => c.classList.contains("ct-carte")],
     ["avis", "Donner mon avis", 7, (c) => c.classList.contains("av-profil")],
     ["demo", "Essayer les félicitations", 8, (c) => /félicitations/i.test(c.querySelector("h2")?.textContent || "") && !c.id],
     ["apropos", "À propos, conditions et déconnexion", 9, (c) => /À propos/.test(c.querySelector("h2")?.textContent || "")],
@@ -27,6 +28,7 @@
     }
     if (k === "avis") return carte.querySelector(".av-fixes") ? `${carte.querySelector(".av-fixes").getAttribute("aria-label")} · ${carte.querySelector(".small.muted")?.textContent || ""}` : "Pas encore donné";
     if (k === "aide") return "Visite guidée, portrait, glossaire";
+    if (k === "contact") return "Une question, un problème, une idée · WhatsApp";
     if (k === "demo") return "Démonstration uniquement";
     if (k === "apropos") return "Version, conditions d'utilisation, déconnexion";
     return app?.etatRubrique?.(k) || "";

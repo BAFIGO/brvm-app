@@ -1149,3 +1149,4 @@ fieldset.ob-manque { border: 2px solid hsl(35 92% 55%) !important; border-radius
 li[data-pos] { position: relative; padding-top: 52px !important; }
 .pos-acts { position: absolute; top: 8px; right: 0; display: flex; gap: 8px; }
 .pos-acts .mk-op, .pos-acts .epingler { width: 36px; height: 36px; margin: 0; border-radius: 10px; display: grid; place-items: center; }
+.ct-carte-b { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .ct-carte-b .btn { min-height: 44px; }

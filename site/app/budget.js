@@ -795,6 +795,7 @@
       S.prevuEdit = false; S.prevuAjout = []; S.prevuRythme = null;
       await sauver(maj);
       app().toast("Budget prévu enregistré.", { detail: "Vous verrez chaque mois le dépensé face au prévu." });
+      setTimeout(() => window.BafiContact?.question?.("budget-prevu", "Ce budget prévu vous est-il utile ?"), 2500);
     }
 
     else if (a === "mois") { S.decal = Math.max(-2, Math.min(0, (S.decal || 0) + +v)); rendre(); }

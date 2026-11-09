@@ -2738,6 +2738,12 @@
           <button class="btn small" data-essai="jour">Petite victoire</button><button class="btn small" data-essai="serie">Série de 7 jours</button>
           <button class="btn small" data-essai="objectif">Objectif atteint</button><button class="btn small" data-essai="seuil">Prêt à investir</button>
           <button class="btn small" data-essai="perdue">Série perdue</button></div></div>` : ""}
+      <div class="card ct-carte"><h2>Nous contacter</h2>
+        <p class="small muted">Une question, un souci, une idée : l'équipe BafiBourse lit chaque message.</p>
+        <div class="ct-carte-b"><button type="button" class="btn" data-contact="contact">Nous écrire</button>
+          <button type="button" class="btn" data-contact="probleme">Signaler un problème</button>
+          <button type="button" class="btn" data-contact="idee">Proposer une idée</button>
+          <a class="btn" href="https://wa.me/221773388068" target="_blank" rel="noopener">WhatsApp</a></div></div>
       <div class="card">
         <h2>À propos</h2>
         <p class="small">Chaque soir de séance, l'outil analyse les actions, obligations et OPCVM cotés à la BRVM, puis calcule
