@@ -78,7 +78,7 @@
     try {
       const b = app().budget;
       S.profil = await b.profil();
-      S.mv = (await b.mouvements(ilya(70))) || [];
+      S.mv = (await b.mouvements(ilya(essentiel() ? 372 : 100))) || [];
       try { S.projets = (await b.projets?.()) || []; S.projetsOk = true; } catch (e) { S.projets = []; S.projetsOk = false; }   // 25-livraison3.sql
       S.erreur = null;
     } catch (e) {
@@ -275,6 +275,10 @@
     const n = Math.ceil(reste / parMois), d = new Date(); d.setMonth(d.getMonth() + n);
     return `à ce rythme, atteint en ${d.toLocaleDateString("fr-FR", { month: "long", year: n > 10 ? "numeric" : undefined })}`;
   }
+  const essentiel = () => app().acces?.(1) !== false;                   // Essentiel ou Investisseur (essai compris)
+  const MOIS_MAX = () => (essentiel() ? 11 : 2);                       // mois en arrière consultables
+  const verrouBu = (t) => `<div class="bu-verrou"><span aria-hidden="true">🔒</span><span>${t}</span>
+    <button type="button" class="btn small" data-bu="formules">Voir la formule Essentiel</button></div>`;
   const lireNombre = (v) => +String(v || "").replace(/[^\d]/g, "") || 0;
   async function terminerDemarrage() {
     const b = S.brouillon;
@@ -486,6 +490,69 @@
       <ul class="bu-ops">${c.abonnements.map((m) => `<li><span class="bu-tuile clair petit">${ic(P[m.categorie] || P.autres)}</span><span class="bu-op-l">${esc(libCat(m))}</span><b>${F(m.montant)}</b></li>`).join("")}</ul>
       <p class="small muted">Tous les 6 mois, vérifiez-les : un abonnement oublié, c'est de l'argent qui part sans vous.</p></details>`;
   }
+  // Mes 12 derniers mois : gagné, dépensé et gardé, mois par mois ; export Excel et PDF (Essentiel)
+  function douzeMois() {
+    const ep = app().epargneResume?.(), out = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+      const k = iso(d).slice(0, 7), du = (m) => m.date && m.date.slice(0, 7) === k;
+      out.push({ k, lib: d.toLocaleDateString("fr-FR", { month: "short" }).replace(".", ""),
+        gagne: S.mv.filter((m) => du(m) && m.type === "revenu").reduce((a, m) => a + (+m.montant || 0), 0),
+        depense: S.mv.filter((m) => du(m) && m.type === "depense").reduce((a, m) => a + (+m.montant || 0), 0),
+        garde: (ep?.mv || []).filter((m) => du(m) && m.type === "VERSEMENT").reduce((a, m) => a + (+m.montant || 0), 0) });
+    }
+    return out;
+  }
+  function blocDouze() {
+    if (S.decal) return "";
+    if (!essentiel()) return `<section class="card"><h2 class="bu-h2">Mes 12 derniers mois</h2>${verrouBu("Comparez vos mois sur un an et exportez votre budget (Excel, PDF) avec la formule Essentiel.")}</section>`;
+    const l = douzeMois(), max = Math.max(1, ...l.map((x) => Math.max(x.gagne, x.depense)));
+    const bw = 22, gap = 6, h = 120, W = l.length * (bw + gap);
+    const bar = (x, v, cls, dx) => v > 0 ? `<rect x="${x + dx}" y="${h - (v / max) * h}" width="${bw / 2 - 1}" height="${(v / max) * h}" rx="2" class="${cls}"/>` : "";
+    return `<section class="card bu-douze"><div class="bu-ligne"><h2 class="bu-h2">Mes 12 derniers mois</h2></div>
+      <div class="scroll-x"><svg viewBox="0 0 ${W} ${h + 18}" class="bu-douze-g" role="img" aria-label="Gagné et dépensé sur les 12 derniers mois">
+        ${l.map((m, i) => { const x = i * (bw + gap); return `${bar(x, m.gagne, "g", 0)}${bar(x, m.depense, "d", bw / 2)}<text x="${x + bw / 2}" y="${h + 14}" text-anchor="middle">${esc(m.lib)}</text>`; }).join("")}</svg></div>
+      <div class="bu-legende small"><span><i class="g"></i>Gagné</span><span><i class="d"></i>Dépensé</span></div>
+      <details class="bu-douze-t"><summary class="small">Voir le tableau</summary><div class="scroll-x"><table class="dtable"><thead><tr><th>Mois</th><th class="num">Gagné</th><th class="num">Dépensé</th><th class="num">Gardé</th></tr></thead>
+        <tbody>${l.slice().reverse().map((m) => `<tr><td>${esc(m.lib)} ${m.k.slice(0, 4)}</td><td class="num">${F(m.gagne)}</td><td class="num">${F(m.depense)}</td><td class="num">${F(m.garde)}</td></tr>`).join("")}</tbody></table></div></details>
+      <div class="bu-export"><button type="button" class="btn small" data-bu="export-csv">Exporter pour Excel</button><button type="button" class="btn small" data-bu="export-pdf">Imprimer ou enregistrer en PDF</button></div></section>`;
+  }
+  // Export Excel : CSV au format français (« ; », virgule décimale, accents conservés) ; une cellule ne commence
+  // jamais par = + - @ (sinon Excel l'exécuterait comme une formule : injection de formules)
+  const cellule = (v) => { let t = String(v ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  function exporterCsv() {
+    if (!essentiel()) return app().voirFormules?.();
+    const lignes = [["Date", "Type", "Catégorie", "Montant (F CFA)", "Revient chaque mois"]];
+    for (const m of S.mv.filter((x) => x.type !== "rien").sort((a, b) => (a.date < b.date ? -1 : 1)))
+      lignes.push([m.date, m.type === "revenu" ? "Gagné" : "Dépensé", libCat(m), String(Math.round(+m.montant || 0)), m.recurrent ? "oui" : ""]);
+    lignes.push([], ["Mois", "Gagné", "Dépensé", "Gardé"], ...douzeMois().map((x) => [x.k, x.gagne, x.depense, x.garde].map(String)));
+    const csv = "\ufeff" + lignes.map((l) => l.map(cellule).join(";")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `bafibourse-budget-${auj()}.csv`; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    app().toast("Fichier prêt : il s'ouvre avec Excel.");
+  }
+  // Export PDF : une page propre, imprimée par le téléphone ou l'ordinateur (« Enregistrer en PDF ») ; tout est échappé
+  function exporterPdf() {
+    if (!essentiel()) return app().voirFormules?.();
+    const c = calculs(), l = douzeMois(), w = window.open("", "_blank");
+    if (!w) { app().toast("Autorisez l'ouverture d'une fenêtre pour imprimer."); return; }
+    w.opener = null;
+    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Mon budget – BafiBourse</title>
+      <style>body{font:14px system-ui,sans-serif;color:#1b1d2a;margin:28px}h1{color:#25347E;margin:0 0 4px}h2{color:#25347E;font-size:16px;margin:22px 0 8px}
+      table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left}td.n,th.n{text-align:right}.m{color:#666;font-size:12px}</style></head>
+      <body><h1>Mon budget</h1><p class="m">BafiBourse · ${esc(new Date().toLocaleDateString("fr-FR"))} · données privées</p>
+      <h2>${esc(c.moisLib)}</h2><table><tr><td>Gagné</td><td class="n">${esc(F(c.revMois))}</td></tr><tr><td>Dépensé</td><td class="n">${esc(F(c.depMois))}</td></tr>
+        <tr><td>Gardé</td><td class="n">${esc(F(c.garde))}</td></tr><tr><td>Reste à vivre</td><td class="n">${esc(F(Math.max(0, c.reste)))}</td></tr><tr><td>Dans mon coffre</td><td class="n">${esc(F(c.solde))}</td></tr></table>
+      <h2>Prévu et dépensé ce mois-ci</h2><table><tr><th>Ligne</th><th class="n">Dépensé</th><th class="n">Prévu</th></tr>
+        ${Object.entries(c.pv.depenses).map(([k, x]) => `<tr><td>${esc(catDep(k)[1])}</td><td class="n">${esc(F(c.depParCat[k] || 0))}</td><td class="n">${esc(F(x))}</td></tr>`).join("")}</table>
+      <h2>Mes 12 derniers mois</h2><table><tr><th>Mois</th><th class="n">Gagné</th><th class="n">Dépensé</th><th class="n">Gardé</th></tr>
+        ${l.slice().reverse().map((m) => `<tr><td>${esc(m.lib)} ${esc(m.k.slice(0, 4))}</td><td class="n">${esc(F(m.gagne))}</td><td class="n">${esc(F(m.depense))}</td><td class="n">${esc(F(m.garde))}</td></tr>`).join("")}</table>
+      <h2>Mes projets</h2><table>${c.projets.map((x) => `<tr><td>${esc(x.nom)}</td><td class="n">${esc(F(x.garde))}${x.montant ? " / " + esc(F(x.montant)) : ""}</td></tr>`).join("") || "<tr><td>Aucun projet</td></tr>"}</table>
+      <script>setTimeout(function(){window.print()},300)<\/script></body></html>`);
+    w.document.close();
+  }
   function dernieres(n, c) {
     const l = S.mv.filter((m) => m.type !== "rien" && (!c || (m.date >= c.d0 && m.date <= c.d1))).slice(0, n);
     if (!l.length) return "";
@@ -502,7 +569,7 @@
       return `<div class="bu-env"><div class="bu-ligne"><b>${nom}</b><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
     };
     return `${blocRetour(c)}
-      <div class="bu-mois"><button type="button" class="btn small" data-bu="mois" data-v="-1" aria-label="Mois précédent"${(S.decal || 0) <= -2 ? " disabled" : ""}>‹</button>
+      <div class="bu-mois"><button type="button" class="btn small" data-bu="mois" data-v="-1" aria-label="Mois précédent"${(S.decal || 0) <= -MOIS_MAX() ? " disabled" : ""}>‹</button>
         <b>${esc(c.moisLib)}</b><button type="button" class="btn small" data-bu="mois" data-v="1" aria-label="Mois suivant"${(S.decal || 0) >= 0 ? " disabled" : ""}>›</button></div>
       <section class="bu-phrase large"><span class="small">${S.decal ? (simple ? "Il me restait" : "Reste à vivre") : simple ? "Il me reste" : "Reste à vivre"} · ${esc(c.moisLib)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
         <span class="small">Gagné ${F(c.revMois)} · dépensé ${F(c.depMois)} · gardé ${F(c.garde)}</span>
@@ -512,7 +579,7 @@
         ${env(simple ? "Pour vivre" : "Besoins", "besoins", 1, "")}${env(simple ? "Pour se faire plaisir" : "Envies", "envies", 2, "env2")}${env(simple ? "Je garde" : "Épargne et avenir", "epargne", 3, "amb")}
         <p class="small muted">Besoins : logement, nourriture, transport, santé, école, famille. Envies : sorties, habits, fêtes, abonnements.</p></section>
       ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
-      ${blocCoffre(c)}${dernieres(8, c)}${blocAbonnements(c)}${S.decal ? "" : blocSemaine(c)}
+      ${blocCoffre(c)}${dernieres(8, c)}${blocDouze()}${blocAbonnements(c)}${S.decal ? "" : blocSemaine(c)}
       ${blocPrevu(c)}
 `;
   }
@@ -571,7 +638,8 @@
             ${x.id !== "profil" ? `<button type="button" class="bu-suppr" data-bu="suppr-projet" data-v="${x.id}" aria-label="Retirer le projet ${esc(x.nom)}">×</button>` : ""}</li>`; }).join("")}</ul>`
           : `<p class="small muted">Aucun projet pour l'instant.</p>`}
         ${(S.projets || []).some((x) => x.realise_le) ? `<p class="small good">✓ Réalisé : ${esc((S.projets || []).filter((x) => x.realise_le).map((x) => x.nom).join(", "))}</p>` : ""}
-        ${S.projetsOk !== false ? `<button type="button" class="btn" data-bu="ajout-projet">Ajouter un projet</button>` : ""}`)}
+        ${S.projetsOk === false ? "" : !essentiel() && c.projets.length >= 2 ? verrouBu("Avec Découverte, 2 projets à la fois. Projets illimités avec Essentiel.")
+          : `<button type="button" class="btn" data-bu="ajout-projet">Ajouter un projet</button>`}`)}
       ${etage(3, "Ma poche bourse", `<span class="bu-tuile">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', "#fff")}</span>`, c.bourse > 0 ? "à placer" : plein ? "prête" : "bientôt",
         `<div class="bu-ligne small"><span>Gardé pour la bourse, pas encore envoyé</span><b>${F(c.bourse)}</b></div>
          <div class="bu-ligne small"><span>Déjà envoyé à ma SGI</span><b>${F(c.envoyeSgi)}</b></div>
@@ -753,7 +821,7 @@
     else if (a === "heure") { S.brouillon.heure = v; rendre(); }
     else if (a === "saisir") ouvrir(v);
     else if (a === "garder") garder(+v);
-    else if (a === "ajout-projet") ajouterProjet();
+    else if (a === "ajout-projet") { if (!essentiel() && calculs().projets.length >= 2) app().voirFormules?.(); else ajouterProjet(); }
     else if (a === "suppr-projet") { try { await app().budget.supprimerProjet(+v); S.projets = (S.projets || []).filter((x) => String(x.id) !== String(v)); app().toast("Projet retiré."); rendre(); } catch (e) { app().toast("Impossible : " + (e.message || e)); } }
     else if (a === "encourager") { b.disabled = true; try { await app().encouragerCercle(v); const c = (S.cercles || []).find((x) => String(x.id) === String(v)); if (c) c.jai_encourage = true; app().toast("👏 Votre cercle est encouragé."); rendre(); } catch (e) { b.disabled = false; app().toast("Impossible : " + (e.message || e)); } }
     else if (a === "cercle-projet" || a === "cercle-deux") {
@@ -798,7 +866,10 @@
       setTimeout(() => window.BafiContact?.question?.("budget-prevu", "Ce budget prévu vous est-il utile ?"), 2500);
     }
 
-    else if (a === "mois") { S.decal = Math.max(-2, Math.min(0, (S.decal || 0) + +v)); rendre(); }
+    else if (a === "mois") { S.decal = Math.max(-MOIS_MAX(), Math.min(0, (S.decal || 0) + +v)); rendre(); }
+    else if (a === "formules") app().voirFormules?.();
+    else if (a === "export-csv") exporterCsv();
+    else if (a === "export-pdf") exporterPdf();
     else if (a === "fermer-invit") { S.invitationFermee = true; b.closest(".bu-invit")?.remove(); }
     else if (a === "cercles" || a === "coffre" || a === "placements") { ev.preventDefault(); app().allerPf?.(a === "cercles" ? "cercles" : a === "coffre" ? "epargne" : "placements"); }
     else if (a === "rec") {

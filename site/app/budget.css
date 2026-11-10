@@ -235,3 +235,10 @@ dialog.bu-dlg { max-height: calc(100dvh - 16px); overflow-y: auto; overflow-x: h
   box-shadow: 0 6px 14px -8px hsl(232 50% 15% / .7); }
 .bu-puce[aria-pressed="true"]::before, .bu-puce[aria-checked="true"]::before { content: "✓ "; font-weight: 800; }
 @media (prefers-color-scheme: dark) { .bu-puce[aria-pressed="true"], .bu-puce[aria-checked="true"] { background: hsl(35 92% 55%) !important; color: hsl(232 45% 14%) !important; } }
+/* itération 1 : verrou de formule, 12 derniers mois, export */
+.bu-verrou { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--border); background: var(--surface-2); font-size: .9rem; }
+.bu-verrou .btn { margin-left: auto; }
+.bu-douze-g { width: 100%; min-width: 320px; height: auto; display: block; }
+.bu-douze-g rect.g { fill: var(--brand); } .bu-douze-g rect.d { fill: hsl(35 92% 55%); } .bu-douze-g text { font-size: 9px; fill: var(--muted); }
+.bu-legende i.g { background: var(--brand); } .bu-legende i.d { background: hsl(35 92% 55%); }
+.bu-douze-t { margin-top: 8px; } .bu-export { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; } .bu-export .btn { min-height: 42px; }

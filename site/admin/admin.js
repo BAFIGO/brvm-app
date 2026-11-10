@@ -1678,7 +1678,8 @@
           <div class="sub">${[m.nom, m.coordonnee, m.email_compte, m.ecran ? "écran " + m.ecran : "", m.version ? "version " + m.version : ""].filter(Boolean).map(esc).join(" · ")}</div>
           ${m.note ? `<div class="sub">Note : ${esc(m.note)}</div>` : ""}</div>
           <div class="right"><select data-msg-statut="${m.id}" aria-label="Statut">${Object.entries(STATUTS_MSG).map(([k, t]) => `<option value="${k}"${m.statut === k ? " selected" : ""}>${t}</option>`).join("")}</select>
-          ${/@/.test(m.coordonnee || m.email_compte || "") ? `<a class="btn small" href="mailto:${esc(m.coordonnee && /@/.test(m.coordonnee) ? m.coordonnee : m.email_compte)}?subject=${encodeURIComponent("BafiBourse : votre message")}">Répondre</a>` : ""}
+          ${(() => { const ok = (x) => /^[^@\s?&#<>"']+@[^@\s?&#<>"']+\.[a-z]{2,}$/i.test(x || ""), e = ok(m.coordonnee) ? m.coordonnee : ok(m.email_compte) ? m.email_compte : "";
+            return e ? `<a class="btn small" href="mailto:${encodeURIComponent(e).replace("%40", "@")}?subject=${encodeURIComponent("BafiBourse : votre message")}">Répondre</a>` : ""; })()}
           ${/\d{8,}/.test((m.coordonnee || "").replace(/\D/g, "")) ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${(m.coordonnee || "").replace(/\D/g, "")}">WhatsApp</a>` : ""}
           <button type="button" class="btn small" data-msg-note="${m.id}">Note</button></div></li>`).join("")}</ul>` : `<p class="muted">Aucun message ici.</p>`}`;
     $("#msg-liste").onclick = async (ev) => {
