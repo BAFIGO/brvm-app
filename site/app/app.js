@@ -1983,7 +1983,13 @@
     };
     const rC = res.BRVMC || res.BRVM30;
     const resume = rC ? `${res.BRVMC ? "BRVM Composite" : "BRVM 30"} ${P(rC.var)} sur ${per[1]}` : "Voir la tendance";
-    return { html: html.replace('<div class="card tendance"', '<div class="tendance"'), lier, resume };
+    // aperçu replié : le chiffre de la période et une mini-courbe de l'indice principal
+    const kA = res.BRVMC ? "BRVMC" : "BRVM30", vA = (pts[kA] || []).filter(ok);
+    const mini = vA.length > 1 ? (() => { const mn = Math.min(...vA), mx = Math.max(...vA), ex = mx - mn || 1;
+      return `<svg class="tend-mini" viewBox="0 0 140 44" aria-hidden="true"><path d="${vA.map((v, i) => `${i ? "L" : "M"}${(2 + (i / (vA.length - 1)) * 136).toFixed(1)} ${(40 - ((v - mn) / ex) * 34).toFixed(1)}`).join(" ")}"/></svg>`; })() : "";
+    const apercu = rC ? `<span class="tend-apercu"><span><span class="small muted">${res.BRVMC ? "BRVM Composite" : "BRVM 30"} · ${per[1]}</span>
+      <b class="num ${cls(rC.var)}">${P(rC.var)}</b></span>${mini}</span>` : "";
+    return { html: html.replace('<div class="card tendance"', '<div class="tendance"'), lier, resume, apercu };
   }
 
   // ---------------------------------------------------------------- récapitulatif du soir
@@ -2250,7 +2256,7 @@
     h += `</ul>${court ? `<div class="actions"><button class="btn" id="mk-tout">Voir les ${list.length} titres</button></div>`
       : list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
       ${tend ? `<details class="card tend-pli"${u.tendOuverte ? " open" : ""}><summary><span class="op-t">Tendance du marché</span>
-        <span class="op-r">${esc(tend.resume)}</span></summary>${tend.html}</details>` : ""}
+        ${tend.apercu || `<span class="op-r">${esc(tend.resume)}</span>`}<span class="tend-voir">${u.tendOuverte ? "Masquer la tendance" : "Voir la tendance ›"}</span></summary>${tend.html}</details>` : ""}
       <p class="small muted">Score de 0 à 100 calculé par l'outil (technique, fondamentaux, dividende, valorisation, liquidité).
       Aide à la décision, pas un conseil en investissement. Données de marché : BRVM.</p>`;
     v.innerHTML = h;
@@ -2265,7 +2271,7 @@
       if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: CALME ? "auto" : "smooth" }); d.querySelector("summary")?.focus({ preventScroll: true }); }
     }));
     tend?.lier(v);
-    $(".tend-pli", v)?.addEventListener("toggle", (ev) => (u.tendOuverte = ev.target.open));
+    $(".tend-pli", v)?.addEventListener("toggle", (ev) => { u.tendOuverte = ev.target.open; const t = $(".tend-voir", ev.target); if (t) t.textContent = ev.target.open ? "Masquer la tendance" : "Voir la tendance ›"; });
     const qi = $("#mk-q", v);
     qi.addEventListener("input", () => { u.mkQuery = qi.value; u.mkShow = 30; vMarche(); $("#mk-q").focus(); const n = $("#mk-q"); n.setSelectionRange(n.value.length, n.value.length); });
     $("#mk-f", v).addEventListener("change", (e) => { u.mkFilter = e.target.value; vMarche(); });

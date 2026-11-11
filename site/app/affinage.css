@@ -403,3 +403,19 @@ li.pos-vise { animation: pos-vise 1.6s ease; }
 .ia-msg.attente { display: flex; align-items: center; gap: 10px; }
 .ia-msg.attente .ia-tortue { width: 34px; height: 34px; flex: none; }
 .ia-reflechit { color: var(--muted); font-size: .9rem; }
+
+/* Hausses en vert, baisses en rouge, aussi dans les listes (Marché, Mes placements) :
+ * la règle « .list .sub » (texte gris) l'emportait sur « .good » / « .bad ». */
+.list .sub.good, .list .right .good, .reg-ligne .good { color: var(--good); }
+.list .sub.bad, .list .right .bad, .reg-ligne .bad { color: var(--bad); }
+/* aperçu de la tendance (Marché, replié) : chiffre de la période + mini-courbe */
+.tend-pli > summary { align-items: center; }
+.tend-apercu { flex: 1 1 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.tend-apercu > span { display: flex; flex-direction: column; gap: 2px; }
+.tend-apercu b { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tend-mini { width: 140px; height: 44px; flex: none; }
+.tend-mini path { fill: none; stroke: var(--af-indigo); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tend-voir { flex: 1 1 100%; color: var(--accent); font-weight: 600; font-size: .9rem; margin-top: 6px; }
+/* hausses / baisses : les teintes de la charte validée (vert sapin, rouge brique), en mode clair */
+@media (prefers-color-scheme: light) { :root[data-charte="indigo"]:not([data-theme="dark"]) { --good: #0F6B43; --bad: #B42318; } }
+:root[data-charte="indigo"][data-theme="light"] { --good: #0F6B43; --bad: #B42318; }
