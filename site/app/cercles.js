@@ -175,7 +175,8 @@
         <button type="button" class="cer-ch" data-cercle="rejoindre"><span class="cer-ch-ic" aria-hidden="true">#</span><span><b>J'ai un code d'invitation</b><span>Quelqu'un vous a invité.</span></span></button>
         <button type="button" class="cer-ch" data-cercle="decouvrir"><span class="cer-ch-ic" aria-hidden="true">★</span><span><b>Découvrir les cercles</b><span>Le top 10 du mois et les cercles ouverts.</span></span></button></div>
       <div class="cer-top" data-cer-top></div></div>`;
-    return `<div class="card cer-carte" aria-labelledby="h-cer"><div class="cer-entete"><h2 id="h-cer">Mes cercles d'épargne</h2>
+    const court = (n, u) => `${n} ${({ jour: "j", semaine: "sem.", mois: "mois" })[u] || "j"}`;
+    return `<div class="card cer-carte" aria-labelledby="h-cer"><h2 id="h-cer" class="sr-only">Mes cercles d'épargne</h2><div class="cer-entete">
         <button type="button" class="btn small" data-cercle="nouveau">+ Nouveau cercle</button></div>
       ${cercles.map((c) => {
         // Régularité du mois : périodes tenues sur périodes attendues, chacun selon son rythme (jour, semaine ou mois)
@@ -186,17 +187,14 @@
           <div class="cer-tete"><div><h3>${esc(c.nom)}</h3><span class="small muted">${ms.length}/${cap} membres${c.public ? ` · <span class="cer-pub">Public</span>` : ""}</span></div>
             <button type="button" class="cer-menu" data-cercle="gerer" data-id="${esc(c.id)}" aria-label="Gérer le cercle ${esc(c.nom)}${c.demandes ? `, ${c.demandes} demande${c.demandes > 1 ? "s" : ""} en attente` : ""}">⋯${c.demandes ? `<span class="cer-pastille">${c.demandes}</span>` : ""}</button></div>
           ${scene(c, ms, fait, but, pc)}
-          <p class="small">Ensemble : <b>${pc} % de régularité</b> ce mois-ci, pour un objectif de ${obj} %${pc >= obj && attendues ? " : objectif atteint ✓" : ""}</p>
-          <div class="cer-barre" role="progressbar" aria-label="Régularité commune du mois" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}" style="--obj:${obj}%">
-            <i style="width:${Math.min(100, pc)}%"></i><b class="cer-cible" aria-hidden="true"></b></div>
-          <ol class="cer-membres">${ms.map((m) => {
-            const t = m.tenues || 0, at = m.attendues || 0, mp = at ? Math.round((100 * t) / at) : 0;
-            return `<li class="${m.moi ? "moi" : ""}"><span class="cer-nom">${m.moi ? "Vous" : esc(m.pseudo)}</span>
-              <span class="cer-serie">${m.serie > 0 ? `🔥 ${pl(m.serie, m.unite)}` : `<span class="muted">pas de série</span>`}</span>
-              <span class="cer-jours">${at ? `<b>${t}</b>/${pl(at, m.unite)}${mp >= obj ? " ✓" : ""}` : `<span class="muted">pas encore de rythme</span>`}</span>
-              <span class="cer-mini" aria-hidden="true"><i style="width:${Math.min(100, mp)}%"></i></span></li>`;
-          }).join("")}</ol>
-          ${ms.length < cap ? `<div class="cer-act"><button type="button" class="btn small primary" data-cercle="inviter" data-id="${esc(c.id)}">Inviter des proches</button></div>` : ""}</section>`;
+          <p class="small">Ensemble : <b>${pc} % de régularité</b> ce mois-ci, pour un objectif de ${obj} %${pc >= obj && attendues ? ". Objectif atteint ✓" : ""}</p>
+          <ol class="cer-classement" aria-label="Classement du mois, par régularité">${[...ms].map((m) => ({ m, t: +m.tenues || 0, at: +m.attendues || 0 }))
+            .map((x) => ({ ...x, mp: x.at ? Math.round((100 * x.t) / x.at) : 0 }))
+            .sort((a, b) => b.mp - a.mp || (b.m.serie || 0) - (a.m.serie || 0)).map(({ m, t, at, mp }, i) =>
+            `<li class="${m.moi ? "moi" : ""}"><span class="cer-rang">${i + 1}</span>
+              <span class="cer-nom">${m.moi ? "Vous" : esc(m.pseudo)}<span class="cer-mini" aria-hidden="true"><i style="width:${Math.min(100, mp)}%"></i></span></span>
+              <span class="cer-chiffres num">${at ? `${t}/${pl(at, m.unite)}${mp >= obj ? " ✓" : ""}` : "pas encore de rythme"}<br>${m.serie > 0 ? `série ${court(+m.serie, m.unite)}` : "pas de série"}</span></li>`).join("")}</ol>
+          ${ms.length < cap ? `<button type="button" class="btn primary cer-inviter" data-cercle="inviter" data-id="${esc(c.id)}">Inviter des proches</button>` : ""}</section>`;
       }).join("")}
       <p class="small muted">Seules la série et la régularité sont visibles des membres, jamais vos montants.</p>
       <div class="cer-top" data-cer-top></div></div>`;
@@ -299,7 +297,8 @@
     const vus = ms.slice(0, 6), R = 39, C = 2 * Math.PI * 88, auj = new Date().toISOString().slice(0, 10);
     return `<div class="cer-scene" aria-hidden="true" style="--pc:${Math.min(100, pc)}">
       <div class="cs-centre"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="88" class="cs-fond"/>
-        <circle cx="100" cy="100" r="88" class="cs-jauge" style="stroke-dasharray:${C.toFixed(0)};--off:${(C * (1 - Math.min(100, pc) / 100)).toFixed(0)};--c:${C.toFixed(0)}"/></svg>
+        <circle cx="100" cy="100" r="88" class="cs-jauge" style="stroke-dasharray:${C.toFixed(0)};--off:${(C * (1 - Math.min(100, pc) / 100)).toFixed(0)};--c:${C.toFixed(0)}"/>
+        <line x1="179" y1="100" x2="197" y2="100" class="cs-cible" transform="rotate(${(3.6 * Math.min(100, Math.max(0, +but || 0))).toFixed(1)} 100 100)"/></svg>
         <div class="cs-info"><b>${pc} %</b><span>objectif ${but} %</span>${ms.length > 6 ? `<small>+${ms.length - 6} membres</small>` : ""}</div></div>
       ${vus.map((m, i) => {
         const a = -Math.PI / 2 + (i * 2 * Math.PI) / vus.length, x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a) * 0.92;
@@ -307,7 +306,7 @@
         const actif = m.maj_le && String(m.maj_le).slice(0, 10) === auj;
         return `<div class="cs-m${m.moi ? " moi" : ""}${actif ? " actif" : ""}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;--d:${(i * 0.12).toFixed(2)}s;--f:${(1 + (i % 3) * 0.7).toFixed(1)}s">
           <span class="cs-av" style="--h:${TEINTES[i % TEINTES.length]}">${esc(ini)}</span>
-          <span class="cs-serie">${m.serie > 0 ? `🔥 ${m.serie}` : "–"}</span></div>`;
+          <span class="cs-serie">${m.serie > 0 ? `${+m.serie} ${({ jour: "j", semaine: "sem.", mois: "mois" })[m.unite] || "j"}` : "–"}</span></div>`;
       }).join("")}</div>`;
   }
   function animerScenes(v) {

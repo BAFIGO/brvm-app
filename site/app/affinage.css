@@ -152,3 +152,87 @@ main .view:not([hidden]) { padding-bottom: 120px; }
 .bu-douze-g rect.d { fill: hsl(230 45% 72%); } .bu-legende i.d { background: hsl(230 45% 72%); }
 .bu-export { align-items: center; gap: 2px 6px; }
 .bu-export .btn.link { min-height: 44px; padding: 0 4px; font-weight: 600; }
+
+/* =====================================================================================
+ * Itération 4 : Mon avenir, Mes objectifs, Mon coffre, Mes cercles
+ * ===================================================================================== */
+
+/* Mon avenir : le résultat d'abord, les 4 chiffres en résumé, le rendement en 3 cases */
+#av-hero:empty { display: none; }
+.bu-av-resume { padding-top: 6px; padding-bottom: 12px; }
+.bu-av-resume .bu-ligne { min-height: 44px; border-bottom: 1px solid var(--border); }
+.bu-av-resume .bu-ligne b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bu-av-pied { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; }
+.bu-av-pied .btn, .bu-av-fini { flex: none; width: auto; }
+.bu-av-hyp { display: flex; flex-direction: column; gap: 6px; }
+.bu-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.bu-seg button { all: unset; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; border-radius: 10px;
+  font-weight: 600; font-size: .92rem; color: var(--text); cursor: pointer; text-align: center; }
+.bu-seg button small { font-weight: 500; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bu-seg button[aria-checked="true"] { background: var(--af-indigo); color: #fff; }
+.bu-seg button[aria-checked="true"] small { color: rgb(255 255 255 / .8); }
+.bu-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bu-q-aide { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 4px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--warn-bg); color: var(--ambre-texte); font: 700 .75rem/1 inherit; cursor: pointer; vertical-align: middle; }
+.bu-q-aide::before { content: ""; position: absolute; width: 44px; height: 44px; transform: translate(-11px, -11px); }   /* zone tactile 44 px */
+.bu-legende .bu-q-aide { position: relative; }
+.bu-hor-l { list-style: none; margin: 8px 0 0; padding: 0; }
+.bu-hor-l li { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 60px; padding: 8px 0; }
+.bu-hor-l li + li { border-top: 1px solid var(--border); }
+.bu-hor-l li > span { display: flex; flex-direction: column; gap: 2px; }
+.bu-hor-l li > span.num { align-items: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
+.bu-hor-l small { font-size: .8rem; }
+.bu-av-sim { display: flex; justify-content: center; width: 100%; box-sizing: border-box; }
+.bu-av-fini[hidden] { display: none; }
+
+/* Mes objectifs : échelle 1 → 2 → 3 reliée par un trait, état en pastille */
+.bu-echelle { list-style: none; margin: 0; padding: 0; position: relative; display: flex; flex-direction: column; gap: var(--af-ecart); }
+.bu-echelle::before { content: ""; position: absolute; left: 13px; top: 20px; bottom: 20px; width: 2px; background: var(--border); }
+.bu-pas { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+.bu-n { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; margin-top: 16px; border-radius: 50%;
+  background: var(--surface); border: 1.5px solid var(--border); color: var(--muted); font-weight: 700; font-size: .85rem; }
+.bu-pas.actif .bu-n { background: var(--af-indigo); border-color: var(--af-indigo); color: #fff; }
+.bu-etage-t { margin: 0; font-size: 1rem; font-weight: 700; }
+.bu-etat { flex: none; font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.bu-etat.on { background: var(--warn-bg); color: var(--ambre-texte); }
+.bu-etage .bu-ligne.num b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.bu-nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bu-ajout-l { align-self: flex-start; min-height: 44px; padding: 0; font-weight: 600; }
+.bu-phrase .btn.small.bu-plan-b:not(.primary):not(.link) { background: transparent; color: #fff; border: 1px solid rgb(255 255 255 / .55); box-shadow: none; }
+.bu-phrase .btn.small.bu-plan-b:not(.primary):not(.link):hover { background: rgb(255 255 255 / .1); }
+
+/* Mon coffre : flamme au trait, trophées / régularité / mouvements dans une seule liste */
+.ep2-flamme { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--warn-bg); color: hsl(30 90% 45%); }
+.ep2-motiv { background: var(--surface-2); }
+.ep2-motiv > span:last-child { display: flex; flex-direction: column; }
+.ep2-motiv small { color: var(--muted); font-size: .82rem; }
+.ep2-groupe { border: 1px solid var(--border); border-radius: 14px; padding: 0 14px; }
+.ep2-groupe > .ep2-pli { border-top: 0; padding: 6px 0; }
+.ep2-groupe > .ep2-pli + .ep2-pli { border-top: 1px solid var(--border); }
+.ep2-groupe .ep2-pli > summary { min-height: 52px; }
+.ep2-groupe .ep2-pli-t { display: flex; flex-direction: column; white-space: normal; }
+.ep2-groupe .ep2-pli-t small { font-weight: 500; font-size: .8rem; }
+
+/* Mes cercles : en-tête, anneau avec repère d'objectif, membres sobres, classement fin */
+.cer-entete { align-items: flex-start; margin-bottom: 8px; }
+.cer-entete p { margin: 0; }
+.cs-cible { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; }
+.cs-av { background: var(--accent-soft) !important; color: var(--accent) !important; box-shadow: none !important; }
+.cs-m.moi .cs-av { background: var(--af-indigo) !important; color: #fff !important; }
+.cs-serie { box-shadow: none; border: 1px solid var(--border); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cer-classement { list-style: none; margin: 12px 0 14px; padding: 0; border-top: 1px solid var(--border); }
+.cer-classement li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 58px; padding: 8px 0; }
+.cer-classement li + li { border-top: 1px solid var(--border); }
+.cer-classement li.moi .cer-nom { font-weight: 700; }
+.cer-rang { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cer-classement .cer-nom { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cer-classement .cer-mini { display: block; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.cer-classement .cer-mini i { display: block; height: 100%; border-radius: 2px; background: var(--af-indigo); }
+.cer-chiffres { text-align: right; font-size: .82rem; color: var(--muted); line-height: 1.35; white-space: nowrap; }
+.cer-inviter { width: 100%; }
+.cer-classement li > *, .cer-classement .cer-mini { grid-area: auto; }
+.cer-entete { justify-content: flex-end; }
+.bu-echelle .bu-proj > .bu-tuile { display: none; }
+.bu-echelle .bu-proj .bu-ligne b { min-width: 0; }
+.bu-etage .bu-ligne > b { white-space: nowrap; }
+.bu-echelle .bu-proj .bu-ligne > b { white-space: normal; }

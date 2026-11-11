@@ -1352,11 +1352,17 @@
         <p class="small muted ep2-note">${pret ? "Assez pour investir : vous pouvez l'envoyer à votre SGI." : `Envoi conseillé à partir de ${F(seuil())}, pour limiter les frais.`}</p>`;
     }
 
-    // 2. Une seule ligne de motivation (série, record et prochain trophée réunis)
-    if (debutant) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🏅</span><span>Votre premier trophée, <b>Premier pas</b>, dès votre premier versement.</span></p>`;
-    else if (ep.serie > 0) h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🔥</span><span><b>${pluriel(ep.serie, ep.unite)} d'affilée</b>${suivant ? ` · prochain trophée dans ${pluriel(suivant.reste, suivant.unite)}` : ""}</span></p>`;
-    else h += `<p class="ep2-motiv"><span class="ep2-flamme" aria-hidden="true">🌱</span><span>Une nouvelle série commence${ep.record > 1 ? ` · votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre` : ""}</span></p>`;
+    // 2. Une seule ligne de motivation (série et prochain trophée), pictogramme dessiné au trait
+    const PICTO = (d) => `<span class="ep2-flamme" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg></span>`;
+    const FLAMME = PICTO('<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.3-4 2.5-5 .2 1.6 1 2.6 2 3 0-2.8-.5-5.2.5-8z"/>');
+    const MEDAILLE = PICTO('<circle cx="12" cy="14" r="5"/><path d="M8.5 9.5 6 3h4l2 4 2-4h4l-2.5 6.5"/>');
+    const POUSSE = PICTO('<path d="M12 21v-8"/><path d="M12 13c0-4 3-6 7-6 0 4-3 6-7 6z"/><path d="M12 15c0-3-2.5-5-6-5 0 3 2.5 5 6 5z"/>');
+    if (debutant) h += `<p class="ep2-motiv">${MEDAILLE}<span>Votre premier trophée, <b>Premier pas</b>, dès votre premier versement.</span></p>`;
+    else if (ep.serie > 0) h += `<p class="ep2-motiv">${FLAMME}<span><b>${pluriel(ep.serie, ep.unite)} d'affilée</b>${suivant ? `<small>Prochain trophée dans ${pluriel(suivant.reste, suivant.unite)}</small>` : ""}</span></p>`;
+    else h += `<p class="ep2-motiv">${POUSSE}<span>Une nouvelle série commence${ep.record > 1 ? ` · votre record : <b>${pluriel(S.demoPerdue ? 23 : ep.record, ep.unite)}</b>, à battre` : ""}</span></p>`;
 
+    // Trophées, régularité et mouvements : une seule liste
+    h += `<div class="ep2-groupe">`;
     // Mes trophées : aperçu des médailles gagnées, la galerie complète se déplie
     if (!debutant) {
       const prochains = tr.filter((t) => !t.ok).slice(0, 2);
@@ -1371,7 +1377,7 @@
     // Ma régularité : le calendrier, replié
     if (ep.calendrier?.length && !debutant) {
       const libCal = (c) => `${c.k.length === 7 ? c.k : D(c.k)} : ${c.fait ? "épargné" : c.joker ? "oubli couvert par le joker" : c.encours ? "à faire" : "manqué"}`;
-      h += `<details class="ep2-pli"><summary><span class="ep2-pli-t">Ma régularité</span><span class="small muted">${ep.tenus} sur ${pluriel(ep.total, ep.unite)} · record ${pluriel(Math.max(ep.record, ep.serie), ep.unite)}</span></summary>
+      h += `<details class="ep2-pli"><summary><span class="ep2-pli-t">Ma régularité<small class="muted">Record : ${pluriel(Math.max(ep.record, ep.serie), ep.unite)}</small></span><span class="small muted">${ep.tenus} sur ${pluriel(ep.total, ep.unite)}</span></summary>
         <div class="ep-cal" role="list" aria-label="Mes ${ep.calendrier.length} dernières périodes d'épargne">${ep.calendrier.map((c, i) =>
           `<span role="listitem" class="ec ${c.fait ? "fait" : c.joker ? "joker" : c.encours ? "encours" : "manque"}" style="--i:${i}" title="${esc(libCal(c))}" aria-label="${esc(libCal(c))}"></span>`).join("")}</div>
         <p class="ep-legende small muted"><span class="ec fait"></span> épargné <span class="ec joker"></span> joker <span class="ec manque"></span> manqué</p>
@@ -1383,7 +1389,8 @@
         <div class="name">${m.type === "VERSEMENT" ? "Mis de côté" : m.type === "TRANSFERT" ? "Envoyé à ma SGI" : "Retiré"}</div>
         <div class="sub">${D(m.date)}${m.source ? " · " + esc(SOURCES[m.source] || m.source) : ""}</div></div>
         <div class="right num ${m.type === "VERSEMENT" ? "good" : ""}">${m.type === "VERSEMENT" ? "+" : "−"}${F(m.montant)}</div></li>`).join("")}</ul></details>`;
-    return h + `</div>`;
+    h += `</div>`;
+    return h.replace(`<div class="ep2-groupe"></div>`, "") + `</div>`;
   }
   function aideGain() {
     // Deux tableaux qui partent du même chiffre : la plus ou moins-value des titres détenus, SANS les vendre.
