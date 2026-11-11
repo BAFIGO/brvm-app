@@ -466,11 +466,22 @@
   document.addEventListener("click", (ev) => { if (ev.target.closest?.("[data-sim-tous]")) { S.ui.simTous = true; S.ui.simAjust = true; render(); } });
   document.addEventListener("keydown", (ev) => { const m = ev.target.closest?.("li[data-vers-marche]"); if (m && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); versMarche(m.dataset.versMarche); } });
   // Ouvre le titre au Marché (bonne rubrique, recherche sur son code, carte dépliée)
-  function versMarche(code) {
+  function versMarche(code, depuisPf = false) {
     const cat = catDe(code) || "actions";
-    Object.assign(S.ui, { mkTab: cat, mkQuery: code, mkFilter: "all", mkShow: 30, mkOuvrir: code });
+    Object.assign(S.ui, { mkTab: cat, mkQuery: "", mkFilter: "all", mkShow: 999, mkTout: true, mkOuvrir: code,
+                          mkRetour: depuisPf ? code : null, pfViser: depuisPf ? code : null, mkRetourHist: depuisPf && location.hash !== "#marche" });
     if (location.hash === "#marche") render(); else location.hash = "marche";
   }
+  // toucher une position (action, FCP ou obligation) : sa fiche au Marché ; « ⋯ » regroupe noter / épingler
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest?.("[data-pos-voir]");
+    if (a) { ev.preventDefault(); versMarche(a.dataset.posVoir, true); return; }
+    const r = ev.target.closest?.("[data-mk-retour]");
+    if (r) { ev.preventDefault(); const c = S.ui.mkRetour; S.ui.mkRetour = null;
+      if (S.ui.mkRetourHist) history.back(); else allerPf("placements", c); }
+  });
+  // fermer le menu « ⋯ » d'une position quand on touche ailleurs
+  document.addEventListener("click", (ev) => { document.querySelectorAll(".pos-menu[open]").forEach((d) => { if (!d.contains(ev.target)) d.open = false; }); });
   // lien vers un onglet du portefeuille (ex. « Mon coffre » depuis Mes placements)
   document.addEventListener("click", (ev) => { const a = ev.target.closest?.("[data-pfo-lien]"); if (a) { ev.preventDefault(); allerPf(a.dataset.pfoLien); } });
   // Sortie de l'application après déconnexion : la page est REMPLACÉE (location.replace) et l'écran vidé,
@@ -1723,9 +1734,10 @@
       </div>`;
     // Ajouter une opération : l'import d'un avis ou d'un relevé est l'action principale, la saisie l'alternative
     h += `<div class="card ajout-op" aria-labelledby="h-ajout"><h2 id="h-ajout">Ajouter une opération</h2>
-        <button type="button" class="ajout-import" data-import=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg></span>
+        <button type="button" class="ajout-import af-import" data-import=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14h6M9 17h4"/></svg></span>
           <span class="ai-txt"><b>Importer un avis ou un relevé</b><span>Photo ou PDF de votre SGI : les opérations se remplissent toutes seules</span></span>
           <span class="ai-badge">Le plus rapide</span></button>
+        <p class="small muted af-import-n">Le plus rapide : photo ou PDF de votre SGI, les opérations se remplissent toutes seules.</p>
         <button type="button" class="ajout-main" data-op=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span><span>Saisir à la main</span><span aria-hidden="true">›</span></button>
         ${!S.ops.length ? `<button type="button" class="ajout-main ajout-depart" data-depart=""><span class="ai-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V5l8-2 8 2v15"/><path d="M9 20v-5h6v5M8 9h2M14 9h2"/></svg></span><span>J'ai déjà des titres chez ma SGI<small>Déclarez ce que vous possédez aujourd'hui, sans ressaisir votre historique</small></span><span aria-hidden="true">›</span></button>` : ""}</div>`;
     for (const e of L.errors) h += `<div class="notice bad">${esc(e)}</div>`;
@@ -1738,15 +1750,18 @@
         const act = S.actions?.get(p.code);
         const al = S.alertesMap?.get(p.code);
         const ep1 = estEpingle(p.code);
-        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}><div class="pos-acts"><button type="button" class="mk-op pos-op" data-op-titre="${esc(p.code)}" data-op-type="VENTE"
-            aria-label="Noter une opération : ${esc(S.names.get(p.code) || p.code)} (vente, achat, dividende)" title="Noter une vente, un achat ou un dividende"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><button type="button" class="epingler icone" data-epingler="${esc(p.code)}" aria-pressed="${ep1}"
-            aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${esc(S.names.get(p.code) || p.code)}" title="${ep1 ? "Épinglé dans le menu" : "Épingler dans le menu"}">${ICONE_EPINGLE}</button></div><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}</div>
-          <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)} en moyenne${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
+        const nomP = esc(S.names.get(p.code) || p.code);
+        h += `<li id="pos-${esc(p.code)}" data-pos="${esc(p.code)}"${al ? ` class="a-al al-${NIVEAUX[al.alerte]?.c || "info"}"` : ""}>
+          <details class="pos-menu"><summary aria-label="Actions pour ${nomP}">⋯</summary><div class="pos-menu-l">
+            <button type="button" class="pos-menu-b" data-op-titre="${esc(p.code)}" data-op-type="VENTE"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Noter une opération</button>
+            <button type="button" class="pos-menu-b epingler" data-epingler="${esc(p.code)}" aria-pressed="${ep1}" aria-label="${ep1 ? "Retirer des épinglés" : "Épingler dans le menu"} : ${nomP}">${ICONE_EPINGLE}<span>${ep1 ? "Épinglé" : "Épingler"}</span></button></div></details>
+          <a href="#marche" class="pos-voir" data-pos-voir="${esc(p.code)}" aria-label="${nomP} : voir sa fiche au Marché"><div class="main"><div class="name">${mq(p.code)}${esc(S.names.get(p.code) || p.code)}</div>
+          <div class="sub">${esc(p.code)} · ${N(p.quantite)} à ${F(p.pru)}${ok(al?.plancher) ? ` · plancher ${F(al.plancher)}` : ""}</div>
           <div class="sub etats">${al ? pastille(al) : chip(d)}${p.coursDu ? `<span class="small muted">dernier cours connu : ${D(p.coursDu)}</span>` : ""}${p.sansCours ? `<span class="small muted">pas de cours : compté à son prix d'achat</span>` : ""}</div></div>
-          <div class="right num">${act ? spark(act.courbe, 72, 24) : ""}<b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></li>`;
+          <div class="right num"><b>${F(p.valeur)}</b><div class="sub ${cls(p.pv)}">${ok(p.pv) ? F(p.pv) + " · " + P(p.pv / p.cout) : "cours inconnu"}</div></div></a></li>`;
       }
       h += `</ul><p class="small muted">Valorisé au cours de la séance du ${D(S.seance?.date)}. Sous chaque ligne : le gain si vous la vendiez aujourd'hui, frais de vente estimés déduits.
-        L'épingle place un titre dans le menu, pour y revenir en un geste.</p>`;
+        Touchez une ligne pour sa fiche au Marché ; « ⋯ » pour noter une opération ou épingler le titre dans le menu.</p>`;
     }
     h += `</div>`;
     {
@@ -2164,7 +2179,7 @@
           <span class="reg-et">${esc(x.etiquette)}</span>
           <span class="reg-nom">${mq(x.r.code)}${esc(x.r.nom || x.r.code)}</span>
           <span class="reg-ligne">${ok(x.r.cours) ? `<b class="num">${F(x.r.cours)}</b>` : ""}${ok(x.r.var_1j) ? ` <span class="num ${cls(x.r.var_1j)}">${P(x.r.var_1j)}</span>` : ""}${ok(x.r.score) ? ` · score ${N(x.r.score)}` : ""}</span>
-          <span class="reg-raison">${esc(x.raison)}</span></button></li>`).join("")}</ul>
+          <span class="reg-raison">${esc(x.raison)}</span><span class="reg-ch" aria-hidden="true">›</span></button></li>`).join("")}</ul>
       <p class="small muted">Une sélection pour orienter votre regard, pas une recommandation. Touchez un titre pour voir son analyse.</p></section>`;
   }
 
@@ -2175,7 +2190,8 @@
     const list = rows.filter((r) => (u.mkFilter === "all" || BUY.includes(r.decision))
       && (!q || (r.code + " " + (r.nom || "")).toLowerCase().includes(q))).sort((a, b) => (b.score || 0) - (a.score || 0));
     const tend = tendance();
-    let h = `<h1 id="h-mk">Marché</h1>${!q ? blocARegarder() : ""}
+    const court = !q && !u.mkTout && list.length > 6, lim = court ? 5 : u.mkShow;
+    let h = `<h1 id="h-mk">Marché</h1>${u.mkRetour ? `<button type="button" class="btn link mk-retour" data-mk-retour="">‹ Retour à Mes placements</button>` : ""}${!q && !u.mkRetour ? blocARegarder() : ""}
       <div class="toolbar">
         <div class="seg" role="group" aria-label="Classe d'actifs">
           ${[["actions", "Actions"], ["obligations", "Obligations"], ["opcvm", "OPCVM"]].map(([k, t]) =>
@@ -2191,7 +2207,7 @@
       ${!rows.length ? `<p class="notice small">Aucune donnée disponible pour le moment dans cette rubrique. Réessayez après le prochain traitement du soir.</p>` : ""}
       <p class="small muted">${list.length} titre${list.length > 1 ? "s" : ""} · séance du ${D(S.mkDate?.[u.mkTab] || S.seance?.date)} · touchez une ligne pour ${u.mkTab === "actions" ? "ses repères et son analyse" : "le détail"}</p>
       <div class="card"><ul class="list">`;
-    for (const r of list.slice(0, u.mkShow)) {
+    for (const r of list.slice(0, lim)) {
       let px, det;
       if (u.mkTab === "actions") {
         px = `${spark(r.courbe)}<div>${F(r.cours)} <span class="sub ${cls(r.var_1j)}">${P(r.var_1j)}</span></div>`;
@@ -2223,19 +2239,21 @@
             ${u.mkTab === "actions" && r.courbe ? `<div class="mk-courbe">${spark(r.courbe, 160, 40)}<span class="small muted">${esc(r.code)} · 3 derniers mois</span></div>` : ""}${det}
             <button type="button" class="btn mk-op-l" data-op-titre="${esc(r.code)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg> Noter un achat ou une vente</button></div></details></li>`;
     }
-    h += `</ul>${list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
+    h += `</ul>${court ? `<div class="actions"><button class="btn" id="mk-tout">Voir les ${list.length} titres</button></div>`
+      : list.length > u.mkShow ? `<div class="actions"><button class="btn" id="mk-more">Afficher plus</button></div>` : ""}</div>
       ${tend ? `<details class="card tend-pli"${u.tendOuverte ? " open" : ""}><summary><span class="op-t">Tendance du marché</span>
         <span class="op-r">${esc(tend.resume)}</span></summary>${tend.html}</details>` : ""}
       <p class="small muted">Score de 0 à 100 calculé par l'outil (technique, fondamentaux, dividende, valorisation, liquidité).
       Aide à la décision, pas un conseil en investissement. Données de marché : BRVM.</p>`;
     v.innerHTML = h;
-    v.querySelectorAll("[data-mk]").forEach((b) => b.addEventListener("click", () => { u.mkTab = b.dataset.mk; u.mkShow = 30; vMarche(); }));
+    v.querySelectorAll("[data-mk]").forEach((b) => b.addEventListener("click", () => { u.mkTab = b.dataset.mk; u.mkShow = 30; u.mkTout = false; vMarche(); }));
+    $("#mk-tout", v)?.addEventListener("click", () => { u.mkTout = true; vMarche(); });
     v.querySelectorAll("[data-tend]").forEach((b) => b.addEventListener("click", () => { u.tend = b.dataset.tend; vMarche(); }));
-    // un titre « à regarder » : la liste se filtre sur lui et son analyse s'ouvre
+    // un titre « à regarder » : on descend jusqu'à sa ligne dans la liste, et son détail s'ouvre
     v.querySelectorAll("[data-regarder]").forEach((b) => b.addEventListener("click", () => {
-      Object.assign(u, { mkTab: b.dataset.classe, mkFilter: "all", mkQuery: b.dataset.regarder, mkShow: 30 });
+      Object.assign(u, { mkTab: b.dataset.classe, mkFilter: "all", mkQuery: "", mkShow: 999, mkTout: true });
       vMarche();
-      const d = $("#v-marche .list details");
+      const d = $(`#v-marche .list [data-op-titre="${CSS.escape(b.dataset.regarder)}"]`)?.closest("details");
       if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: CALME ? "auto" : "smooth" }); d.querySelector("summary")?.focus({ preventScroll: true }); }
     }));
     tend?.lier(v);
@@ -2248,7 +2266,7 @@
     if (u.mkOuvrir) {
       const c = u.mkOuvrir; u.mkOuvrir = null;
       const d = v.querySelector(`[data-op-titre="${CSS.escape(c)}"]`)?.closest("details");
-      if (d) { d.open = true; setTimeout(() => d.scrollIntoView({ block: "start", behavior: "smooth" }), 80); }
+      if (d) { d.open = true; setTimeout(() => { d.scrollIntoView({ block: "start", behavior: CALME ? "auto" : "smooth" }); d.querySelector("summary")?.focus({ preventScroll: true }); }, 80); }
     }
   }
 
@@ -2764,10 +2782,17 @@
         <p class="small muted">Version de l'application : <b>${esc((document.querySelector('script[src*="budget.js"]')?.getAttribute("src") || "").split("v=")[1] || "?")}</b></p>
         ${S.docs?.cgu ? `<p class="small"><button class="btn link" type="button" id="voir-cgu">${esc(S.docs.cgu.titre)} (version ${esc(S.docs.cgu.version)})</button>
           ${p.cgu_acceptee_le ? `<span class="muted">acceptée le ${new Date(p.cgu_acceptee_le).toLocaleDateString("fr-FR")}</span>` : ""}</p>` : ""}
-        <div class="actions"><button class="btn" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button>
+        <div class="actions"><button class="btn pr-logout-orig" id="logout">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button>
           ${DEMO ? "" : `<button class="btn link small" id="logout-partout">Me déconnecter de tous mes appareils</button>`}</div>
         ${DEMO ? "" : `<p class="small muted">Téléphone perdu, ordinateur partagé : « tous mes appareils » ferme aussi les sessions ouvertes ailleurs, en moins d'une heure.</p>`}
-      </div>`;
+      </div>
+      <div class="card pr-docs"><h2>Documents légaux</h2><ul class="pr-docs-l">${[["cgu", "Conditions d'utilisation"], ["confidentialite", "Politique de confidentialité"],
+          ["mentions", "Mentions légales"], ["avertissement", "Avertissement sur les risques"]].map(([k, nom]) => S.docs?.[k]
+          ? `<li><button type="button" class="btn link" data-pr-doc="${k}">${esc(S.docs[k].titre || nom)}</button></li>`
+          : `<li><span class="muted">${nom} · bientôt disponible</span></li>`).join("")}</ul></div>
+      <div class="pr-sortie"><button type="button" class="btn pr-deco" data-pr-deco="">${DEMO ? "Quitter la démo" : "Se déconnecter"}</button></div>`;
+    v.querySelectorAll("[data-pr-doc]").forEach((b) => b.addEventListener("click", () => { const d = S.docs?.[b.dataset.prDoc]; if (d) showCgu(d, false); }));
+    $("[data-pr-deco]", v)?.addEventListener("click", () => $("#logout", v)?.click());
     const f = $("#f-profil", v);
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault();
@@ -2903,7 +2928,7 @@
     const idx = (k) => cumul(rows.map((r) => ix[k]?.get(r.date)?.variation));
     const b30 = idx("BRVM30"), bc = idx("BRVMC");
     const per = n === 1 ? `la séance du ${D(last.date)}` : `${D(rows[0].date)} → ${D(last.date)}`;
-    h += `<div class="seg scroll" role="group" aria-label="Période">${PERIODES.map(([k, t]) => !acces(1) && k === 0
+    h += `<div class="seg scroll af-chips" role="group" aria-label="Période">${PERIODES.map(([k, t]) => !acces(1) && k === 0
       ? `<button type="button" data-formules aria-label="${t} : disponible avec Essentiel">🔒 ${t}</button>`
       : `<button type="button" data-perf="${k}" aria-pressed="${S.ui.perf === k}">${t}</button>`).join("")}</div>
       <div class="card"><p class="perf-phrase">${(() => {
@@ -2920,8 +2945,8 @@
         </div>
         <p class="small" style="margin-top:10px">${ok(pf) && ok(b30) ? `Écart avec le BRVM 30 : <b class="${cls(pf - b30)}">${(pf - b30 > 0 ? "+" : "") + nf1.format((pf - b30) * 100)} points</b>` + (pf >= b30 ? " — vous faites mieux que le marché." : " — le marché fait mieux sur cette période.") : ""}</p>
         ${!ok(b30) || !ok(bc) ? `<p class="small muted">« – » : indice pas encore disponible pour ces séances.</p>` : ""}
-        <p class="small muted">Gain sur la période choisie, hors dépôts et retraits : évolution des cours, dividendes et frais.
-          À ne pas confondre avec le « gain si je vendais aujourd'hui » de Portefeuille.</p></div>`;
+        <details class="bu-def"><summary>Comment c'est calculé ?</summary><p class="small">Gain sur la période choisie, hors dépôts et retraits : évolution des cours, dividendes et frais.
+          À ne pas confondre avec le « gain si je vendais aujourd'hui » de Portefeuille.</p></details></div>`;
     let ch = null;
     if (n === 1) {
       // Une seule séance : la BRVM ne publie qu'un cours de clôture par jour, il n'y a donc pas de courbe à tracer
@@ -3430,6 +3455,13 @@
       v.querySelectorAll("[data-count]").forEach(countUp);
     }
     if (current && current !== t) { $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
+    if (t !== "marche") S.ui.mkRetour = null;
+    if (t === "portefeuille" && S.ui.pfViser && (S.ui.pfOnglet || "placements") === "placements") {
+      const c = S.ui.pfViser; S.ui.pfViser = null;
+      setTimeout(() => { const li = document.getElementById("pos-" + c); if (!li) return;
+        li.scrollIntoView({ block: "center", behavior: "auto" }); li.querySelector("[data-pos-voir]")?.focus({ preventScroll: true });
+        li.classList.remove("pos-vise"); void li.offsetWidth; li.classList.add("pos-vise"); }, 60);
+    } else if (t !== "marche") S.ui.pfViser = null;
     current = t;
     if (S.alertesCle !== cleJournal()) chargerAlertes().then(() => { if (S.user && tab() === t && ["aujourdhui", "portefeuille"].includes(t)) VIEWS[t](); signalerAssistant(); });
     signalerAssistant();

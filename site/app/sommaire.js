@@ -17,7 +17,10 @@
     ["contact", "Nous contacter", 6.5, (c) => c.classList.contains("ct-carte")],
     ["avis", "Donner mon avis", 7, (c) => c.classList.contains("av-profil")],
     ["demo", "Essayer les félicitations", 8, (c) => /félicitations/i.test(c.querySelector("h2")?.textContent || "") && !c.id],
-    ["apropos", "À propos, conditions et déconnexion", 9, (c) => /À propos/.test(c.querySelector("h2")?.textContent || "")],
+    ["gloss", "Souligner les mots expliqués", 5.5, (c) => c.classList.contains("gl-carte")],
+    ["lexique", "Lexique", 7.5, (c) => c.classList.contains("gl-lexique")],
+    ["docs", "Documents légaux", 8.5, (c) => c.classList.contains("pr-docs")],
+    ["apropos", "À propos", 9, (c) => /À propos/.test(c.querySelector("h2")?.textContent || "")],
   ];
   const ouverte = () => { try { return sessionStorage.getItem("brvm-rubrique") || ""; } catch (e) { return ""; } };
   function etat(k, carte) {
@@ -30,7 +33,9 @@
     if (k === "aide") return "Visite guidée, portrait, glossaire";
     if (k === "contact") return "Une question, un problème, une idée · WhatsApp";
     if (k === "demo") return "Démonstration uniquement";
-    if (k === "apropos") return "Version, conditions d'utilisation, déconnexion";
+    if (k === "apropos") return "Version de l'application, déconnexion de tous mes appareils";
+    if (k === "lexique") return "Tous les mots expliqués : SGI, séance, OPCVM…";
+    if (k === "docs") return "Conditions, confidentialité, risques";
     return app?.etatRubrique?.(k) || "";
   }
   function ranger() {
@@ -51,6 +56,12 @@
       if (!carte.matches?.(".card")) continue;
       const r = RUBRIQUES.find(([, , , test]) => test(carte));
       const [k, titre, ordre] = r || ["autre" + Math.random().toString(36).slice(2, 6), carte.querySelector("h2")?.textContent || "Réglages", 10];
+      if (k === "gloss") {                                   // un interrupteur : la ligne agit directement, sans se déplier
+        const d = document.createElement("div");
+        d.className = "rubrique rub-direct"; d.dataset.rub = k; d.dataset.ordre = ordre; d.append(carte);
+        som.insertBefore(d, [...som.children].find((x) => +x.dataset.ordre > ordre) || null);
+        continue;
+      }
       const d = document.createElement("details");
       d.className = "rubrique"; d.dataset.rub = k; d.dataset.ordre = ordre;
       d.innerHTML = `<summary><span class="rub-t">${esc(titre)}</span><span class="rub-e">${esc(etat(k, carte))}</span></summary>`;
@@ -67,12 +78,14 @@
     // trois groupes, lus d'un coup d'œil : Mon compte, Mes réglages, Aide
     som.querySelectorAll(".rub-groupe").forEach((x) => x.remove());
     let gPrec = "";
-    for (const d of som.querySelectorAll("details.rubrique")) {
-      const o = +d.dataset.ordre, g = o <= 1 ? "Mon compte" : o <= 5 ? "Mes réglages" : "Aide et informations";
+    for (const d of som.querySelectorAll(".rubrique")) {
+      const o = +d.dataset.ordre, g = o <= 1 ? "Mon compte" : o < 6 ? "Mes réglages" : "Aide et informations";
       if (g !== gPrec) { const h = document.createElement("h2"); h.className = "rub-groupe"; h.textContent = g; som.insertBefore(h, d); gPrec = g; }
     }
     // mettre à jour les états (après un enregistrement, par exemple)
-    som.querySelectorAll("details.rubrique").forEach((d) => { const c = d.querySelector(".card"); if (c) d.querySelector(".rub-e").textContent = etat(d.dataset.rub, c); });
+    som.querySelectorAll("details.rubrique").forEach((d) => { const c = d.querySelector(".card"), e = d.querySelector(".rub-e"); if (c && e) e.textContent = etat(d.dataset.rub, c); });
+    // une rubrique-interrupteur sortie de sa ligne (profil redessiné) retrouve sa place au prochain passage
+    som.querySelectorAll(".rub-direct").forEach((d) => { if (!d.querySelector(".card")) d.remove(); });
   }
   let prevu = 0;
   const planifier = () => { clearTimeout(prevu); prevu = setTimeout(ranger, 30); };

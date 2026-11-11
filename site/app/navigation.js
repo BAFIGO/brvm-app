@@ -305,7 +305,7 @@
     if (!app) return;
     const t = app.tab?.() || "aujourdhui";
     titre.textContent = t === "portefeuille" ? NOMS_PF[app.ongletPf?.()] || "Portefeuille" : TITRES[t] || "";
-    infoB.hidden = t !== "profil";
+    infoB.hidden = true;                                   // documents légaux et version : Profil › Aide et informations
     if (ouvert) remplir();
   }
 
@@ -403,4 +403,15 @@
   };
   document.addEventListener("touchend", fin);
   document.addEventListener("touchcancel", fin);
+
+  // ---------------------------------------------------------------- boutons flottants : ils s'écartent pendant qu'on fait défiler
+  // vers le bas (pour ne pas cacher les montants à droite) et reviennent dès qu'on s'arrête ou qu'on remonte.
+  let yPrec = scrollY, tRetour = 0;
+  addEventListener("scroll", () => {
+    const y = scrollY, bas = y > yPrec + 4, haut = y < yPrec - 4;
+    if (bas && y > 80) document.body.classList.add("fabs-retires");
+    else if (haut) document.body.classList.remove("fabs-retires");
+    yPrec = y; clearTimeout(tRetour);
+    tRetour = setTimeout(() => document.body.classList.remove("fabs-retires"), 1200);
+  }, { passive: true });
 })();

@@ -236,3 +236,104 @@ main .view:not([hidden]) { padding-bottom: 120px; }
 .bu-echelle .bu-proj .bu-ligne b { min-width: 0; }
 .bu-etage .bu-ligne > b { white-space: nowrap; }
 .bu-echelle .bu-proj .bu-ligne > b { white-space: normal; }
+
+/* =====================================================================================
+ * Itération 5 : Marché, Mes placements, Performance, Profil, boutons flottants
+ * ===================================================================================== */
+
+/* boutons flottants : ils s'écartent pendant le défilement vers le bas, puis reviennent */
+.fab-ia, #fab-coffre { transition: transform .25s ease, opacity .25s ease; }
+body.fabs-retires .fab-ia, body.fabs-retires #fab-coffre { transform: translateX(84px); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .fab-ia, #fab-coffre { transition: none; } }
+
+/* Marché : « 3 titres à regarder » en lignes, avec « › » */
+.a-regarder .reg-liste { display: block; margin: 8px 0 4px; padding: 0; }
+.a-regarder .reg-liste li + li { border-top: 1px solid var(--border); }
+.a-regarder .reg { position: relative; background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  padding: 12px 28px 12px 0 !important; margin: 0 !important; width: 100%; text-align: left; }
+.a-regarder .reg-et { display: inline-block; width: auto; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .72rem; font-weight: 600; }
+.reg-ch { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 1.3rem; color: var(--muted); }
+.reg .num { font-variant-numeric: tabular-nums; }
+
+/* Marché : sélecteur pleine largeur, recherche et tri sur une ligne, retour vers Mes placements */
+#v-marche .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+#v-marche .toolbar .seg { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+#v-marche .toolbar .seg button { justify-content: center; text-align: center; }
+#v-marche .toolbar input, #v-marche .toolbar select { margin: 0; min-height: 44px; }
+.mk-retour { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 74px); display: inline-flex !important; align-items: center; min-height: 40px !important; z-index: 4; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 999px; padding: 0 14px !important; box-shadow: var(--af-ombre-flottante);
+  align-self: flex-start; min-height: 44px; padding: 0 2px; font-weight: 600; text-decoration: none; }
+#v-marche .list .right { min-width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Mes placements : ligne entière touchable, menu « ⋯ », plus de mini-courbe */
+li[data-pos] { padding-top: 0 !important; display: flex; align-items: stretch; gap: 4px; position: relative; }
+li[data-pos] > .pos-voir { order: 1; flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px 0; color: inherit; text-decoration: none; }
+li[data-pos] > .pos-voir .main { flex: 1; min-width: 0; }
+li[data-pos] > .pos-voir .right { min-width: 0; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+li[data-pos] > .pos-voir:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.pos-ch { color: var(--muted); font-size: 1.3rem; flex: none; }
+.pos-menu { order: 2; position: relative; flex: none; align-self: center; }
+.pos-menu > summary { list-style: none; display: grid; place-items: center; width: 34px; height: 44px; border-radius: 10px; cursor: pointer; color: var(--muted); font-size: 1.2rem; font-weight: 700; }
+.pos-menu > summary::-webkit-details-marker { display: none; }
+.pos-menu > summary:hover, .pos-menu[open] > summary { background: var(--surface-2); color: var(--text); }
+.pos-menu > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pos-menu-l { position: absolute; right: 0; top: 46px; z-index: 5; min-width: 220px; padding: 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: 0 10px 24px -12px hsl(232 50% 18% / .35); display: flex; flex-direction: column; }
+.pos-menu-b { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: .92rem; }
+.pos-menu-b:hover, .pos-menu-b:focus-visible { background: var(--surface-2); }
+.pos-menu-b svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+li.pos-vise { animation: pos-vise 1.6s ease; }
+@keyframes pos-vise { 0%, 40% { background: var(--accent-soft); } 100% { background: transparent; } }
+
+/* Ajouter une opération : l'import est le bouton principal, sans grande carte sombre */
+.ajout-import.af-import { background: var(--af-indigo); color: #fff; border-radius: 12px; min-height: 56px; padding: 12px 14px; box-shadow: var(--af-ombre-legere); }
+.ajout-import.af-import .ai-txt > span { color: rgb(255 255 255 / .82); }
+.ajout-import.af-import .ai-ic { background: rgb(255 255 255 / .14); color: #fff; }
+.ajout-import.af-import .ai-ic svg { stroke: #fff; }
+.ajout-import.af-import { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 8px 16px; }
+.ajout-import.af-import .ai-txt > span, .ajout-import.af-import .ai-badge { display: none; }
+.ajout-import.af-import .ai-ic { width: auto; height: auto; padding: 0; background: none; gap: 4px; }
+.ajout-import.af-import .ai-ic svg { width: 20px; height: 20px; }
+.ajout-import.af-import .ai-txt b { font-size: 1rem; }
+.af-import-n { margin: 6px 0 2px; }
+
+/* Performance : périodes en pastilles qui défilent */
+.seg.af-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 16px 4px 0; background: none; border: 0; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.seg.af-chips::-webkit-scrollbar { display: none; }
+.seg.af-chips button { flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); white-space: nowrap; }
+.seg.af-chips button[aria-pressed="true"] { background: var(--af-indigo); border-color: var(--af-indigo); color: #fff; }
+
+/* Profil : les lignes d'un même groupe dans une seule carte */
+.sommaire .rubrique { margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; border-bottom-width: 0 !important; }
+.sommaire .rub-groupe + .rubrique { border-top-left-radius: var(--af-rayon-carte) !important; border-top-right-radius: var(--af-rayon-carte) !important; }
+.sommaire .rubrique:has(+ .rub-groupe), .sommaire .rubrique:last-child { border-bottom-left-radius: var(--af-rayon-carte) !important; border-bottom-right-radius: var(--af-rayon-carte) !important;
+  border-bottom-width: 1px !important; }
+.rub-direct { background: var(--surface); border: 1px solid var(--border); }
+.rub-direct > .card { margin: 0; border: 0; background: none; padding: 0; }
+.gl-reglage { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: 10px 16px; margin: 0 !important; cursor: pointer; }
+.gl-reglage > span { display: flex; flex-direction: column; font-weight: 600; }
+.gl-reglage small { font-weight: 400; color: var(--muted); font-size: .82rem; }
+.gl-reglage input { order: 2; }
+.gl-lex { margin: 8px 0 0; }
+.gl-lex dt { font-weight: 700; margin-top: 12px; }
+.gl-lex dd { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+.pr-docs-l { list-style: none; margin: 4px 0 0; padding: 0; }
+.pr-docs-l li { min-height: 44px; display: flex; align-items: center; }
+.pr-docs-l .btn.link { padding: 0; text-align: left; }
+.sommaire .pr-logout-orig { display: none; }
+.pr-sortie { margin-top: 8px; }
+.pr-deco { width: 100%; color: var(--bad); font-weight: 700; background: var(--surface); }
+#v-marche .list details { scroll-margin-top: 128px; }
+.sommaire { gap: 0 !important; }
+.sommaire .rub-groupe { margin: 20px 4px 8px !important; }
+.sommaire .rub-groupe:first-child { margin-top: 4px !important; }
+.pr-sortie .btn.pr-deco { color: var(--bad); }
+/* interrupteur (Souligner les mots expliqués) */
+.gl-reglage input[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 46px; height: 28px; margin: 0; border-radius: 14px;
+  background: var(--border); cursor: pointer; transition: background .2s; }
+.gl-reglage input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px hsl(232 40% 20% / .25); transition: transform .2s; }
+.gl-reglage input[type="checkbox"]:checked { background: var(--af-indigo); }
+.gl-reglage input[type="checkbox"]:checked::after { transform: translateX(18px); }
+.gl-reglage input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .gl-reglage input[type="checkbox"], .gl-reglage input[type="checkbox"]::after { transition: none; } }

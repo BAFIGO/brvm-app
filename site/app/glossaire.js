@@ -159,12 +159,19 @@
   const corps = $("#dlg-info-body");
   if (corps) new MutationObserver(() => setTimeout(() => annoter(corps), 0)).observe(corps, { childList: true });
 
-  // réglage dans le Profil (carte « Aide à la prise en main »)
+  // réglage dans le Profil (Mes réglages) et Lexique complet (Aide et informations)
   function carteReglage() {
-    const c = $("#v-profil .tuto-aide");
-    if (!c || $(".gl-reglage", c)) return;
-    c.insertAdjacentHTML("beforeend", `<label class="switch gl-reglage"><input type="checkbox"${actif() ? " checked" : ""}>
-      Souligner les mots techniques pour les expliquer d'un toucher</label>`);
+    const v = $("#v-profil");
+    if (!v || v.hidden) return;
+    if (!$(".gl-lexique", v)) {
+      const L = TERMES.map(([t, , d]) => [t, d]).sort((a, b) => a[0].localeCompare(b[0], "fr", { sensitivity: "base" }));
+      v.insertAdjacentHTML("beforeend", `<div class="card gl-lexique"><h2>Lexique</h2><p class="small muted">Les ${L.length} mots techniques de l'application, expliqués simplement.</p>
+        <dl class="gl-lex" data-no-gl>${L.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("")}</dl></div>`);
+    }
+    if ($(".gl-carte", v)) return;
+    v.insertAdjacentHTML("beforeend", `<div class="card gl-carte"><label class="switch gl-reglage"><input type="checkbox"${actif() ? " checked" : ""}>
+      <span>Souligner les mots expliqués<small>Les mots techniques en pointillés avec un « ? »</small></span></label></div>`);
+    const c = $(".gl-carte", v);
     $(".gl-reglage input", c).addEventListener("change", (ev) => {
       try { localStorage.setItem(CLE, ev.target.checked ? "oui" : "non"); } catch (e) { /* stockage indisponible */ }
       document.querySelectorAll("main > .view").forEach(nettoyer);
