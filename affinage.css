@@ -108,3 +108,47 @@ main .view:not([hidden]) { padding-bottom: 120px; }
 
 /* BafiBot : coup d'œil plus discret (la tête penche à peine) */
 @keyframes ia-tete { 25% { transform: rotate(-5deg); } 65% { transform: rotate(4deg); } }
+
+/* =====================================================================================
+ * Itération 3 : Aujourd'hui et Mon budget
+ * ===================================================================================== */
+
+/* chiffre du jour : série avec une flamme dessinée, lien vers le budget */
+.bu-serie { display: inline-flex; align-items: center; gap: 6px; }
+.bu-serie svg { width: 15px; height: 15px; fill: none; stroke: hsl(35 92% 65%); stroke-width: 2; stroke-linecap: round; }
+.bu-phrase-l { align-self: flex-start; color: #fff; font-size: .88rem; font-weight: 600; text-decoration: none; opacity: .92; min-height: 32px; display: inline-flex; align-items: center; }
+.bu-phrase-l:hover { opacity: 1; text-decoration: underline; color: #fff; }
+
+/* jour de paie : carte pleine largeur */
+.bu-jourpaie { display: flex; gap: 14px; align-items: flex-start; }
+.bu-jourpaie p { margin: 4px 0 10px; }
+
+/* « Mon résumé » : une seule carte, une ligne par sujet (coffre, placements, avenir) */
+.bu-resume-t { margin: 4px 2px -6px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.card.bu-resume { padding: 0 16px; }
+.bu-resume > .card { border: 0; border-radius: 0; box-shadow: none; background: none; margin: 0; padding: 12px 0; min-height: 60px; }
+.bu-resume > .card + .card { border-top: 1px solid var(--border); }
+.bu-pl-v { white-space: nowrap; font-weight: 600; }
+
+/* Mon budget : gagné, dépensé, gardé en trois colonnes */
+.bu-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 2px; padding-top: 10px; border-top: 1px solid rgb(255 255 255 / .16); }
+.bu-trio span { display: flex; flex-direction: column; min-width: 0; }
+.bu-trio small { font-size: .75rem; opacity: .8; }
+.bu-phrase .bu-trio b { font-size: .95rem; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+
+/* dernières opérations : la ligne entière se touche ; « Supprimer » n'apparaît qu'ensuite, avec « Annuler » */
+.bu-ops li.bu-op { display: block; }
+.bu-op-b { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; cursor: pointer; }
+.bu-op-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.bu-op-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 0 12px 48px; }
+.bu-op-act[hidden] { display: none; }
+.bu-op-act > .small { flex: 1 1 100%; color: var(--muted); }
+.bu-op-act .btn { flex: 0 0 auto; width: auto; min-height: 40px; }
+.btn.danger { background: var(--bad); color: #fff; border: 0; }
+.btn.danger:hover { filter: brightness(1.08); }
+
+/* 12 derniers mois : mois sans donnée visibles, « Dépensé » en indigo clair, export en liens */
+.bu-douze-g rect.vide { fill: var(--border); }
+.bu-douze-g rect.d { fill: hsl(230 45% 72%); } .bu-legende i.d { background: hsl(230 45% 72%); }
+.bu-export { align-items: center; gap: 2px 6px; }
+.bu-export .btn.link { min-height: 44px; padding: 0 4px; font-weight: 600; }

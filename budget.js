@@ -19,6 +19,7 @@
 
   // ------------------------------------------------------------------ catégories (pictogrammes) et enveloppes
   const P = {
+    flamme: '<path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-3 2-4 2-7 1 1 2 2 3 4"/>',
     nourriture: '<path d="M4 11h16l-1.5 8h-13z"/><path d="M8 11l4-6 4 6"/>',
     transport: '<rect x="3" y="8" width="18" height="9" rx="2"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="16.5" cy="17" r="1.5"/>',
     logement: '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
@@ -338,24 +339,27 @@
       <span class="bu-curseur${det ? " droite" : ""}" aria-hidden="true"></span></div>`; };
   // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
   function vueAccueil(c) {
-    return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}${blocPaie(c)}
+    return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}
       ${c.jour && !c.revMois ? `<section class="bu-phrase"><span class="small">Bienvenue</span><b style="font-size:1.35rem">Notez votre recette du jour</b>
           <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
-        ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      ${troisBoutons()}${blocSoir(c)}${blocRecette(c)}
+        <a href="#budget" class="bu-phrase-l" data-bu="voir-budget">Mon budget ›</a>
+        ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
+      ${troisBoutons()}${blocSoir(c)}${blocPaie(c)}${blocRecette(c)}
       ${blocRecurrents()}</div>
-      <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocPlacements()}${blocSemaine(c)}</div></div>`;
+      <div class="bu-col"><h2 class="bu-resume-t">Mon résumé</h2>
+        <section class="card bu-resume">${ligneCoffre(c)}${blocPlacements()}${blocAvenir(c)}</section>
+        ${blocCercle()}${blocSemaine(c)}</div></div>`;
   }
   function vueAccueilDetaille(c) {
     const env = (nom, v, max, cls) => `<div class="bu-env mini"><div class="bu-ligne small"><span>${nom}</span><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
-    return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}${blocPaie(c)}
+    return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}
       <section class="bu-phrase large"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         <span class="small">Reste à vivre du mois : ${F(Math.max(0, c.reste))} · gagné ${F(c.revMois)} · dépensé ${F(c.depMois)}</span>
-        ${c.serie ? `<span class="small">🔥 ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
+        ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
         ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.epargneCible, "amb")}</section>
-      ${troisBoutons()}${blocSoir(c)}${blocRecette(c)}${blocRecurrents()}</div>
+      ${troisBoutons()}${blocSoir(c)}${blocPaie(c)}${blocRecette(c)}${blocRecurrents()}</div>
       <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocSemaine(c)}
       <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}<div class="bu-place-bourse"></div></div></div>`;
   }
@@ -383,7 +387,7 @@
   function blocPaie(c) {
     const j = +c.p.jour_paie, d = new Date().getDate(), fin = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
     if (c.jour || !j || !(d === Math.min(j, fin) || d === Math.min(j, fin) + 1) || c.garde >= c.epargneCible) return "";
-    return `<section class="card bu-paie"><span class="bu-tuile amb">${ic(P.salaire)}</span><div><b>C'est jour de paie</b>
+    return `<section class="card bu-jourpaie"><span class="bu-tuile amb">${ic(P.salaire)}</span><div><b>C'est jour de paie</b>
       <p class="small">Gardez d'abord <b>${F(Math.max(0, c.epargneCible - c.garde))}</b>, avant les dépenses.</p>
       <button type="button" class="btn primary small" data-coffre="verser">Je garde maintenant</button></div></section>`;
   }
@@ -418,6 +422,13 @@
         ${autres > 0 ? `<p class="small muted">+ ${autres} autre${autres > 1 ? "s" : ""} projet${autres > 1 ? "s" : ""}</p>` : ""}
         ${!c.projets.length ? `<p class="small"><a href="#portefeuille" data-bu="coffre">Ajouter un projet</a></p>` : ""}</div></section>`;
   }
+  // Mon coffre en une ligne (résumé d'Aujourd'hui et de Mon budget) : le détail reste dans Mon coffre
+  function ligneCoffre(c) {
+    const pct = c.securiteObj ? Math.min(100, Math.round(100 * c.securite / c.securiteObj)) : 0, n = c.projets.length;
+    return `<a class="card bu-pl" href="#portefeuille" data-bu="coffre"><span class="bu-tuile amb petit">${ic(P.coffre)}</span>
+      <span class="bu-op-l"><b>Mon coffre</b><small>Sécurité ${pct} %${n ? ` · ${n} projet${n > 1 ? "s" : ""}` : ""}</small></span>
+      <b class="num bu-pl-v">${F(c.solde)}</b><span aria-hidden="true">›</span></a>`;
+  }
   // Mon avenir (accueil) : l'âge de liberté estimé, ou l'invitation à le calculer
   function blocAvenir(c) {
     const a = avenir(c);
@@ -438,10 +449,9 @@
         <p class="small">${aujN} sur ${m.length} ont gardé aujourd'hui</p>
         <div class="bu-pastilles">${m.slice(0, 8).map((x) => `<span class="${jour(x) ? "ok" : ""}" title="${esc(x.pseudo || "")}${jour(x) ? " : a gardé aujourd'hui" : ""}">${esc(String(x.pseudo || "?").slice(0, 1).toUpperCase())}</span>`).join("")}</div>
         ${att ? `<p class="small muted">Ce mois-ci, le cercle a tenu ${ten} jour${ten > 1 ? "s" : ""} sur ${att}${ten / att >= 0.7 ? " : bravo à tous !" : "."}</p>` : ""}
-        ${bravos.length ? `<p class="small bu-bravo">👏 ${esc(bravos.slice(0, 3).join(", "))}${bravos.length > 3 ? " et d'autres" : ""} ${bravos.length > 1 ? "vous encouragent" : "vous encourage"} aujourd'hui</p>` : ""}
+        ${bravos.length ? `<p class="small bu-bravo">${esc(bravos.slice(0, 3).join(", "))}${bravos.length > 3 ? " et d'autres" : ""} ${bravos.length > 1 ? "vous encouragent" : "vous encourage"} aujourd'hui</p>` : ""}
         ${c.jai_encourage ? `<p class="small muted">✓ Vous avez encouragé le cercle aujourd'hui.</p>`
-          : `<button type="button" class="btn small bu-encourager" data-bu="encourager" data-v="${esc(c.id)}">👏 J'encourage mon cercle</button>`}
-        ${creer}</div></section>`;
+          : `<button type="button" class="btn small bu-encourager" data-bu="encourager" data-v="${esc(c.id)}">J'encourage mon cercle</button>`}</div></section>`;
   }
   function blocPlacements() {
     const pl = app().placements?.();
@@ -516,14 +526,15 @@
     if (!essentiel()) return `<section class="card"><h2 class="bu-h2">Mes 12 derniers mois</h2>${verrouBu("Comparez vos mois sur un an et exportez votre budget (Excel, PDF) avec la formule Essentiel.")}</section>`;
     const l = douzeMois(), max = Math.max(1, ...l.map((x) => Math.max(x.gagne, x.depense)));
     const bw = 22, gap = 6, h = 120, W = l.length * (bw + gap);
-    const bar = (x, v, cls, dx) => v > 0 ? `<rect x="${x + dx}" y="${h - (v / max) * h}" width="${bw / 2 - 1}" height="${(v / max) * h}" rx="2" class="${cls}"/>` : "";
+    const bar = (x, v, cls, dx) => v > 0 ? `<rect x="${x + dx}" y="${h - (v / max) * h}" width="${bw / 2 - 1}" height="${(v / max) * h}" rx="2" class="${cls}"/>`
+      : `<rect x="${x + dx}" y="${h - 3}" width="${bw / 2 - 1}" height="3" rx="1.5" class="vide"/>`;
     return `<section class="card bu-douze"><div class="bu-ligne"><h2 class="bu-h2">Mes 12 derniers mois</h2></div>
       <div class="scroll-x"><svg viewBox="0 0 ${W} ${h + 18}" class="bu-douze-g" role="img" aria-label="Gagné et dépensé sur les 12 derniers mois">
         ${l.map((m, i) => { const x = i * (bw + gap); return `${bar(x, m.gagne, "g", 0)}${bar(x, m.depense, "d", bw / 2)}<text x="${x + bw / 2}" y="${h + 14}" text-anchor="middle">${esc(m.lib)}</text>`; }).join("")}</svg></div>
       <div class="bu-legende small"><span><i class="g"></i>Gagné</span><span><i class="d"></i>Dépensé</span></div>
       <details class="bu-douze-t"><summary class="small">Voir le tableau</summary><div class="scroll-x"><table class="dtable"><thead><tr><th>Mois</th><th class="num">Gagné</th><th class="num">Dépensé</th><th class="num">Gardé</th></tr></thead>
         <tbody>${l.slice().reverse().map((m) => `<tr><td>${esc(m.lib)} ${m.k.slice(0, 4)}</td><td class="num">${F(m.gagne)}</td><td class="num">${F(m.depense)}</td><td class="num">${F(m.garde)}</td></tr>`).join("")}</tbody></table></div></details>
-      <div class="bu-export"><button type="button" class="btn small" data-bu="export-csv">Exporter pour Excel</button><button type="button" class="btn small" data-bu="export-pdf">Imprimer ou enregistrer en PDF</button></div></section>`;
+      <div class="bu-export"><span class="small muted">Exporter :</span><button type="button" class="btn link small" data-bu="export-csv">Excel</button><span class="muted" aria-hidden="true">·</span><button type="button" class="btn link small" data-bu="export-pdf">PDF (imprimer)</button></div></section>`;
   }
   // Export Excel : CSV au format français (« ; », virgule décimale, accents conservés) ; une cellule ne commence
   // jamais par = + - @ (sinon Excel l'exécuterait comme une formule : injection de formules)
@@ -564,11 +575,15 @@
   function dernieres(n, c) {
     const l = S.mv.filter((m) => m.type !== "rien" && (!c || (m.date >= c.d0 && m.date <= c.d1))).slice(0, n);
     if (!l.length) return "";
-    return `<section class="card"><h2 class="bu-h2">Dernières opérations</h2><ul class="bu-ops">${l.map((m) => `<li>
-      <span class="bu-tuile ${m.type === "revenu" ? "" : "clair"} petit">${ic(P[m.categorie] || P.autres, m.type === "revenu" ? "#fff" : "currentColor")}</span>
-      <span class="bu-op-l">${esc(libCat(m))}<small>${new Date(m.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span>
-      <b class="${m.type === "revenu" ? "good" : ""}">${m.type === "revenu" ? "+" : "−"}${F(m.montant)}</b>
-      <button type="button" class="bu-suppr" data-bu="suppr" data-v="${m.id}" aria-label="Supprimer ${esc(libCat(m))} ${F(m.montant)}">×</button></li>`).join("")}</ul></section>`;
+    return `<section class="card"><h2 class="bu-h2">Dernières opérations</h2><ul class="bu-ops">${l.map((m) => `<li class="bu-op">
+      <button type="button" class="bu-op-b" data-bu="op-ouvrir" aria-expanded="false">
+        <span class="bu-tuile ${m.type === "revenu" ? "" : "clair"} petit">${ic(P[m.categorie] || P.autres, m.type === "revenu" ? "#fff" : "currentColor")}</span>
+        <span class="bu-op-l">${esc(libCat(m))}<small>${new Date(m.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span>
+        <b class="num${m.type === "revenu" ? " good" : ""}">${m.type === "revenu" ? "+" : "−"}${F(m.montant)}</b></button>
+      <div class="bu-op-act" hidden><span class="small">Supprimer cette opération ?</span>
+        <button type="button" class="btn small" data-bu="op-fermer">Annuler</button>
+        <button type="button" class="btn small danger" data-bu="suppr" data-v="${esc(m.id)}" aria-label="Supprimer ${esc(libCat(m))} ${F(m.montant)}">Supprimer</button></div></li>`).join("")}</ul>
+      <p class="small muted">Touchez une ligne pour la supprimer.</p></section>`;
   }
   function vueBudget(c, simple) {
     const mois = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
@@ -580,14 +595,14 @@
       <div class="bu-mois"><button type="button" class="btn small" data-bu="mois" data-v="-1" aria-label="Mois précédent"${(S.decal || 0) <= -MOIS_MAX() ? " disabled" : ""}>‹</button>
         <b>${esc(c.moisLib)}</b><button type="button" class="btn small" data-bu="mois" data-v="1" aria-label="Mois suivant"${(S.decal || 0) >= 0 ? " disabled" : ""}>›</button></div>
       <section class="bu-phrase large"><span class="small">${S.decal ? (simple ? "Il me restait" : "Reste à vivre") : simple ? "Il me reste" : "Reste à vivre"} · ${esc(c.moisLib)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
-        <span class="small">Gagné ${F(c.revMois)} · dépensé ${F(c.depMois)} · gardé ${F(c.garde)}</span>
+        <div class="bu-trio"><span><small>Gagné</small><b class="num">${F(c.revMois)}</b></span><span><small>Dépensé</small><b class="num">${F(c.depMois)}</b></span><span><small>Gardé</small><b class="num">${F(c.garde)}</b></span></div>
         ${S.decal ? `<span class="small">Mois terminé</span>` : `<span class="small">Aujourd'hui : ${F(c.duJour)} ${c.jour ? "(selon vos recettes du mois)" : `· ${c.joursRest} jour${c.joursRest > 1 ? "s" : ""} restant${c.joursRest > 1 ? "s" : ""}`}</span>`}</section>
+      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">${simple ? "Mon argent du mois" : "Mes enveloppes"}</h2>
           ${simple ? "" : `<label class="small">Profil <select data-bu="profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}"${(c.p.profil || "equilibre") === k ? " selected" : ""}>${v[0]} ${v[1]}/${v[2]}/${v[3]}</option>`).join("")}</select></label>`}</div>
         ${env(simple ? "Pour vivre" : "Besoins", "besoins", 1, "")}${env(simple ? "Pour se faire plaisir" : "Envies", "envies", 2, "env2")}${env(simple ? "Je garde" : "Épargne et avenir", "epargne", 3, "amb")}
-        <p class="small muted">Besoins : logement, nourriture, transport, santé, école, famille. Envies : sorties, habits, fêtes, abonnements.</p></section>
-      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
-      ${blocCoffre(c)}${dernieres(8, c)}${blocDouze()}${blocAbonnements(c)}${S.decal ? "" : blocSemaine(c)}
+        <details class="bu-def"><summary>Que mettre dans chaque enveloppe ?</summary><p class="small">Besoins : logement, nourriture, transport, santé, école, famille. Envies : sorties, habits, fêtes, abonnements.</p></details></section>
+      <section class="card bu-resume">${ligneCoffre(c)}</section>${dernieres(8, c)}${blocDouze()}${blocAbonnements(c)}${S.decal ? "" : blocSemaine(c)}
       ${blocPrevu(c)}
 `;
   }
@@ -892,6 +907,10 @@
       app().toast("C'est noté : votre série continue."); rendre();
     }
     else if (a === "reprendre") { S.retourVu = true; rendre(); }
+    else if (a === "op-ouvrir" || a === "op-fermer") {
+      const li = b.closest(".bu-op"), ouvrir = a === "op-ouvrir" && $(".bu-op-act", li).hidden;
+      $(".bu-op-act", li).hidden = !ouvrir; $(".bu-op-b", li).setAttribute("aria-expanded", String(ouvrir));
+    }
     else if (a === "suppr") {
       try { await app().budget.supprimer(+v); S.mv = S.mv.filter((m) => String(m.id) !== String(v)); app().toast("Opération supprimée."); rendre(); }
       catch (e) { app().toast("Impossible : " + (e.message || e)); }
