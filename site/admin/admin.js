@@ -187,7 +187,7 @@
       { id: "p4", nom: "Jeunes investisseurs UEMOA", presentation: "On apprend la bourse en épargnant.", createur: "koffi.a@exemple.ci", membres: 27, masque: false, signalements: 0, motifs: null, cree_le: "2026-07-14T10:00:00Z" }];
     const TARIFS_DEMO = [["essentiel_mois", "Essentiel · 1 mois", 1000, 1], ["essentiel_3mois", "Essentiel · 3 mois", 2700, 3], ["essentiel_an", "Essentiel · 1 an", 10000, 12],
       ["investisseur_mois", "Investisseur · 1 mois", 3000, 1], ["investisseur_an", "Investisseur · 1 an", 30000, 12],
-      ["pack_questions", "Pack BafiBot · 50 questions", 500, 0], ["pack_pages", "Pack import · 20 pages", 500, 0]].map(([objet, libelle, prix, duree_mois]) => ({ objet, libelle, prix, duree_mois, actif: true }));
+      ["pack_questions", "Pack Bim Bim · 50 questions", 500, 0], ["pack_pages", "Pack import · 20 pages", 500, 0]].map(([objet, libelle, prix, duree_mois]) => ({ objet, libelle, prix, duree_mois, actif: true }));
     const QUOTAS_DEMO = [{ formule: "decouverte", questions: 10, questions_debut: 20, approfondies: 0, pages: 2 },
       { formule: "essentiel", questions: 100, questions_debut: 0, approfondies: 0, pages: 15 }, { formule: "investisseur", questions: 300, questions_debut: 0, approfondies: 20, pages: 40 }];
     const AV = [
@@ -613,7 +613,7 @@
         <p>${puceFormule(a.formule, a.essai)} ${a.formule !== "decouverte" && a.fin ? `jusqu'au <b>${D(a.fin)}</b>` : "formule gratuite"}
           · origine : ${esc({ essai: "essai offert", paiement: "paiement", console: "console", parrainage: "parrainage" }[a.source] || "–")}</p>
         <table class="dtable"><tbody>
-          <tr><th>Questions à BafiBot ce mois-ci</th><td class="num">${N(u.questions)} / ${N(q.questions)}</td></tr>
+          <tr><th>Questions à Bim Bim ce mois-ci</th><td class="num">${N(u.questions)} / ${N(q.questions)}</td></tr>
           ${q.approfondies ? `<tr><th>Questions approfondies</th><td class="num">${N(u.approfondies)} / ${N(q.approfondies)}</td></tr>` : ""}
           <tr><th>Pages importées ce mois-ci</th><td class="num">${N(u.pages)} / ${N(q.pages)}</td></tr>
           <tr><th>Crédits des packs</th><td class="num">${N(cr.questions)} questions · ${N(cr.pages)} pages${cr.expire_le ? ` (jusqu'au ${D(cr.expire_le)})` : ""}</td></tr>
@@ -664,7 +664,7 @@
         <td><label class="small" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" data-k="actif" style="width:18px;height:18px"${t.actif ? " checked" : ""}> oui</label></td>
         <td><button class="btn small" data-tarif-ok>Enregistrer</button></td></tr>`).join("")}</tbody></table></div>
       <h3>Quotas mensuels par formule</h3>
-      <div class="scroll-x"><table class="dtable"><thead><tr><th>Formule</th><th class="num">Questions à BafiBot</th><th class="num">1re semaine</th>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Formule</th><th class="num">Questions à Bim Bim</th><th class="num">1re semaine</th>
         <th class="num">Dont approfondies</th><th class="num">Pages importées</th><th></th></tr></thead>
       <tbody>${(r.quotas || []).map((q) => `<tr data-formule="${esc(q.formule)}"><td>${esc(NOMS_F[q.formule] || q.formule)}</td>
         <td class="num">${champ(`data-k="questions" value="${q.questions}" aria-label="Questions ${esc(q.formule)}"`)}</td>
