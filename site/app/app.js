@@ -31,7 +31,7 @@
     dynamique: { t: "Dynamique", d: "Jusqu'à 70 % en actions et fonds actions. Plus de rendement attendu, plus de variations." },
   };
   const CLASSES = { actions: "Actions", obligations: "Obligations", opcvm_actions: "OPCVM actions", opcvm_taux: "OPCVM taux" };
-  const COLORS = { actions: "#2f8a72", obligations: "#c48a1a", opcvm_actions: "#5b73c4", opcvm_taux: "#a86aa6", liquidites: "#9aa0b4" };
+  const COLORS = { actions: "#1B286A", obligations: "#6E7BC4", opcvm_actions: "#98A3DC", opcvm_taux: "#BFC6EA", liquidites: "#DDE0EC" };   // nuances d'indigo (charte)
   const BUY = ["ACHAT", "ACHAT FORT", "SOUSCRIRE"];
 
   // ---------------------------------------------------------------- utilitaires
@@ -1815,7 +1815,7 @@
   const PART = (lignes, classe) => { const t = lignes.reduce((a, l) => a + (+l.montant || 0), 0) || 1;
     return lignes.filter((l) => (classe === "opcvm" ? /^opcvm/.test(l.classe) : l.classe === classe)).reduce((a, l) => a + (+l.montant || 0), 0) / t; };
   function simulateurHtml(L) {
-    const badge = `<span class="sim-pastille">Simulation</span>`;
+    const badge = `<span class="sim-pastille">Simulation · rien n'est acheté ni enregistré</span>`;
     if (!acces(1)) return `<div class="card sim-zone">${badge}<h2>Simulateur</h2>
       <p>Voyez ce que donnerait votre profil d'investisseur avec votre argent : la répartition visée, les écarts avec vos placements réels, et les ajustements possibles.</p>
       ${verrou(1, "Le simulateur")}</div>`;
@@ -1826,8 +1826,8 @@
     const r = ciblesP ? instantOrders(L.valeur > 0 ? L : { valeur: 0, cash: 0, positions: [] }, { montant: u.montant, cibles: ciblesP }) : null;
     const nA = r ? r.ordres.filter((o) => o.sens !== "VENTE").length : 0, nV = r ? r.ordres.length - nA : 0;
     const ecart = u.montant - reel;
-    let h = `<div class="card sim-zone">${badge}<h2>Simulateur</h2>
-      <p class="small">Ce que donnerait un profil d'investisseur avec un montant donné. <b>Rien n'est acheté ni enregistré</b> : vos ordres se passent chez votre SGI.</p>
+    let h = `<section class="card sim-zone sim-un" aria-label="Zone de simulation">${badge}
+      <p class="small muted sim-intro">Ce que donnerait un profil d'investisseur avec un montant donné. Vos ordres se passent chez votre SGI.</p>
       <div class="sim-reglages">
         <label>Montant simulé (F)<input type="number" min="0" step="10000" inputmode="numeric" id="sim-montant" value="${u.montant}"></label>
         <div class="sim-puces">${reel ? `<button type="button" class="puce${u.montant === reel ? " on" : ""}" data-sim-m="${reel}">Mon portefeuille (${F(reel)})</button>` : ""}
@@ -1836,14 +1836,14 @@
           ${acces(2) ? `<div class="seg" role="group" aria-label="Profil simulé">${Object.entries(PROFILS).map(([k, p]) =>
             `<button type="button" data-sim-p="${k}" aria-pressed="${u.profil === k}"${k === S.profil?.profil ? ` aria-label="${p.t}, mon profil"` : ""}>${p.t}${k === S.profil?.profil ? " ★" : ""}</button>`).join("")}</div>`
             : `<b>${esc(PROFILS[u.profil]?.t || "")}</b> <span class="small muted">(votre profil)</span>`}</div>
-      </div></div>`;
-    if (!r) return h + `<div class="card sim-zone"><p class="muted">Chargement des cibles du profil…</p></div>`;
+      </div>`;
+    if (!r) return h + `<p class="muted sim-part">Chargement des cibles du profil…</p></section>`;
     // le résultat d'abord, en une phrase ; le détail (répartition, ajustements) ensuite
-    h += `<div class="card sim-zone sim-resultat">${badge}<p class="sim-phrase">Avec <b>${F(u.montant)}</b> en profil <b>${esc(PROFILS[u.profil]?.t || u.profil)}</b>${r.ordres.length
+    h += `<div class="sim-part sim-resultat"><p class="sim-phrase">Avec <b>${F(u.montant)}</b> en profil <b>${esc(PROFILS[u.profil]?.t || u.profil)}</b>${r.ordres.length
         ? `, en ${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour y arriver.` : ". Vos placements y sont déjà."}</p>
       <p class="small muted">Une estimation, pas une promesse ni une recommandation.</p></div>`;
     // répartition : le réel en trait plein, la simulation en pointillés
-    h += `<div class="card sim-zone">${badge}<h2>Répartition</h2>
+    h += `<div class="sim-part"><h2>Répartition</h2>
       ${reel ? `<p class="rep-lbl">Aujourd'hui (réel)</p>${classBar(L.positions.filter((p) => p.valeur > 0 && CLASSES[p.classe]).map((p) => ({ classe: p.classe, montant: p.valeur })).concat(L.cash > 0 ? [{ classe: "liquidites", montant: L.cash }] : []))}` : ""}
       <p class="rep-lbl">Simulée · profil ${esc(PROFILS[u.profil]?.t || "")}${ecart ? ` · ${ecart > 0 ? "avec un apport de" : "avec un retrait de"} ${F(Math.abs(ecart))}` : ""}</p>
       <div class="sim-barre">${classBar(r.cible)}</div>
@@ -1852,25 +1852,26 @@
     // ajustements : un résumé et les principaux, sans bouton d'enregistrement (on n'enregistre que le réel)
     const tous = r.ordres.slice().sort((a, b) => b.quantite * b.prix_limite - a.quantite * a.prix_limite);
     const top = S.ui.simTous ? tous : tous.slice(0, 6);
-    h += `<details class="card sim-zone sim-ajust"${S.ui.simAjust ? " open" : ""}><summary>${badge}<h2>Ajustements simulés</h2><span class="small muted">le détail des achats et ventes</span></summary>
+    h += `<details class="sim-part sim-ajust"${S.ui.simAjust ? " open" : ""}><summary><span><b>Ajustements simulés</b><span class="small muted">Le détail des achats et ventes</span></span><span class="sim-ch" aria-hidden="true">›</span></summary>
       ${r.ordres.length ? `<p>${[nA ? `${nA} achat${nA > 1 ? "s" : ""}` : "", nV ? `${nV} vente${nV > 1 ? "s" : ""}` : ""].filter(Boolean).join(" et ")} pour se rapprocher de cette répartition :</p>
         <ul class="list">${top.map((o) => `<li class="vers-mk" data-vers-marche="${esc(o.code)}" tabindex="0" role="link" aria-label="Voir ${esc(nomLisible(o.libelle || o.code))} au Marché"><div class="main"><div class="name">${o.sens === "VENTE" ? "Vente" : "Achat"} · ${esc(nomLisible(o.libelle || o.code))} <span class="vers-mk-f" aria-hidden="true">›</span></div>
           <div class="sub">${esc(o.motif || "")}</div></div><div class="right num"><b>${N(o.quantite)} titre${o.quantite > 1 ? "s" : ""}</b><div class="sub">vers ${F(o.prix_limite)}</div></div></li>`).join("")}</ul>
         ${r.ordres.length > top.length ? `<button type="button" class="btn small" data-sim-tous>Voir les ${r.ordres.length - top.length} autre${r.ordres.length - top.length > 1 ? "s" : ""} (plus petits montants)</button>` : ""}`
       : `<p>Rien à ajuster : vos placements sont déjà proches de cette répartition.</p>`}
       <p class="small muted">Touchez un titre pour l'analyser au Marché ; c'est là que vous notez un achat ou une vente fait chez votre SGI.
-        Une estimation pour éclairer vos décisions, pas une recommandation.</p></details>`;
+        Une estimation pour éclairer vos décisions, pas une recommandation.</p></details></section>`;
     // Investisseur : les trois profils côte à côte
     if (acces(2)) {
       const lignes = Object.keys(PROFILS).map((k) => { const c = k === S.profil?.profil ? S.cibles : S.ciblesPar?.[k];
         return [k, c ? instantOrders(L.valeur > 0 ? L : { valeur: 0, cash: 0, positions: [] }, { montant: u.montant, cibles: c }) : null]; });
-      h += `<div class="card sim-zone">${badge}<h2>Comparer les profils</h2><p class="small muted">Pour ${F(u.montant)}, avec les cibles de ce soir.</p>
+      h += `<div class="card sim-zone">${badge}<h2>Comparer les trois profils</h2><p class="small muted">Pour ${F(u.montant)}, avec les cibles de ce soir.</p>
         <div class="scroll-x"><table class="dtable sim-comp"><thead><tr><th>Profil</th><th class="num">Actions</th><th class="num">Oblig.</th><th class="num c-opcvm">OPCVM</th><th title="Ampleur des variations à attendre">Variations</th></tr></thead>
         <tbody>${lignes.map(([k, x]) => `<tr class="${k === u.profil ? "on" : ""}"><td><b>${esc(PROFILS[k].t)}</b>${k === S.profil?.profil ? ` <span aria-label="mon profil">★</span>` : ""}</td>
           ${x ? `<td class="num">${Math.round(PART(x.cible, "actions") * 100)} %</td><td class="num">${Math.round(PART(x.cible, "obligations") * 100)} %</td>
           <td class="num c-opcvm">${Math.round(PART(x.cible, "opcvm") * 100)} %</td><td>${(() => { const a = PART(x.cible, "actions"); return a >= 0.45 ? "Fortes" : a >= 0.25 ? "Moyennes" : "Faibles"; })()}</td>` : `<td colspan="4" class="muted">…</td>`}</tr>`).join("")}</tbody></table></div>
         <p class="small muted">★ : votre profil. Plus de part en actions : plus de potentiel sur le long terme, mais des variations plus fortes. Aucun rendement n'est garanti. Pour changer de profil : Profil › Mon profil d'investisseur.</p></div>`;
-    } else h += `<div class="card sim-zone">${badge}<h2>Comparer les profils</h2>${verrou(2, "La comparaison des trois profils et la simulation d'un autre profil")}</div>`;
+    } else h += `<button type="button" class="card sim-comp-l" data-formules><span class="sim-cadenas" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+        <span><b>Comparer les trois profils</b><span class="small muted">Avec la formule Investisseur</span></span><span class="sim-voir">Voir ›</span></button>`;
     return h;
   }
   async function lierSimulateur(v, L) {
