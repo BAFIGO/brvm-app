@@ -813,10 +813,10 @@
     peindre(); dlg.showModal(); setTimeout(() => $("#bu-m", dlg).focus(), 60);
   }
   // dictée : « j'ai payé 2 500 de taxi », « j'ai gagné 12 000 aujourd'hui »
-  const MOTS = { transport: /taxi|bus|car|moto|essence|carburant|transport|clando|wôrô|woro/i, nourriture: /march|riz|pain|nourrit|manger|repas|cuisine|poisson|viande/i,
+  const MOTS = { transport: /taxi|\bbus\b|\bcar\b|moto|essence|carburant|transport|clando|wôrô|woro/i, nourriture: /march|\briz\b|\bpain|nourrit|manger|repas|cuisine|poisson|viande/i,
     logement: /loyer|maison|chambre|logement/i, famille: /famille|maman|papa|enfant|frère|soeur|sœur|parent/i, sante: /santé|sante|médic|medic|pharma|hôpital|hopital|docteur/i,
     ecole: /école|ecole|scolar|fourniture|cahier/i, ceremonie: /baptême|bapteme|mariage|funéraille|funeraille|cérémon|ceremon|fête|fete/i,
-    factures: /facture|électric|electric|eau|courant|crédit téléphone/i };
+    factures: /facture|électric|electric|\beau\b|courant|crédit téléphone/i };
   function dicter() {
     const R = window.SpeechRecognition || window.webkitSpeechRecognition, out = $(".bu-voix-r", dlg);
     if (!R) { out.textContent = "La dictée n'est pas disponible ici : utilisez le micro de votre clavier."; return; }
@@ -1002,7 +1002,67 @@
     catch (e) { await app().budget.supprimerProjet(id); S.projets = (S.projets || []).filter((x) => String(x.id) !== String(id)); }   // colonne absente : retiré
     rendre();
   }
-  window.BafiBudget = { render, contexte, projetsEnCours, realiserProjet, coffreHtml, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
+  // ---------------------------------------------------------------- Bim Bim : noter une dépense ou un revenu en le disant
+  // « J'ai payé 2 500 F de taxi », « j'ai reçu mon salaire, 400 000 » : lu sur le téléphone (aucun appel extérieur, aucune question décomptée).
+  const UNITES = { zero: 0, "zéro": 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, onze: 11, douze: 12, treize: 13,
+    quatorze: 14, quinze: 15, seize: 16, vingt: 20, trente: 30, quarante: 40, cinquante: 50, soixante: 60, cent: 100, cents: 100 };
+  function nombreEnLettres(t) {
+    const mots = t.toLowerCase().replace(/-/g, " ").split(/\s+/);
+    let total = 0, courant = 0, vu = false;
+    for (const w of mots) {
+      if (w in UNITES) { const v = UNITES[w]; vu = true; if (v === 100) courant = (courant || 1) * 100; else courant += v; }
+      else if (w === "mille") { vu = true; total += (courant || 1) * 1000; courant = 0; }
+      else if (/^millions?$/.test(w)) { vu = true; total += (courant || 1) * 1e6; courant = 0; }
+      else if (w === "et") continue;
+      else if (vu) break;
+    }
+    return vu ? total + courant : 0;
+  }
+  function montantDe(t) {
+    const x = t.toLowerCase().replace(/(\d)[\s.\u202f\u00a0](?=\d{3}(?!\d))/g, "$1");   // 2 500 / 2.500 → 2500
+    const m = x.match(/(\d+(?:,\d+)?)\s*(k\b|mille\b|millions?\b|m\b)?/);
+    if (m) { const n = parseFloat(m[1].replace(",", ".")); const mult = !m[2] ? 1 : /^k|mille/.test(m[2]) ? 1000 : 1e6; return Math.round(n * mult); }
+    return nombreEnLettres(x);
+  }
+  function comprendre(t) {
+    const s = String(t || "").trim();
+    if (!s || s.length > 160 || /\?\s*$/.test(s) || /^(combien|est[- ]ce|comment|pourquoi|quel|quelle|quand|où|ou en|peux|puis|explique|c'est quoi)/i.test(s)) return null;
+    const rev = /(gagn|reçu|recu|touch[ée]|encaiss|vendu|\bsalaire|recette|ma paie|ma paye)/i.test(s);
+    const dep = /(pay[ée]|dépens|depens|achet|donn[ée]|envoy[ée]|prêt[ée]|pret[ée]|réglé|regle|cotis)/i.test(s);
+    if (!rev && !dep) return null;
+    const montant = montantDe(s);
+    if (!montant || montant > 1e8) return null;
+    const type = dep && (!rev || /(pay[ée]|achet|dépens|depens|donn[ée]|envoy[ée])/i.test(s)) ? "depense" : "revenu";
+    if (type === "depense") {
+      const cat = Object.keys(MOTS).find((k) => MOTS[k].test(s)) || null;
+      const doute = /(donn[ée]|envoy[ée]|prêt[ée]|pret[ée])/i.test(s);       // donner, envoyer, prêter : on demande toujours
+      const choix = [...new Set([cat, "famille", "ceremonie", "nourriture", "transport"].filter(Boolean))].slice(0, 4).concat("autres")
+        .map((k) => [k, catDep(k)[1]]);
+      return { type, montant, cat: cat || "autres", sur: !!cat && !doute, choix };
+    }
+    const cat = /salaire|paie|paye/i.test(s) ? "salaire" : /recette|vendu|vente|client/i.test(s) ? "recette"
+      : /reçu de|recu de|envoy|transfert|wave|orange money|mobile money/i.test(s) ? "transfert" : null;
+    const defaut = S.profil?.rythme === "jour" ? "recette" : "salaire";
+    return { type, montant, cat: cat || defaut, sur: !!cat || !!S.profil?.rythme, choix: REV.map(([k, l]) => [k, l]) };
+  }
+  async function noterOperation(op) {
+    const type = op.type === "revenu" ? "revenu" : "depense", montant = Math.round(+op.montant);
+    if (!(montant > 0 && montant <= 1e8)) throw new Error("Montant invalide");
+    const cat = type === "revenu" ? (REV.some((r) => r[0] === op.cat) ? op.cat : "autres") : catDep(op.cat)[0];
+    const m = { date: auj(), type, montant, categorie: cat, enveloppe: type === "depense" ? catDep(cat)[2] : null, recurrent: false, credit: false };
+    const x = await app().budget.ajouter(m);
+    const ligne = x || { ...m, id: Date.now() };
+    S.mv.unshift(ligne); rendre();
+    const c = calculs();
+    return { id: ligne.id, libelle: libCat(m), duJour: c.duJour, garder: type === "revenu" ? Math.round(montant * c.part(3)) : 0 };
+  }
+  async function annulerOperation(id) {
+    await app().budget.supprimer(+id);
+    S.mv = S.mv.filter((m) => String(m.id) !== String(id)); rendre();
+  }
+  function ouvrirSaisie(op) { ouvrir(op.type === "revenu" ? "revenu" : "depense"); saisie.cat = op.cat || null; $("#bu-m", dlg).value = nf.format(Math.round(+op.montant || 0)); peindre(); }
+
+  window.BafiBudget = { render, comprendre, noterOperation, annulerOperation, ouvrirSaisie, garder, pret: () => !!(S.charge && S.profil), contexte, projetsEnCours, realiserProjet, coffreHtml, cercles: () => S.cercles || [], renderAccueil, renderObjectifs, renderAvenir, accueilSimple, accueilDetaille, enrichirDetaille, invitation,
     mode: () => (S.profil ? S.profil.mode : (S.charge && !app()?.nbOps?.() ? "simple" : null)), recharger: () => { S.charge = false; } };
   // À l'ouverture : en mode simple (ou pour un nouvel utilisateur), le budget est l'écran d'accueil
   window.addEventListener("brvm:pret", async () => {

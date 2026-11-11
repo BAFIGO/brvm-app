@@ -6,6 +6,7 @@
   "use strict";
 
   const $ = (s, r = document) => r.querySelector(s);
+  const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const MAX_HISTO = 8;                         // échanges renvoyés au serveur pour garder le fil de la conversation
@@ -17,6 +18,9 @@
   const ICONE_ENVOI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>`;
   const ICONE_PLUS = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`;
   const ICONE_X = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+  const ICONE_PHOTO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+  const ICONE_DOC = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>`;
+  const ICONE_GRAPHE = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 3 4-5"/></svg>`;
   const ONDE = Array.from({ length: 18 }, (_, i) => `<i style="--k:${i}"></i>`).join("");
 
   // ---------------------------------------------------------------- interface (créée une seule fois)
@@ -28,7 +32,7 @@
       <div class="ia-tete">
         <span class="ia-avatar">${tortue()}</span>
         <div class="ia-titres"><h2 id="ia-titre"><span class="marque-bot"><b class="mb-bafi">Bim</b> Bim</span></h2>
-          <p class="small muted">Votre assistant : il répond avec vos chiffres et l'actualité publiée</p></div>
+          <p class="small muted">Votre petite tortue : pas à pas, avec vos chiffres</p></div>
         <button type="button" class="ia-agrandir" aria-label="Agrandir la conversation" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <button type="button" class="ia-fermer" aria-label="Fermer Bim Bim">
@@ -40,20 +44,29 @@
         <label for="ia-q" class="sr-only">Votre question</label>
         <textarea id="ia-q" rows="1" maxlength="500" placeholder="Écrivez ou dictez votre question…" autocomplete="off"></textarea>
         <div class="ia-barre">
-          <button type="button" class="ia-plus" aria-label="Joindre l'avis de ma SGI (photo ou PDF)" data-import="">${ICONE_PLUS}</button>
+          <button type="button" class="ia-plus" aria-label="Joindre un avis ou un relevé" aria-haspopup="true" aria-expanded="false">${ICONE_PLUS}</button>
           <button type="button" class="ia-annuler" aria-label="Annuler la dictée" hidden>${ICONE_X}</button>
+          <button type="button" class="ia-appro" aria-pressed="false" hidden><svg class="ia-mini" viewBox="0 0 24 24" aria-hidden="true"><circle class="fond" cx="12" cy="12" r="9"/><circle class="arc" cx="12" cy="12" r="9"/></svg><span>Approfondir</span><b class="ia-appro-n"></b></button>
           <span class="ia-onde" aria-hidden="true">${ONDE}</span>
           <span class="ia-ecoute sr-only" aria-live="polite"></span>
           <button type="button" class="ia-micro" aria-label="Dicter ma question" aria-pressed="false" hidden>${ICONE_MICRO}</button>
-          <button type="submit" class="ia-envoyer" aria-label="Envoyer">${ICONE_ENVOI}</button>
+          <span class="ia-envoi"><svg class="ia-anneau" viewBox="0 0 52 52" aria-hidden="true"><circle class="fond" cx="26" cy="26" r="23.5"/><circle class="arc" cx="26" cy="26" r="23.5"/></svg>
+            <button type="submit" class="ia-envoyer" aria-label="Envoyer">${ICONE_ENVOI}</button>
+            <button type="button" class="ia-cpt" aria-expanded="false" hidden></button></span>
         </div>
+        <div class="ia-pop" role="status" hidden></div>
+        <div class="ia-feuille" hidden>
+          <button type="button" class="ia-opt" data-import=""><span class="ia-opt-ic">${ICONE_PHOTO}</span><span><b>Prendre en photo</b><small>Un avis d'opération ou un relevé de ma SGI</small></span></button>
+          <button type="button" class="ia-opt" data-import=""><span class="ia-opt-ic">${ICONE_DOC}</span><span><b>Choisir un PDF ou une image</b><small>Relevé trimestriel, avis de dividende, capture d'écran</small></span></button>
+          <button type="button" class="ia-opt" disabled><span class="ia-opt-ic i">${ICONE_GRAPHE}</span><span><b>Un graphique ou un tableau <em>Bientôt</em></b><small>Bim Bim le lira et vous l'expliquera</small></span></button>
+        </div>
+        <input type="checkbox" id="ia-appro" hidden>
       </form>
-      <div class="ia-quota" aria-live="polite"><span class="iq-txt"></span>
-        <label class="iq-appro" hidden><input type="checkbox" id="ia-appro"> Analyse approfondie <span class="iq-appro-n"></span></label></div>
+      <div class="ia-bas" hidden></div>
+      <div class="ia-pied"><p class="ia-avert">Pas un conseil en investissement.</p>
       <div class="ia-histo" hidden><button type="button" class="btn link small ia-effacer">Effacer mon historique</button>
         <span class="ia-conf" hidden><span class="small">Effacer vos 50 derniers échanges, sur tous vos appareils ?</span>
-          <button type="button" class="btn small danger ia-oui">Effacer</button><button type="button" class="btn small ia-non">Annuler</button></span></div>
-      <p class="ia-avert">Aide à la décision, pas un conseil en investissement. Vérifiez toujours avant de passer un ordre.</p>
+          <button type="button" class="btn small danger ia-oui">Effacer</button><button type="button" class="btn small ia-non">Annuler</button></span></div></div>
     </dialog>`);
 
   const fab = $("#fab-ia"), dlg = $("#dlg-ia"), fil = $(".ia-fil", dlg), sugg = $(".ia-sugg", dlg);
@@ -122,35 +135,128 @@
 
   // ---------------------------------------------------------------- envoi d'une question
   // Quota du mois : « 63 questions restantes » ; à 80 % consommé, l'alerte devient visible
+  // Compteurs : un anneau ambre autour du bouton d'envoi (questions du mois) et un mini-anneau sur « Approfondir »
+  const ARC = 2 * Math.PI * 23.5, ARC_MINI = 2 * Math.PI * 9;
+  let infoQuota = "", infoAppro = "", tPop = 0;
   function majQuota() {
-    const a = window.BRVM_APP?.abo?.(), z = $(".ia-quota", dlg);
-    if (!z) return;
-    if (!a) { z.hidden = true; return; }
+    const a = window.BRVM_APP?.abo?.(), cpt = $(".ia-cpt", dlg), envoi = $(".ia-envoi", dlg), bas = $(".ia-bas", dlg), appro = $(".ia-appro", dlg);
+    if (!a) { cpt.hidden = true; envoi.classList.remove("compte"); bas.hidden = true; appro.hidden = true; return; }
     const q = a.quotas || {}, u = a.usage || {}, c = a.credits || {};
-    const reste = Math.max(0, (q.questions || 0) - (u.questions || 0)) + (c.questions || 0);
-    const bas = reste <= Math.ceil((q.questions || 0) * 0.2);
-    z.hidden = false; z.classList.toggle("bas", bas);
-    $(".iq-txt", z).innerHTML = reste > 0 ? `${reste} question${reste > 1 ? "s" : ""} restante${reste > 1 ? "s" : ""} ce mois-ci`
-      + (bas ? ` · <button type="button" class="btn link small" data-formules>plus de questions</button>` : "")
-      : `Plus de question ce mois-ci · <button type="button" class="btn link small" data-formules>voir les packs</button>`;
+    const total = (q.questions || 0) + (c.questions || 0), reste = Math.max(0, (q.questions || 0) - (u.questions || 0)) + (c.questions || 0);
+    const faible = reste <= Math.ceil(total * 0.2);
+    envoi.classList.add("compte"); envoi.classList.toggle("bas", faible);
+    $(".ia-anneau .arc", dlg).style.strokeDasharray = `${(total ? (ARC * Math.min(reste, total)) / total : 0).toFixed(1)} ${ARC.toFixed(1)}`;
+    cpt.hidden = false; cpt.textContent = reste > 99 ? "99+" : String(reste);
+    cpt.setAttribute("aria-label", `${reste} question${reste > 1 ? "s" : ""} restante${reste > 1 ? "s" : ""} ce mois-ci : voir le détail`);
+    infoQuota = `<b>${reste} question${reste > 1 ? "s" : ""}</b> restante${reste > 1 ? "s" : ""} sur ${total} ce mois-ci.<span>Elles reviennent le 1er du mois prochain. Besoin de plus ? Pack de 50 questions : 500 F.</span>`;
+    bas.hidden = !faible;
+    bas.innerHTML = reste > 0 ? `Plus que <b>${reste} question${reste > 1 ? "s" : ""}</b> ce mois-ci. <button type="button" class="btn link small" data-formules>Ajouter 50 questions (500 F)</button>`
+      : `Plus de question ce mois-ci. <button type="button" class="btn link small" data-formules>Voir les packs</button>`;
     const ra = Math.max(0, (q.approfondies || 0) - (u.approfondies || 0));
-    $(".iq-appro", z).hidden = !(q.approfondies > 0);
-    $(".iq-appro-n", z).textContent = `(${ra} restante${ra > 1 ? "s" : ""})`;
-    $("#ia-appro").disabled = ra <= 0;
+    appro.hidden = !(q.approfondies > 0);
+    appro.disabled = ra <= 0;
+    if (ra <= 0) $("#ia-appro").checked = false;
+    $(".ia-mini .arc", appro).style.strokeDasharray = `${(q.approfondies ? (ARC_MINI * ra) / q.approfondies : 0).toFixed(1)} ${ARC_MINI.toFixed(1)}`;
+    $(".ia-appro-n", appro).textContent = String(ra);
+    appro.setAttribute("aria-pressed", String($("#ia-appro").checked));
+    appro.setAttribute("aria-label", `Approfondir la question (${ra} restante${ra > 1 ? "s" : ""} ce mois-ci)`);
+    infoAppro = `<b>Approfondir</b> : une réponse plus complète, avec les comptes et l'actualité de la société. <b>${ra} sur ${q.approfondies || 0}</b> restante${ra > 1 ? "s" : ""} ce mois-ci.`;
   }
+  function montrerPop(html, cote) {
+    const pop = $(".ia-pop", dlg);
+    pop.innerHTML = html; pop.dataset.cote = cote; pop.hidden = false;
+    clearTimeout(tPop); tPop = setTimeout(() => (pop.hidden = true), 6000);
+  }
+  $(".ia-cpt", dlg).addEventListener("click", (ev) => {
+    const pop = $(".ia-pop", dlg), b = ev.currentTarget, ouvert = !pop.hidden && pop.dataset.cote === "droite";
+    if (ouvert) { pop.hidden = true; b.setAttribute("aria-expanded", "false"); } else { montrerPop(infoQuota, "droite"); b.setAttribute("aria-expanded", "true"); }
+  });
+  $(".ia-appro", dlg).addEventListener("click", (ev) => {
+    const b = ev.currentTarget; if (b.disabled) return;
+    const on = !$("#ia-appro").checked; $("#ia-appro").checked = on; b.setAttribute("aria-pressed", String(on));
+    if (on) montrerPop(infoAppro, "gauche"); else $(".ia-pop", dlg).hidden = true;
+  });
+  // « + » : joindre un avis ou un relevé (la fenêtre d'import s'ouvre), le reste viendra
+  $(".ia-plus", dlg).addEventListener("click", (ev) => {
+    const f = $(".ia-feuille", dlg), ouvrir = f.hidden; f.hidden = !ouvrir; ev.currentTarget.setAttribute("aria-expanded", String(ouvrir));
+    if (ouvrir) f.querySelector(".ia-opt:not([disabled])")?.focus();
+  });
+  $(".ia-feuille", dlg).addEventListener("click", (ev) => { if (ev.target.closest("[data-import]")) { $(".ia-feuille", dlg).hidden = true; dlg.close(); } });
+  dlg.addEventListener("click", (ev) => {
+    if (!ev.target.closest(".ia-feuille, .ia-plus")) { $(".ia-feuille", dlg).hidden = true; $(".ia-plus", dlg).setAttribute("aria-expanded", "false"); }
+    if (!ev.target.closest(".ia-pop, .ia-cpt, .ia-appro")) $(".ia-pop", dlg).hidden = true;
+  });
   window.addEventListener("brvm:pret", () => setTimeout(majQuota, 300));
   fab?.addEventListener("click", () => setTimeout(majQuota, 50));
 
-  async function poser(question) {
+  // ---------------------------------------------------------------- « J'ai payé 2 500 F de taxi » : noté dans le budget, sans question décomptée
+  function carteOp(html) { const d = document.createElement("div"); d.className = "ia-carte"; d.innerHTML = html; fil.append(d); fil.scrollTop = fil.scrollHeight; return d; }
+  function memoriser(question, texte) {
+    histo.push({ role: "user", content: question }, { role: "assistant", content: texte });
+    window.BRVM_APP?.bafibot?.ajouter([{ role: "user", contenu: question }, { role: "assistant", contenu: texte }]).then(() => { $(".ia-histo", dlg).hidden = false; }).catch(() => {});
+  }
+  async function enregistrerOp(question, op, carte) {
+    const B = window.BafiBudget, rev = op.type === "revenu";
+    try {
+      const r = await B.noterOperation(op);
+      const montant = `${rev ? "+" : "−"}${nf.format(op.montant)} F`;
+      carte.innerHTML = `<p class="ia-carte-h"><span class="ia-ok" aria-hidden="true">✓</span>${rev ? "Revenu noté" : "Dépense notée"} dans votre budget</p>
+        <div class="ia-carte-l"><span><b>${esc(r.libelle)}</b><small>Aujourd'hui</small></span><b class="num${rev ? " good" : ""}">${montant}</b></div>
+        <div class="ia-carte-act"><button type="button" class="btn link small" data-iaop="modifier">Modifier</button><button type="button" class="btn link small" data-iaop="annuler">Annuler</button><span class="small muted ia-minuteur">annulable 10 s</span></div>`;
+      const fin = setTimeout(() => { const a = carte.querySelector('[data-iaop="annuler"]'); a?.remove(); const m = carte.querySelector(".ia-minuteur"); if (m) m.textContent = "à retrouver dans Mon budget"; }, 10000);
+      carte.addEventListener("click", async (ev) => {
+        const b = ev.target.closest("[data-iaop]"); if (!b) return;
+        b.disabled = true; clearTimeout(fin);
+        try { await B.annulerOperation(r.id); } catch (e) { bulle("ia erreur", "<p>Je n'ai pas pu retirer cette opération. Vous pouvez la supprimer dans Mon budget.</p>"); return; }
+        if (b.dataset.iaop === "annuler") { carte.innerHTML = `<p class="ia-carte-h">Annulé : rien n'est enregistré.</p>`; return; }
+        carte.innerHTML = `<p class="ia-carte-h">Corrigez le montant ou la catégorie, puis enregistrez.</p>`;
+        dlg.close(); B.ouvrirSaisie(op);
+      });
+      const texte = rev ? `C'est noté ! Votre plan dit de garder **${nf.format(r.garder)} F** d'abord, avant les dépenses.`
+        : `Il vous reste **${nf.format(Math.round(r.duJour))} F** à dépenser aujourd'hui. Rien n'a été compté sur vos questions.`;
+      const d = bulle("ia", formater(texte));
+      if (rev && r.garder > 0) {
+        d.insertAdjacentHTML("beforeend", `<div class="ia-choix"><button type="button" class="ia-chip on" data-garder="${r.garder}">Je garde ${nf.format(r.garder)} F</button><button type="button" class="ia-chip" data-plus-tard>Plus tard</button></div>`);
+        d.addEventListener("click", (ev) => {
+          if (ev.target.closest("[data-garder]")) { dlg.close(); B.garder(+ev.target.closest("[data-garder]").dataset.garder); }
+          if (ev.target.closest("[data-plus-tard]")) ev.target.closest(".ia-choix").remove();
+        });
+      }
+      memoriser(question, `${rev ? "Revenu" : "Dépense"} noté${rev ? "" : "e"} : ${r.libelle}, ${montant}. ${texte.replace(/\*\*/g, "")}`);
+      window.dispatchEvent(new Event("brvm:question"));
+    } catch (e) { carte.remove(); bulle("ia erreur", `<p>${esc("Je n'ai pas pu l'enregistrer : " + (e.message || e))}</p><p class="small">Vous pouvez la noter avec « J'ai dépensé » ou « J'ai gagné ».</p>`); }
+  }
+  function traiterOperation(question, op) {
+    champ.value = ""; ajusterChamp();
+    bulle("moi", esc(question));
+    if (!window.BafiBudget?.pret?.()) { bulle("ia", formater("Pour noter vos dépenses et vos revenus, commencez d'abord votre budget : menu ☰ > Mon budget.")); return; }
+    if (op.sur) { enregistrerOp(question, op, carteOp(`<p class="ia-carte-h">J'enregistre…</p>`)); return; }
+    const rev = op.type === "revenu";
+    const carte = carteOp(`<p class="ia-carte-h"><span>${rev ? "Un revenu" : "Une dépense"} de <b class="num">${nf.format(op.montant)} F</b> : dans quelle catégorie ?</span></p>
+      <div class="ia-choix">${op.choix.map(([k, l]) => `<button type="button" class="ia-chip${k === op.cat ? " on" : ""}" data-cat="${esc(k)}" aria-pressed="${k === op.cat}">${esc(l)}</button>`).join("")}</div>
+      <div class="ia-carte-act"><button type="button" class="btn link small" data-iaop="ok">Enregistrer</button><button type="button" class="btn link small" data-iaop="question">Ce n'est pas une ${rev ? "recette" : "dépense"}</button></div>`);
+    bulle("ia muet", `<p class="small muted">Quand je ne suis pas sûr, je vous demande avant d'enregistrer.</p>`);
+    carte.addEventListener("click", (ev) => {
+      const c = ev.target.closest("[data-cat]");
+      if (c) { op.cat = c.dataset.cat; carte.querySelectorAll("[data-cat]").forEach((x) => { const on = x === c; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on)); }); return; }
+      const b = ev.target.closest("[data-iaop]"); if (!b) return;
+      if (b.dataset.iaop === "ok") { carte.innerHTML = `<p class="ia-carte-h">J'enregistre…</p>`; enregistrerOp(question, op, carte); }
+      else { carte.remove(); fil.lastElementChild?.classList.contains("muet") && fil.lastElementChild.remove(); fil.lastElementChild?.remove(); poser(question, true); }
+    });
+  }
+
+  async function poser(question, brut = false) {
     question = String(question || "").trim();
     const app = window.BRVM_APP;
     if (!question || enCours || !app) return;
+    const op = !brut && window.BafiBudget?.comprendre?.(question);
+    if (op) { traiterOperation(question, op); return; }
     enCours = true; envoyer.disabled = true;
     champ.value = ""; ajusterChamp();
     bulle("moi", esc(question));
     const attente = bulle("ia attente", `${tortue("ia-tortue reflechit")}<span class="ia-reflechit" aria-hidden="true">Bim Bim réfléchit…</span><span class="sr-only">Bim Bim prépare sa réponse…</span>`);
     try {
-      const approfondie = !!$("#ia-appro")?.checked && !$(".iq-appro", dlg).hidden;
+      const approfondie = !!$("#ia-appro")?.checked && !$(".ia-appro", dlg).hidden;
       const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte([question, ...histo.filter((h) => h.role === "user").slice(-2).map((h) => h.content)].join(" \n ")), approfondie });
       if ($("#ia-appro")) $("#ia-appro").checked = false;
       app.noterUsage?.(approfondie ? "approfondies" : "questions");
@@ -189,7 +295,7 @@
   champ.addEventListener("input", ajusterChamp);
 
   // ---------------------------------------------------------------- « + » : joindre l'avis de sa SGI (import.js ouvre sa fenêtre)
-  $(".ia-plus", dlg).addEventListener("click", () => dlg.close());
+
 
   // ---------------------------------------------------------------- dictée (seulement si le navigateur la propose)
   // Pendant l'écoute : l'onde s'anime, le micro devient « arrêter » (carré) et le « + » devient « annuler » (×).
