@@ -52,6 +52,9 @@
       </form>
       <div class="ia-quota" aria-live="polite"><span class="iq-txt"></span>
         <label class="iq-appro" hidden><input type="checkbox" id="ia-appro"> Analyse approfondie <span class="iq-appro-n"></span></label></div>
+      <div class="ia-histo" hidden><button type="button" class="btn link small ia-effacer">Effacer mon historique</button>
+        <span class="ia-conf" hidden><span class="small">Effacer vos 50 derniers échanges, sur tous vos appareils ?</span>
+          <button type="button" class="btn small danger ia-oui">Effacer</button><button type="button" class="btn small ia-non">Annuler</button></span></div>
       <p class="ia-avert">Aide à la décision, pas un conseil en investissement. Vérifiez toujours avant de passer un ordre.</p>
     </dialog>`);
 
@@ -67,6 +70,19 @@
   const form = $(".ia-saisie", dlg), champ = $("#ia-q"), micro = $(".ia-micro", dlg), envoyer = $(".ia-envoyer", dlg);
   const histo = [];               // [{ role: "user" | "assistant", content }]
   let enCours = false, accueilFait = false, dernierCompte = 0;
+  // Historique gardé par la base (50 derniers échanges) et alertes déjà vues : les mêmes sur tous les appareils.
+  // Si la table n'est pas encore installée, BafiBot fonctionne comme avant (conversation gardée le temps de la visite).
+  let anciens = [], vues = null, histoPret = null;
+  function chargerHisto() {
+    const b = window.BRVM_APP?.bafibot;
+    if (!b || histoPret) return histoPret;
+    histoPret = Promise.allSettled([b.histo(), b.etat()]).then(([h, e]) => {
+      if (h.status === "fulfilled" && Array.isArray(h.value)) anciens = h.value.slice().reverse();
+      vues = e.status === "fulfilled" ? new Set(e.value?.alertes_vues || []) : null;
+      majBouton();
+    });
+    return histoPret;
+  }
 
   // ---------------------------------------------------------------- mise en forme des réponses (gras, listes, paragraphes)
   function formater(t) {
@@ -91,7 +107,8 @@
   function sources(list) {
     if (!list?.length) return "";
     return `<div class="ia-sources"><span>Sources</span><ul>${list.slice(0, 4).map((s) => {
-      let site = ""; try { site = new URL(s.url).hostname.replace(/^www\./, ""); } catch (e) { /* adresse invalide */ }
+      let site = "", u = null; try { u = new URL(s.url); site = u.hostname.replace(/^www\./, ""); } catch (e) { /* adresse invalide */ }
+      if (!u || !/^https?:$/.test(u.protocol)) return "";
       return `<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.titre || site)}</a>${site ? ` <span class="muted">(${esc(site)})</span>` : ""}</li>`;
     }).join("")}</ul></div>`;
   }
@@ -143,6 +160,9 @@
       const texte = rep?.texte || "Je n'ai pas de réponse pour le moment.";
       bulle("ia", formater(texte) + sources(rep?.sources));
       histo.push({ role: "user", content: question }, { role: "assistant", content: texte });
+      const src = (rep?.sources || []).slice(0, 4).map((x) => ({ titre: String(x.titre || "").slice(0, 200), url: String(x.url || "").slice(0, 500) }));
+      app.bafibot?.ajouter([{ role: "user", contenu: question }, { role: "assistant", contenu: texte.slice(0, 20000), sources: src.length ? src : null }])
+        .then(() => { $(".ia-histo", dlg).hidden = false; }).catch(() => { /* table pas encore installée : rien n'est gardé */ });
       window.dispatchEvent(new Event("brvm:question"));      // prise en main : « poser une question au robot » est fait
     } catch (e) {
       attente.remove();
@@ -218,9 +238,19 @@
   }
 
   // ---------------------------------------------------------------- ouverture / fermeture
-  function ouvrir() {
+  async function ouvrir() {
     const app = window.BRVM_APP;
     if (!accueilFait && app) {
+      await Promise.race([chargerHisto(), new Promise((ok) => setTimeout(ok, 1500))]);
+      if (anciens.length) {
+        const sep = document.createElement("p"); sep.className = "ia-sep small muted"; sep.textContent = "Vos échanges précédents"; fil.append(sep);
+        for (const m of anciens) {
+          if (m.role === "user") bulle("moi", esc(m.contenu)); else bulle("ia", formater(m.contenu) + sources(m.sources));
+          histo.push({ role: m.role, content: m.contenu });
+        }
+        const sep2 = document.createElement("p"); sep2.className = "ia-sep small muted"; sep2.textContent = "Aujourd'hui"; fil.append(sep2);
+        $(".ia-histo", dlg).hidden = false;
+      }
       const p = app.prenom(), n = app.urgentes();
       bulle("ia", formater(`Bonjour${p ? " " + p : ""} ! Je peux vous parler de votre portefeuille, de vos alertes, du marché du jour ou d'un titre précis.`
         + (n ? `\n\nVous avez **${n} alerte${n > 1 ? "s" : ""}** à regarder.` : "")
@@ -228,14 +258,15 @@
       accueilFait = true;
     }
     afficherSuggestions();
-    dlg.showModal();
+    marquerVues();
+    if (!dlg.open) dlg.showModal();
+    fil.scrollTop = fil.scrollHeight;
     if (!matchMedia("(pointer: coarse)").matches) champ.focus();
   }
   fab.addEventListener("click", ouvrir);
   window.addEventListener("brvm:ouvrir-assistant", (ev) => {
     if (fab.hidden) return;
-    ouvrir();
-    if (ev.detail?.question) setTimeout(() => poser(ev.detail.question), 250);   // premiers pas : question posée en une touche
+    ouvrir().then(() => { if (ev.detail?.question) setTimeout(() => poser(ev.detail.question), 250); });   // premiers pas : question posée en une touche
   });
   $(".ia-fermer", dlg).addEventListener("click", () => dlg.close());
   dlg.addEventListener("click", (ev) => { if (ev.target === dlg) dlg.close(); });     // toucher le fond ferme
@@ -251,9 +282,9 @@
     if (!app) return;
     fab.hidden = false;
     document.body.classList.add("has-ia");
-    const n = app.urgentes(), badge = $(".ia-badge", fab);
+    const cles = app.clesUrgentes?.() || [], n = vues ? cles.filter((k) => !vues.has(k)).length : app.urgentes(), badge = $(".ia-badge", fab);
     badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n);
-    fab.setAttribute("aria-label", n ? `Ouvrir BafiBot (${n} alerte${n > 1 ? "s" : ""} à regarder)` : "Ouvrir BafiBot");
+    fab.setAttribute("aria-label", n ? `Ouvrir BafiBot (${n} nouvelle${n > 1 ? "s" : ""} alerte${n > 1 ? "s" : ""})` : "Ouvrir BafiBot");
     if (n > dernierCompte) cligner();          // une seule animation, seulement quand il y a du nouveau
     dernierCompte = n;
   }
@@ -283,7 +314,32 @@
     if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, ambianceFaites ? 45000 + Math.random() * 45000 : 20000 + Math.random() * 10000);
   }
 
-  window.addEventListener("brvm:pret", () => { majBouton(); setTimeout(cligner, 900); planifierAmbiance(); });
+  // ouvrir BafiBot = avoir vu les alertes du moment (la liste est remplacée, les anciennes alertes en sortent)
+  function marquerVues() {
+    const app = window.BRVM_APP, cles = app?.clesUrgentes?.() || [];
+    if (!app?.bafibot) return;
+    const avant = vues ? [...vues].sort().join(",") : null;
+    vues = new Set(cles);
+    majBouton();
+    if (avant !== [...vues].sort().join(",")) app.bafibot.vu(cles.slice(0, 200)).catch(() => { /* table pas encore installée */ });
+  }
+  // effacer l'historique : deux gestes (Effacer, puis confirmer)
+  const zH = $(".ia-histo", dlg);
+  $(".ia-effacer", zH).addEventListener("click", () => { $(".ia-conf", zH).hidden = false; $(".ia-effacer", zH).hidden = true; $(".ia-non", zH).focus(); });
+  $(".ia-non", zH).addEventListener("click", () => { $(".ia-conf", zH).hidden = true; $(".ia-effacer", zH).hidden = false; $(".ia-effacer", zH).focus(); });
+  $(".ia-oui", zH).addEventListener("click", async (ev) => {
+    const b = ev.currentTarget; b.disabled = true;
+    try {
+      await window.BRVM_APP.bafibot.effacer();
+      anciens = []; histo.length = 0; fil.innerHTML = ""; accueilFait = false;
+      zH.hidden = true; $(".ia-conf", zH).hidden = true; $(".ia-effacer", zH).hidden = false;
+      bulle("ia", formater("Votre historique est effacé, sur tous vos appareils."));
+      champ.focus();
+    } catch (e) { bulle("ia erreur", `<p>L'historique n'a pas pu être effacé. Réessayez dans un instant.</p>`); }
+    finally { b.disabled = false; }
+  });
+
+  window.addEventListener("brvm:pret", () => { majBouton(); chargerHisto(); setTimeout(cligner, 900); planifierAmbiance(); });
 
   // ---------------------------------------------------------------- boutons flottants : ils s'effacent quand on descend
   // pour ne pas cacher les chiffres, et reviennent dès qu'on remonte ou qu'on arrive en bas de la page.

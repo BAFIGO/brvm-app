@@ -429,6 +429,12 @@
         return { tarifs: t.data || [], quotas: q.data || [] };
       },
       definirParrain: async (code) => { const { data } = await sb.rpc("definir_parrain", { p_code: code }); return data; },
+      // BafiBot : historique (50 derniers échanges, gardés par la base) et alertes déjà vues — chacun ne voit que les siens (RLS)
+      bafibotHisto: async () => r(await sb.from("bafibot_messages").select("id,role,contenu,sources").order("id", { ascending: false }).limit(100)),
+      bafibotAjouter: async (rows) => r(await sb.from("bafibot_messages").insert(rows)),
+      bafibotEffacer: async (uid) => r(await sb.from("bafibot_messages").delete().eq("user_id", uid)),
+      bafibotEtat: async () => r(await sb.from("bafibot_etat").select("alertes_vues").maybeSingle()),
+      bafibotVu: async (uid, vues) => r(await sb.from("bafibot_etat").upsert({ user_id: uid, alertes_vues: vues, maj_le: new Date().toISOString() })),
       // Assistant : fonction Supabase « assistant » (la clé de l'API Claude reste sur le serveur)
       assistant: async (body) => {
         const { data, error } = await sb.functions.invoke("assistant", { body });
@@ -651,6 +657,8 @@
         const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
         avisDemo = { ...a, statut: st }; return { statut: st };
       },
+      bafibotHisto: async () => [], bafibotAjouter: async () => {}, bafibotEffacer: async () => {},
+      bafibotEtat: async () => null, bafibotVu: async () => {},
       assistant: async (body) => {
         await new Promise((ok) => setTimeout(ok, 700));
         const c = body.contexte || {}, pf = c.portefeuille || {}, al = c.alertes_titres || [];
@@ -3752,7 +3760,11 @@
                           return d ? Math.floor((Date.now() - new Date(d)) / 864e5) : 0;
                         },
                         evenement: (e, x) => { api.evenementTutoriel(e, x ?? null).catch(() => {}); },
-                        prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length };
+                        prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length,
+                        // clés des alertes urgentes (titre + niveau) : la pastille de BafiBot ne compte que celles pas encore vues
+                        clesUrgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).map((a) => `${a.ticker}|${a.alerte}`),
+                        bafibot: { histo: () => api.bafibotHisto(), ajouter: (rows) => api.bafibotAjouter(rows), effacer: () => api.bafibotEffacer(S.user.id),
+                                   etat: () => api.bafibotEtat(), vu: (vues) => api.bafibotVu(S.user.id, vues) } };
     window.dispatchEvent(new Event("brvm:pret"));
   }
 
