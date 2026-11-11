@@ -26,10 +26,10 @@
       ic: ic('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8"/>') },
     { id: "pf:epargne", esp: 2, simple: true, nom: "Mon coffre", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
     { id: "pf:cercles", esp: 2, simple: true, nom: "Mes cercles", ic: ic('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="4.5" r="2"/><circle cx="5.5" cy="16" r="2"/><circle cx="18.5" cy="16" r="2"/>') },
-    { id: "pf:simulateur", esp: 3, nom: "Simuler un placement", ic: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>') },
-    { id: "marche", esp: 3, nom: "Marché", href: "#marche", ic: ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>') },
-    { id: "pf:placements", esp: 3, nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
-    { id: "performance", esp: 3, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
+    { id: "pf:simulateur", esp: 3, simple: true, nom: "Simuler un placement", ic: ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>') },
+    { id: "marche", esp: 3, simple: true, nom: "Marché", href: "#marche", ic: ic('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>') },
+    { id: "pf:placements", esp: 3, simple: true, nom: "Mes placements", ic: ic('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>') },
+    { id: "performance", esp: 3, simple: true, nom: "Performance", href: "#performance", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
   ];
   const NOMS_PF = { placements: "Mes placements", epargne: "Mon coffre", cercles: "Mes cercles", simulateur: "Simuler un placement" };
   // trois espaces, dans l'ordre du parcours : budget → épargne et cercles → bourse
@@ -59,7 +59,7 @@
           ${ic('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>')}<span class="ti-cadeau-pt" hidden></span></button>
       </div>
       <div class="ti-defile">
-        <ul class="ti-liste">${RUBRIQUES.map((r, i) => (r.esp !== RUBRIQUES[i - 1]?.esp ? `<li class="ti-esp"${r.esp === 3 ? " data-complet" : ""}>${ESPACES[r.esp]}</li>` : "")
+        <ul class="ti-liste">${RUBRIQUES.map((r, i) => (r.esp !== RUBRIQUES[i - 1]?.esp ? `<li class="ti-esp">${ESPACES[r.esp].replace(/^(\d) · /, '<b class="ti-num" aria-hidden="true">$1</b><span class="sr-only">$1 · </span>')}</li>` : "")
             + `<li${r.simple ? "" : " data-complet"}><a href="${r.href || "#portefeuille"}" class="ti-item" data-ti="${r.id}">${r.ic}<span>${r.nom}</span></a></li>`).join("")}
           <li class="ti-plus" hidden><button type="button" class="ti-item ti-plus-b">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}<span>Je fais grandir</span></button></li></ul>
         <div class="ti-bloc" data-bloc="epingles"><p class="ti-sous">Épinglés</p><ul class="ti-liste petite"></ul>
@@ -297,7 +297,7 @@
     const items = pins.map((x) => `<li><a href="#portefeuille" class="ti-item" data-epingle="titre" data-code="${esc(x.code)}"><span class="ti-pastille">${esc(joli(x.nom).slice(0, 1))}</span><span class="ti-txt">${esc(joli(x.nom))}</span></a></li>`)
       .concat(cer.map((c) => `<li><a href="#portefeuille" class="ti-item" data-epingle="cercle"><span class="ti-pastille rond">${esc((c.nom || "C").slice(0, 1))}</span><span class="ti-txt">${esc(c.nom || "Mon cercle")}</span></a></li>`));
     $("ul", bE).innerHTML = items.join("");
-    $(".ti-astuce", bE).hidden = pins.length > 0;
+    $(".ti-astuce", bE).hidden = pins.length > 0 || cer.length > 0;   // l'astuce seulement quand la liste est vide
   }
 
   // ---------------------------------------------------------------- en-tête : titre de l'écran, bouton « i » sur Profil

@@ -261,7 +261,7 @@
   // Discrètes et limitées : la première vers 10 s, puis une toutes les 20 à 40 s, 6 au plus par visite, jamais pendant que l'utilisateur
   // fait défiler, touche l'écran ou tape, ni quand la fenêtre est ouverte ou l'onglet caché.
   // Rien du tout si le téléphone demande de réduire les animations.
-  const MAX_AMBIANCE = 6;
+  const MAX_AMBIANCE = 3;
   let ambianceFaites = 0, derniereActivite = Date.now();
   for (const ev of ["scroll", "touchstart", "keydown", "pointerdown"])
     window.addEventListener(ev, () => { derniereActivite = Date.now(); }, { passive: true });
@@ -280,7 +280,7 @@
     planifierAmbiance();
   }
   function planifierAmbiance() {          // la première arrive vite (8 à 12 s), les suivantes toutes les 20 à 40 s
-    if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, ambianceFaites ? 20000 + Math.random() * 20000 : 8000 + Math.random() * 4000);
+    if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, ambianceFaites ? 45000 + Math.random() * 45000 : 20000 + Math.random() * 10000);
   }
 
   window.addEventListener("brvm:pret", () => { majBouton(); setTimeout(cligner, 900); planifierAmbiance(); });

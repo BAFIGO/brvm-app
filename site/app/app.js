@@ -43,9 +43,11 @@
   const F = (v) => (ok(v) ? nf0.format(Math.round(+v)) + " F" : "–");
   const montantHtml = (v) => (ok(v) ? `${nf0.format(Math.round(+v))}<span class="unite">&nbsp;F</span>` : "–");
   const N = (v) => (ok(v) ? nf0.format(+v) : "–");
-  const P = (v, sign = true) => (ok(v) ? (sign && +v > 0 ? "+" : "") + nf1.format(+v * 100) + " %" : "–");
+  const nz = (x) => (Math.abs(x) < 5e-4 ? 0 : x);           // sous 0,05 % : affiché « 0,0 % », sans couleur ni flèche (jamais « −0,0 % » en rouge)
+  const nz2 = (x) => (Math.abs(x) < 5e-5 ? 0 : x);
+  const P = (v, sign = true) => (ok(v) ? (sign && nz(+v) > 0 ? "+" : "") + nf1.format(nz(+v) * 100) + " %" : "–");
   const nf2 = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const P2 = (v) => (ok(v) ? (+v > 0 ? "+" : "") + nf2.format(+v * 100) + " %" : "–");
+  const P2 = (v) => (ok(v) ? (nz2(+v) > 0 ? "+" : "") + nf2.format(nz2(+v) * 100) + " %" : "–");
   const Dc = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "–");
   const D = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR") : "–");
   const today = () => new Date().toISOString().slice(0, 10);
@@ -63,7 +65,7 @@
     },
     consomme(type) { try { sessionStorage.setItem("brvm-sollicitation", type); } catch (e) { /* rien */ } },
   };
-  const cls = (v) => (ok(v) ? (+v > 0 ? "good" : +v < 0 ? "bad" : "") : "");
+  const cls = (v) => (ok(v) ? (nz(+v) > 0 ? "good" : nz(+v) < 0 ? "bad" : "") : "");
   // Score « bien noté » mais santé financière D ou E : l'étiquette ne promet pas plus que les comptes ne le permettent
   const chipSante = (d, note) => (/^[DE]$/.test(note || "") && (BUY.includes(d) || d === "RENFORCER")
     ? `<span class="chip warn" title="Score favorable, mais diagnostic financier : ${esc(SANTE[note] || "")}">Neutre · comptes fragiles</span>` : chip(d));
@@ -3352,12 +3354,12 @@
     };
     requestAnimationFrame(step);
   }
-  // Coffre flottant : seulement sur les écrans où l'on épargne (Aujourd'hui, Mon épargne, Mes cercles)
+  // Coffre flottant : sur Aujourd'hui et Mes cercles ; pas sur Mon coffre, où « Je garde » est déjà le bouton principal
   function majCoffre() {
     const t = tab(), o = S.ui.pfOnglet || "placements";
     // Sur l'accueil simple, « Je garde » est déjà l'un des trois gros boutons : pas de second bouton flottant
     const simple = t === "aujourdhui" && (window.BafiBudget?.accueilSimple?.() || window.BafiBudget?.accueilDetaille?.());
-    const fab = $("#fab-coffre"), showFab = !!S.coffre && !simple && (t === "aujourdhui" || (t === "portefeuille" && (o === "epargne" || o === "cercles")));
+    const fab = $("#fab-coffre"), showFab = !!S.coffre && !simple && (t === "aujourdhui" || (t === "portefeuille" && o === "cercles"));
     fab.hidden = !showFab;
     document.body.classList.toggle("has-fab", showFab);
     const aFaire = !!epargne()?.aFaire;

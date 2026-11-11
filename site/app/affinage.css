@@ -1,0 +1,154 @@
+/* BafiBourse – affinage visuel (itérations 1 et 2, révision validée le 11/11/2026) : surfaces, boutons, pictogrammes, boutons flottants, focus.
+ * Chargée en dernier. Aucune règle ne touche à la structure ni au comportement : uniquement l'apparence.
+ * Principes : couleurs à plat (plus de dégradés), ombres très légères, bordures fines,
+ * indigo pour les actions, ambre réservé à la marque et au coffre, focus toujours visible. */
+
+:root {
+  --af-indigo: hsl(231 52% 30%);          /* action principale et bandeaux (identique en clair et en sombre, texte blanc) */
+  --af-indigo-survol: hsl(231 52% 25%);
+  --af-bandeau: hsl(231 50% 24%);
+  --af-ombre-legere: 0 1px 2px hsl(232 40% 20% / .06);
+  --af-ombre-flottante: 0 6px 16px -8px hsl(232 50% 18% / .35);
+  --af-rayon-carte: 16px;
+  --af-ecart: 16px;
+}
+
+/* ---------------------------------------------------------------- 1. cartes : même rayon, bordure fine, pas d'ombre */
+.card { border-radius: var(--af-rayon-carte); box-shadow: none; }
+.bu-gros-b { box-shadow: none; border-radius: var(--af-rayon-carte); }
+.bu-gros-b:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+
+/* espacement régulier entre les grandes sections (Mon avenir : les cartes se touchaient) */
+#v-budget, #v-objectifs, #v-avenir { gap: var(--af-ecart); }
+#av-res { display: flex; flex-direction: column; gap: var(--af-ecart); }
+#av-res > * { margin: 0; }
+
+/* ---------------------------------------------------------------- 2. bandeaux de synthèse : indigo à plat */
+.bu-phrase, .recap-inv, .syn-recap, .ajout-import { background: var(--af-bandeau); }
+.ab-hero:not(.f-investisseur):not(.f-decouverte) { background: var(--af-bandeau); box-shadow: none; }
+
+/* ---------------------------------------------------------------- 3. boutons : un seul principal, à plat ; les secondaires discrets */
+.btn.primary { background: var(--af-indigo); box-shadow: var(--af-ombre-legere); filter: none; }
+.btn.primary:hover { background: var(--af-indigo-survol); box-shadow: var(--af-ombre-legere); filter: none; }
+.btn:not(.primary):not(.link):not(.danger) { border-width: 1px; box-shadow: none; }
+.ct-b .ct-ok { background: var(--af-indigo); }
+
+/* choix sélectionné (périodes, profils, montants, Simple/Détaillé) : indigo à plat, sans ombre */
+.bu-curseur { background: var(--af-indigo); box-shadow: none; }
+.bu-type button[aria-checked="true"], .bu-freq button[aria-checked="true"] { background: var(--af-indigo); }
+.bu-puce[aria-pressed="true"], .bu-puce[aria-checked="true"] { background: var(--af-indigo) !important; box-shadow: none; }
+
+/* ---------------------------------------------------------------- 4. pictogrammes : tuiles claires, trait fin, sans ombre */
+.bu-tuile { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.bu-tuile.amb { background: var(--warn-bg); color: var(--ambre-texte); box-shadow: none; }
+.bu-tuile svg { stroke-width: 1.8; }
+.bu-tuile svg[stroke] { stroke: currentColor; }   /* certains pictogrammes avaient un trait blanc écrit en dur */
+
+/* étape en cours (Mes objectifs) : cadre orange clair et fin, fond à peine teinté (décision du 11/11) */
+.bu-etage.actif { border: 1.5px solid hsl(35 85% 72%); background: color-mix(in srgb, var(--warn-bg) 45%, var(--surface)); }
+
+/* montant « Ce qu'il me faut » : une donnée, pas une alerte */
+.bu-besoin { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- 5. simulation : repère conservé, plus sobre */
+.card.sim-zone { border: 1px dashed color-mix(in srgb, var(--sim) 45%, var(--border));
+  background: color-mix(in srgb, var(--sim-doux) 40%, var(--surface)); }
+
+/* ---------------------------------------------------------------- 6. boutons flottants : plus petits, plus légers */
+.fab-ia, #fab-coffre { width: 52px !important; height: 52px !important; border-radius: 16px !important;
+  box-shadow: var(--af-ombre-flottante) !important; }
+.fab-ia { border-width: 1px !important; border-color: var(--border) !important; color: var(--accent); }
+.fab svg { width: 26px; height: 26px; }
+.defile-b { width: 36px; height: 36px; box-shadow: var(--af-ombre-legere); backdrop-filter: none; -webkit-backdrop-filter: none;
+  background: var(--surface); color: var(--muted); }
+
+/* bouton du menu : bordure fine plutôt qu'ombre */
+.nav-ouvrir { box-shadow: none; border: 1px solid var(--border); background: var(--surface); }
+
+/* le bas de chaque écran n'est plus masqué par les boutons flottants */
+main .view:not([hidden]) { padding-bottom: 120px; }
+
+/* ---------------------------------------------------------------- 7. chiffres alignés et focus visible partout */
+.bu-phrase b, .bu-ligne b, .card td, .card .right b { font-variant-numeric: tabular-nums; }
+:where(a, button, summary, [role="button"], [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bu-curseur { transition: none; }
+}
+
+/* =====================================================================================
+ * Itération 2 : menu, hausses et baisses, Mon avenir, animations
+ * ===================================================================================== */
+
+/* menu : numéro d'étape en pastille orange claire, point orange sur la page en cours */
+#tiroir .ti-esp { display: flex; align-items: center; gap: 8px; }
+#tiroir .ti-num { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; flex: none;
+  background: var(--warn-bg); color: var(--ambre-texte); font-size: .68rem; font-weight: 800; letter-spacing: 0; }
+.ti-item[aria-current="page"]::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ambre); }
+
+/* hausses et baisses : une flèche en plus de la couleur (jamais la couleur seule) */
+:is(td, b, span, div).good:not(.small):not(.chip)::before { content: "▲\00a0"; font-size: .72em; vertical-align: .08em; }
+:is(td, b, span, div).bad:not(.small):not(.chip)::before { content: "▼\00a0"; font-size: .72em; vertical-align: .08em; }
+
+/* Marché : le titre « Tendance du marché » n'apparaît plus deux fois (il reste lu par les lecteurs d'écran) */
+.tend-pli .tendance > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tend-pli > .tendance { border: 0; padding: 0; background: none; }
+
+/* Mon avenir : repère « libre à N ans », définition repliée, « Le prix d'attendre » */
+.bu-courbe .repere { stroke: var(--brand); stroke-width: 1; stroke-dasharray: 2 3; }
+.bu-courbe .libre { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
+.bu-courbe .libre-t { font-size: 10.5px; font-weight: 700; fill: var(--brand); }
+.bu-def { margin-top: 10px; border-radius: 12px; background: var(--surface-2); padding: 0 12px; }
+.bu-def > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--accent); }
+.bu-def > p { margin: 0; padding-bottom: 12px; }
+.bu-attente { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 8px; }
+.bu-attente > div { border-radius: 12px; padding: 10px 12px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; }
+.bu-attente > .maint { background: var(--accent-soft); }
+.bu-attente b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+
+/* BafiBot : coup d'œil plus discret (la tête penche à peine) */
+@keyframes ia-tete { 25% { transform: rotate(-5deg); } 65% { transform: rotate(4deg); } }
+
+/* =====================================================================================
+ * Itération 3 : Aujourd'hui et Mon budget
+ * ===================================================================================== */
+
+/* chiffre du jour : série avec une flamme dessinée, lien vers le budget */
+.bu-serie { display: inline-flex; align-items: center; gap: 6px; }
+.bu-serie svg { width: 15px; height: 15px; fill: none; stroke: hsl(35 92% 65%); stroke-width: 2; stroke-linecap: round; }
+.bu-phrase-l { align-self: flex-start; color: #fff; font-size: .88rem; font-weight: 600; text-decoration: none; opacity: .92; min-height: 32px; display: inline-flex; align-items: center; }
+.bu-phrase-l:hover { opacity: 1; text-decoration: underline; color: #fff; }
+
+/* jour de paie : carte pleine largeur */
+.bu-jourpaie { display: flex; gap: 14px; align-items: flex-start; }
+.bu-jourpaie p { margin: 4px 0 10px; }
+
+/* « Mon résumé » : une seule carte, une ligne par sujet (coffre, placements, avenir) */
+.bu-resume-t { margin: 4px 2px -6px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.card.bu-resume { padding: 0 16px; }
+.bu-resume > .card { border: 0; border-radius: 0; box-shadow: none; background: none; margin: 0; padding: 12px 0; min-height: 60px; }
+.bu-resume > .card + .card { border-top: 1px solid var(--border); }
+.bu-pl-v { white-space: nowrap; font-weight: 600; }
+
+/* Mon budget : gagné, dépensé, gardé en trois colonnes */
+.bu-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 2px; padding-top: 10px; border-top: 1px solid rgb(255 255 255 / .16); }
+.bu-trio span { display: flex; flex-direction: column; min-width: 0; }
+.bu-trio small { font-size: .75rem; opacity: .8; }
+.bu-phrase .bu-trio b { font-size: .95rem; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+
+/* dernières opérations : la ligne entière se touche ; « Supprimer » n'apparaît qu'ensuite, avec « Annuler » */
+.bu-ops li.bu-op { display: block; }
+.bu-op-b { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; cursor: pointer; }
+.bu-op-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.bu-op-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 0 12px 48px; }
+.bu-op-act[hidden] { display: none; }
+.bu-op-act > .small { flex: 1 1 100%; color: var(--muted); }
+.bu-op-act .btn { flex: 0 0 auto; width: auto; min-height: 40px; }
+.btn.danger { background: var(--bad); color: #fff; border: 0; }
+.btn.danger:hover { filter: brightness(1.08); }
+
+/* 12 derniers mois : mois sans donnée visibles, « Dépensé » en indigo clair, export en liens */
+.bu-douze-g rect.vide { fill: var(--border); }
+.bu-douze-g rect.d { fill: hsl(230 45% 72%); } .bu-legende i.d { background: hsl(230 45% 72%); }
+.bu-export { align-items: center; gap: 2px 6px; }
+.bu-export .btn.link { min-height: 44px; padding: 0 4px; font-weight: 600; }

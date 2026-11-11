@@ -26,6 +26,7 @@
     ["Obligation", ["obligation", "obligations"], "Un prêt à un État ou à une entreprise : il rapporte des intérêts (coupons) et le capital est remboursé à l'échéance."],
     ["Échéance", ["échéance", "échéances"], "La date à laquelle une obligation est remboursée."],
     ["Dividende", ["dividende", "dividendes"], "La part du bénéfice qu'une société verse à ses actionnaires, en général une fois par an. Elle n'est jamais garantie."],
+    ["Argent qui dort", ["argent qui dort"], "L'argent gardé sans être placé (compte courant, mobile money, tontine, à la maison) : il ne rapporte rien et, avec la hausse des prix, il achète un peu moins chaque année."],
     ["Rendement", ["rendement"], "Ce qu'un placement rapporte chaque année (dividende ou intérêts), en pourcentage de son prix."],
     ["Avis d'opéré", ["avis d'opéré", "avis d'exécution"], "Le document envoyé par votre SGI après chaque achat ou vente : titre, quantité, cours et frais."],
     ["Prix limite", ["prix limite", "limite"], "Le prix maximum que vous acceptez de payer à l'achat, ou le minimum à la vente : votre ordre ne passe pas au-delà."],
