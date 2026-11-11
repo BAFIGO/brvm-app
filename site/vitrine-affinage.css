@@ -1,0 +1,61 @@
+/* BafiBourse – vitrine alignée sur l'application (révision UX de novembre 2026).
+ * Chargée en dernier. Uniquement l'apparence : les animations et la structure de la vitrine restent les mêmes.
+ * Mêmes principes que l'app : couleurs à plat, ombres très légères, indigo pour les actions,
+ * ambre réservé à la marque et au coffre, pictogrammes au trait dans des tuiles claires, plus d'émojis. */
+
+:root {
+  --vf-indigo: hsl(231 52% 30%);
+  --vf-indigo-survol: hsl(231 52% 25%);
+  --vf-ambre: hsl(35 92% 55%);
+  --vf-ambre-doux: hsl(35 92% 55% / .16);
+  --vf-ambre-texte: hsl(30 80% 33%);
+  --vf-ombre: 0 1px 2px hsl(232 40% 20% / .06);
+  --vf-ombre-flottante: 0 6px 16px -8px hsl(232 50% 18% / .35);
+}
+
+/* 1. boutons : un seul principal, indigo à plat (comme dans l'app) */
+.btn.primary { background: var(--vf-indigo) !important; box-shadow: var(--vf-ombre) !important; }
+.btn.primary:hover { background: var(--vf-indigo-survol) !important; filter: none !important; box-shadow: var(--vf-ombre) !important; }
+.btn:not(.primary):not(.link) { border-width: 1px; }
+.v-foot .btn.primary { background: var(--vf-ambre) !important; color: hsl(232 34% 12%) !important; }      /* pied de page sombre : la marque */
+.v-foot .btn.primary:hover { background: hsl(35 92% 50%) !important; }
+
+/* 2. pictogrammes : tuiles claires, trait fin, sans ombre (ambre = coffre, indigo = le reste) */
+.bf-ic { box-shadow: none !important; }
+.bf-coffre, .bf-import, .ie-ic { background: var(--vf-ambre-doux) !important; color: var(--vf-ambre-texte) !important; }
+.bf-recap { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.bf-bot { background: var(--accent-soft) !important; color: var(--accent) !important; box-shadow: none !important; }
+.bf-ic svg, .ie-ic svg, .tf-ic svg { stroke-width: 1.8; }
+
+/* 3. coches des listes : pastille indigo claire (l'ambre reste à la marque et au coffre) */
+.aj-ok { background: var(--accent-soft) !important; color: var(--accent) !important; border-radius: 50% !important; width: 22px !important; height: 22px !important; font-size: .72rem !important; }
+.tf ul li::before { background: var(--accent-soft) !important; color: var(--accent) !important; }
+
+/* 4. cartes : même rayon, bordure fine, ombre très légère */
+.card, .tf, .pc-etapes li, .imp-etapes li, .points li, .imp-resultat, .pc-ecran, .bb-chat { box-shadow: var(--vf-ombre) !important; }
+.card, .pc-etapes li, .imp-etapes li { border-radius: 16px; }
+
+/* 5. coffre : le bouton du coffre est ambre, comme dans l'app */
+.ev-fab { background: var(--vf-ambre) !important; color: hsl(232 50% 18%) !important; box-shadow: var(--vf-ombre-flottante) !important; border-radius: 16px !important; width: 52px !important; height: 52px !important; }
+
+/* 6. cercles : initiales sobres, « Vous » en indigo plein, séries sans émoji */
+.cv-av { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.cv-av.av-d, .moi .cv-av { background: var(--vf-indigo) !important; color: #fff !important; }
+.cv-membre { box-shadow: var(--vf-ombre) !important; border: 1px solid var(--border); }
+.cv-membre small { font-variant-numeric: tabular-nums; }
+
+/* 7. BafiBot : questions proposées comme dans la fenêtre de l'app (contour indigo) */
+.bb-questions li { background: var(--surface) !important; border: 1px solid var(--accent); }
+.bb-avatar { background: var(--accent-soft); }
+
+/* 8. « Aujourd'hui » : hausses avec ▲ (jamais la couleur seule) */
+.ha-up { font-variant-numeric: tabular-nums; }
+
+/* 9. tarifs : la formule conseillée reste mise en avant, mais à plat */
+.tf.reco { background: var(--surface) !important; border: 1.5px solid var(--vf-indigo) !important; box-shadow: var(--vf-ombre-flottante) !important; }
+.tf.reco .tf-ic { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.tf-or .tf-ic { background: var(--vf-ambre-doux) !important; color: var(--vf-ambre-texte) !important; }
+.tf-prix, .pc-l b, .ev-stats b, .ha-val { font-variant-numeric: tabular-nums; }
+
+/* 10. focus toujours visible */
+:where(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
