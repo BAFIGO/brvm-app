@@ -32,7 +32,7 @@
     probleme: ["Signaler un problème", "Dites-nous ce qui ne va pas : l'écran et la version de l'application sont joints automatiquement."],
     idee: ["Proposer une idée", "Une fonction qui vous manque, une amélioration ? Toutes les idées sont lues."],
   };
-  const SUJETS = { contact: ["Une question", "Mon abonnement", "Un problème", "Un partenariat", "Autre"], idee: ["Budget", "Épargne", "Bourse", "BafiBot", "Autre"] };
+  const SUJETS = { contact: ["Une question", "Mon abonnement", "Un problème", "Un partenariat", "Autre"], idee: ["Budget", "Épargne", "Bourse", "Bim Bim", "Autre"] };
   let dlg = null;
   function ouvrir(type = "contact", o = {}) {
     if (!dlg) {

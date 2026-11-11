@@ -163,7 +163,7 @@
       $$("[data-q]").forEach((e) => { const [f, k] = e.dataset.q.split("."); if (Q[f]?.[k] != null) e.textContent = nf.format(Q[f][k]); });
       $$("[data-pack]").forEach((e) => {
         const x = T[e.dataset.pack]; if (!x) return;
-        e.textContent = x.credit_questions ? `${nf.format(x.credit_questions)} questions à BafiBot pour ${F(x.prix)}` : `${nf.format(x.credit_pages)} pages importées pour ${F(x.prix)}`;
+        e.textContent = x.credit_questions ? `${nf.format(x.credit_questions)} questions à Bim Bim pour ${F(x.prix)}` : `${nf.format(x.credit_pages)} pages importées pour ${F(x.prix)}`;
       });
     } catch (e) { /* tables pas encore créées : les tarifs affichés restent ceux de la page */ }
   }
@@ -245,8 +245,8 @@
   }
 
   // ------------------------------------------------------------ animations
-  // ------------------------------------------------------------ BafiBot : une conversation qui se joue quand on la regarde
-  // Les bulles arrivent une à une, avec « BafiBot écrit… » ; rejouée à chaque retour ; figée si l'on réduit les animations.
+  // ------------------------------------------------------------ Bim Bim : une conversation qui se joue quand on la regarde
+  // Les bulles arrivent une à une, avec « Bim Bim écrit… » ; rejouée à chaque retour ; figée si l'on réduit les animations.
   function conversationBafiBot() {
     const fil = $(".bb-fil"), av = $(".bb-avatar"), etat = $(".bb-etat");
     if (!fil || CALME) return;
