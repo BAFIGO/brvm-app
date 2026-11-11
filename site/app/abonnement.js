@@ -1,5 +1,5 @@
 /* BafiBourse – « Mon abonnement » (rubrique du Profil).
- * Formule en cours et jours restants, consommation du mois (BafiBot, pages importées), les trois formules, les packs,
+ * Formule en cours et jours restants, consommation du mois (Bim Bim, pages importées), les trois formules, les packs,
  * le parrainage. En attendant l'agrégateur, « Choisir » enregistre une demande ; la console l'active à réception du paiement. */
 (() => {
   "use strict";
@@ -72,7 +72,7 @@
 
   const DEF_PRIX = { essentiel_mois: ["Essentiel · 1 mois", 1000, 1], essentiel_3mois: ["Essentiel · 3 mois", 2700, 3], essentiel_an: ["Essentiel · 1 an", 10000, 12],
     investisseur_mois: ["Investisseur · 1 mois", 3000, 1], investisseur_an: ["Investisseur · 1 an", 30000, 12],
-    pack_questions: ["Pack BafiBot · 50 questions", 500, 0, 50, 0], pack_pages: ["Pack import · 20 pages", 500, 0, 0, 20] };
+    pack_questions: ["Pack Bim Bim · 50 questions", 500, 0, 50, 0], pack_pages: ["Pack import · 20 pages", 500, 0, 0, 20] };
   const DEF_Q = { decouverte: { questions: 10, questions_debut: 20, approfondies: 0, pages: 2 }, essentiel: { questions: 100, questions_debut: 0, approfondies: 0, pages: 15 },
     investisseur: { questions: 300, questions_debut: 0, approfondies: 20, pages: 40 } };
   // Offres actives : { objet: [libellé, prix, durée en mois, questions du pack, pages du pack] }
@@ -94,18 +94,18 @@
                  "Mon coffre : un seul plan, trois poches (sécurité, projets, bourse)", "Mes objectifs, Mon avenir (âge de liberté)",
                  "Séries, trophées, bilan de la semaine, rappel du soir", "1 cercle d'épargne",
                  "Suivi réel de vos placements, point du soir", "Score, diagnostic financier et tendance de chaque titre",
-                 d.questions_debut > d.questions ? `BafiBot : ${n(d.questions_debut)} questions la 1re semaine, puis ${n(d.questions)} par mois` : `BafiBot : ${n(d.questions)} questions par mois`,
+                 d.questions_debut > d.questions ? `Bim Bim : ${n(d.questions_debut)} questions la 1re semaine, puis ${n(d.questions)} par mois` : `Bim Bim : ${n(d.questions)} questions par mois`,
                  `${n(d.pages)} page${d.pages > 1 ? "s" : ""} importée${d.pages > 1 ? "s" : ""} par mois`] },
       { k: "essentiel", nom: "Essentiel", mois: o.essentiel_mois?.[1], an: o.essentiel_an?.[1], pour: "Pour épargner et investir sereinement", reco: true,
         plus: "Tout Découverte, plus :",
         points: ["Affichage détaillé du budget : enveloppes, profil réglable", "Rappels par WhatsApp", "Cercles illimités et encouragements",
                  "Simulateur : la répartition de votre profil", "Ce qui fait la note de chaque titre", "Performance complète et export",
-                 `BafiBot : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`] },
+                 `Bim Bim : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`] },
       { k: "investisseur", nom: "Investisseur", mois: o.investisseur_mois?.[1], an: o.investisseur_an?.[1], pour: "Pour suivre plusieurs lignes en détail",
         plus: "Tout Essentiel, plus :",
         points: ["Analyses financières complètes et notations d'agences", "Simulateur avancé : comparer les profils, tester un montant",
                  "Comparateurs, seuils d'alerte personnalisés, rapport mensuel",
-                 `BafiBot : ${n(i.questions)} questions${i.approfondies ? `, dont ${n(i.approfondies)} approfondies` : ""}`, `${n(i.pages)} pages importées par mois`] },
+                 `Bim Bim : ${n(i.questions)} questions${i.approfondies ? `, dont ${n(i.approfondies)} approfondies` : ""}`, `${n(i.pages)} pages importées par mois`] },
     ].filter((f) => f.k === "decouverte" || f.mois != null);
   }
   const libObjet = (k) => offres()[k]?.[0] || k;
@@ -144,7 +144,7 @@
       ${a.essai ? `<p class="small ab-essai">Pendant l'essai, vous profitez de tout l'Essentiel. Ensuite, vous repassez en Découverte, sans rien payer ni perdre vos données.</p>` : ""}
       ${a.demande ? `<div class="notice small">Demande en cours : <b>${esc(libObjet(a.demande.objet))}</b>, envoyée le ${new Date(a.demande.cree_le).toLocaleDateString("fr-FR")}. Elle sera activée dès réception de votre paiement.</div>` : ""}
       <h3>Ce mois-ci</h3>
-      <div class="ab-consos">${barre("bot", "Questions à BafiBot", u.questions || 0, q.questions || 0, c.questions)}
+      <div class="ab-consos">${barre("bot", "Questions à Bim Bim", u.questions || 0, q.questions || 0, c.questions)}
       ${q.approfondies ? barre("loupe", "Questions approfondies", u.approfondies || 0, q.approfondies) : ""}
       ${barre("page", "Pages importées", u.pages || 0, q.pages || 0, c.pages)}</div>
       <h3 id="ab-formules">Les formules</h3>
@@ -156,7 +156,7 @@
           ${x.k === f && !a.essai ? `<span class="ab-actuel">✓ Votre formule</span>` : x.mois ? `<button type="button" class="btn${x.reco ? " primary" : ""}" data-abo="${x.k}">${x.k === f ? "Continuer après l'essai" : `Choisir ${x.nom}`}</button>` : ""}
         </div>`).join("")}</div>
       <h3>Les packs</h3>
-      <div class="ab-packs">${[["pack_questions", 3, "questions à BafiBot"], ["pack_pages", 4, "pages à importer"]].filter(([k]) => offres()[k]).map(([k, i, lib]) =>
+      <div class="ab-packs">${[["pack_questions", 3, "questions à Bim Bim"], ["pack_pages", 4, "pages à importer"]].filter(([k]) => offres()[k]).map(([k, i, lib]) =>
         `<button type="button" class="ab-pack" data-abo-objet="${k}"><span class="ab-pack-ic">${SVG(ICO[k === "pack_pages" ? "page" : "bot"])}</span>
           <span class="ab-pack-t"><b>${nf.format(offres()[k][i] || 0)} ${lib}</b><span>${F(offres()[k][1])} · valables 3 mois</span></span><span class="ab-pack-plus">${SVG(ICO.plus)}</span></button>`).join("")}</div>
       <div class="ab-parrainage"><span class="ab-cadeau">${SVG(ICO.cadeau)}</span>

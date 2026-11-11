@@ -10,11 +10,9 @@
   const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const MAX_HISTO = 8;                         // échanges renvoyés au serveur pour garder le fil de la conversation
 
-  const VISAGE = `<svg viewBox="0 0 32 32" aria-hidden="true" class="ia-visage">
-      <path d="M16 3.5v3.2"/><circle cx="16" cy="3" r="1.4" class="plein"/>
-      <rect x="5" y="7.5" width="22" height="18" rx="7"/>
-      <g class="yeux"><ellipse cx="11.8" cy="15.6" rx="1.7" ry="2.1" class="plein"/><ellipse cx="20.2" cy="15.6" rx="1.7" ry="2.1" class="plein"/></g>
-      <path d="M12.5 20.6c1.9 1.5 5.1 1.5 7 0"/><path d="M2.5 14.5v5M29.5 14.5v5"/></svg>`;
+  // Bim Bim, la petite tortue de BafiBourse (patience et discipline). Chaque dessin a son propre dégradé (identifiant unique).
+  let nTortue = 0;
+  const tortue = (cls = "ia-tortue") => { const id = "tt" + (++nTortue); return `<svg class="${cls}" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="tt-h"/><stop offset="1" class="tt-b"/></linearGradient></defs><g class="tt-corps"><ellipse class="tt-sol" cx="16" cy="27.2" rx="10.5" ry="1"/><path class="tt-patte g tt-peau" d="M9.9 21.9c-2.7.3-4.8 2.2-5 4.5h5.1c.1-1.5.6-2.6 1.3-3.5z"/><path class="tt-patte d tt-peau" d="M22.1 21.9c2.7.3 4.8 2.2 5 4.5h-5.1c-.1-1.5-.6-2.6-1.3-3.5z"/><path class="tt-bord" d="M3.7 19C5.9 22.5 26.1 22.5 28.3 19" fill="url(#${id})"/><ellipse class="tt-creux" cx="16" cy="19.5" rx="5.6" ry="2.4"/><g class="tt-tete"><ellipse class="tt-peau" cx="16" cy="21.5" rx="4.8" ry="4.45"/><g class="tt-yeux"><ellipse class="tt-oeil" cx="14.2" cy="20.9" rx=".88" ry="1.08"/><ellipse class="tt-oeil" cx="17.8" cy="20.9" rx=".88" ry="1.08"/><circle class="tt-lum" cx="14.5" cy="20.5" r=".32"/><circle class="tt-lum" cx="18.1" cy="20.5" r=".32"/></g><path class="tt-bouche" d="M15 23.3c.6.42 1.4.42 2 0"/><ellipse class="tt-joue" cx="13" cy="22.9" rx=".85" ry=".55"/><ellipse class="tt-joue" cx="19" cy="22.9" rx=".85" ry=".55"/></g><path class="tt-dome" d="M2.5 18.6C2.5 11.5 8.5 7.5 16 7.5S29.5 11.5 29.5 18.6Q16 14.9 2.5 18.6Z" fill="url(#${id})"/><path class="tt-ecailles" d="M13.7 8.4h4.6l1.55 2.7-1.55 2.7h-4.6L12.15 11.1z M12.15 11.1L6 13.5 M19.85 11.1L26 13.5 M13.7 13.8l-1.2 2.6 M18.3 13.8l1.2 2.6"/><path class="tt-reflet" d="M6.2 13.4C7.6 10.9 10.2 9.3 12.8 8.7"/></g></svg>`; };
   const ICONE_MICRO = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>`;
   const ICONE_ENVOI = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>`;
   const ICONE_PLUS = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`;
@@ -24,16 +22,16 @@
   // ---------------------------------------------------------------- interface (créée une seule fois)
   document.body.insertAdjacentHTML("beforeend", `
     <button id="fab-ia" class="fab-ia" type="button" aria-haspopup="dialog" aria-controls="dlg-ia" hidden>
-      ${VISAGE}<span class="ia-badge" hidden></span>
+      ${tortue()}<span class="ia-badge" hidden></span>
     </button>
     <dialog id="dlg-ia" class="ia" aria-labelledby="ia-titre">
       <div class="ia-tete">
-        <span class="ia-avatar">${VISAGE}</span>
-        <div class="ia-titres"><h2 id="ia-titre"><span class="marque-bot"><b class="mb-bafi">Bafi</b>Bot</span></h2>
+        <span class="ia-avatar">${tortue()}</span>
+        <div class="ia-titres"><h2 id="ia-titre"><span class="marque-bot"><b class="mb-bafi">Bim</b> Bim</span></h2>
           <p class="small muted">Votre assistant : il répond avec vos chiffres et l'actualité publiée</p></div>
         <button type="button" class="ia-agrandir" aria-label="Agrandir la conversation" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-        <button type="button" class="ia-fermer" aria-label="Fermer BafiBot">
+        <button type="button" class="ia-fermer" aria-label="Fermer Bim Bim">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="ia-fil" role="log" aria-live="polite" aria-label="Conversation" tabindex="0"></div>
@@ -71,7 +69,7 @@
   const histo = [];               // [{ role: "user" | "assistant", content }]
   let enCours = false, accueilFait = false, dernierCompte = 0;
   // Historique gardé par la base (50 derniers échanges) et alertes déjà vues : les mêmes sur tous les appareils.
-  // Si la table n'est pas encore installée, BafiBot fonctionne comme avant (conversation gardée le temps de la visite).
+  // Si la table n'est pas encore installée, Bim Bim fonctionne comme avant (conversation gardée le temps de la visite).
   let anciens = [], vues = null, histoPret = null;
   function chargerHisto() {
     const b = window.BRVM_APP?.bafibot;
@@ -99,7 +97,7 @@
   function bulle(qui, html) {
     const d = document.createElement("div");
     d.className = "ia-msg " + qui;
-    d.innerHTML = qui === "moi" ? `<span class="sr-only">Vous : </span>${html}` : `<span class="sr-only">BafiBot : </span>${html}`;
+    d.innerHTML = qui === "moi" ? `<span class="sr-only">Vous : </span>${html}` : `<span class="sr-only">Bim Bim : </span>${html}`;
     fil.append(d);
     fil.scrollTop = fil.scrollHeight;
     return d;
@@ -150,7 +148,7 @@
     enCours = true; envoyer.disabled = true;
     champ.value = ""; ajusterChamp();
     bulle("moi", esc(question));
-    const attente = bulle("ia attente", `<span class="ia-points" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">BafiBot prépare sa réponse…</span>`);
+    const attente = bulle("ia attente", `${tortue("ia-tortue reflechit")}<span class="ia-reflechit" aria-hidden="true">Bim Bim réfléchit…</span><span class="sr-only">Bim Bim prépare sa réponse…</span>`);
     try {
       const approfondie = !!$("#ia-appro")?.checked && !$(".iq-appro", dlg).hidden;
       const rep = await app.demander({ question, historique: histo.slice(-MAX_HISTO), contexte: app.contexte([question, ...histo.filter((h) => h.role === "user").slice(-2).map((h) => h.content)].join(" \n ")), approfondie });
@@ -163,7 +161,7 @@
       const src = (rep?.sources || []).slice(0, 4).map((x) => ({ titre: String(x.titre || "").slice(0, 200), url: String(x.url || "").slice(0, 500) }));
       app.bafibot?.ajouter([{ role: "user", contenu: question }, { role: "assistant", contenu: texte.slice(0, 20000), sources: src.length ? src : null }])
         .then(() => { $(".ia-histo", dlg).hidden = false; }).catch(() => { /* table pas encore installée : rien n'est gardé */ });
-      window.dispatchEvent(new Event("brvm:question"));      // prise en main : « poser une question au robot » est fait
+      window.dispatchEvent(new Event("brvm:question"));      // prise en main : « poser une question à Bim Bim » est fait
     } catch (e) {
       attente.remove();
       if (e.quota) {                                           // quota du mois atteint : trois choix, jamais de blocage sans issue
@@ -208,7 +206,7 @@
       micro.setAttribute("aria-pressed", String(on));
       micro.setAttribute("aria-label", on ? "Arrêter la dictée" : "Dicter ma question");
       micro.innerHTML = on ? ICONE_STOP : ICONE_MICRO;
-      ecoute.textContent = on ? "BafiBot vous écoute" : "";
+      ecoute.textContent = on ? "Bim Bim vous écoute" : "";
     };
     const arreter = () => { etat(false); reco = null; };
     micro.addEventListener("click", () => {
@@ -252,7 +250,7 @@
         $(".ia-histo", dlg).hidden = false;
       }
       const p = app.prenom(), n = app.urgentes();
-      bulle("ia", formater(`Bonjour${p ? " " + p : ""} ! Je peux vous parler de votre portefeuille, de vos alertes, du marché du jour ou d'un titre précis.`
+      bulle("ia", formater(`Bonjour${p ? " " + p : ""} ! Je suis **Bim Bim**, votre petite tortue : pas à pas, je vous aide à garder et à investir. Je peux vous parler de votre portefeuille, de vos alertes, du marché du jour ou d'un titre précis.`
         + (n ? `\n\nVous avez **${n} alerte${n > 1 ? "s" : ""}** à regarder.` : "")
         + (app.demo ? "\n\nVous êtes en démonstration : les réponses utilisent des données fictives." : "")));
       accueilFait = true;
@@ -284,8 +282,8 @@
     document.body.classList.add("has-ia");
     const cles = app.clesUrgentes?.() || [], n = vues ? cles.filter((k) => !vues.has(k)).length : app.urgentes(), badge = $(".ia-badge", fab);
     badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n);
-    fab.setAttribute("aria-label", n ? `Ouvrir BafiBot (${n} nouvelle${n > 1 ? "s" : ""} alerte${n > 1 ? "s" : ""})` : "Ouvrir BafiBot");
-    if (n > dernierCompte) cligner();          // une seule animation, seulement quand il y a du nouveau
+    fab.setAttribute("aria-label", n ? `Ouvrir Bim Bim (${n} nouvelle${n > 1 ? "s" : ""} alerte${n > 1 ? "s" : ""})` : "Ouvrir Bim Bim");
+    if (n > dernierCompte && !CALME) { fab.classList.remove("cligne", "regarde", "saut"); void fab.offsetWidth; fab.classList.add("saut"); }   // un petit saut, seulement quand il y a du nouveau
     dernierCompte = n;
   }
   // ---------------------------------------------------------------- petites animations d'ambiance (robot et coffre)
@@ -297,11 +295,11 @@
   for (const ev of ["scroll", "touchstart", "keydown", "pointerdown"])
     window.addEventListener(ev, () => { derniereActivite = Date.now(); }, { passive: true });
   const coffre = () => { const f = document.getElementById("fab-coffre"); return f && !f.hidden ? f : null; };
-  function rejouer(el, classe) { el.classList.remove("cligne", "regarde", "allume"); void el.offsetWidth; el.classList.add(classe); }
+  function rejouer(el, classe) { el.classList.remove("cligne", "regarde", "allume", "saut"); void el.offsetWidth; el.classList.add(classe); }
   function jouerAmbiance() {
     if (CALME || ambianceFaites >= MAX_AMBIANCE) return;
     if (document.hidden || dlg.open || fab.hidden || Date.now() - derniereActivite < 4000) { planifierAmbiance(); return; }
-    // le robot et le coffre jouent chacun leur tour ; le robot alterne clin d'œil et coup d'œil
+    // Bim Bim et le coffre jouent chacun leur tour ; Bim Bim alterne clin d'œil et coup d'œil
     const c = coffre() && ambianceFaites % 2 === 0 ? "coffre" : (ambianceFaites % 4 < 2 ? "cligne" : "regarde");
     if (c === "coffre") {
       const cadran = coffre().querySelector("svg circle");
@@ -314,7 +312,7 @@
     if (!CALME && ambianceFaites < MAX_AMBIANCE) setTimeout(jouerAmbiance, ambianceFaites ? 45000 + Math.random() * 45000 : 20000 + Math.random() * 10000);
   }
 
-  // ouvrir BafiBot = avoir vu les alertes du moment (la liste est remplacée, les anciennes alertes en sortent)
+  // ouvrir Bim Bim = avoir vu les alertes du moment (la liste est remplacée, les anciennes alertes en sortent)
   function marquerVues() {
     const app = window.BRVM_APP, cles = app?.clesUrgentes?.() || [];
     if (!app?.bafibot) return;
@@ -339,6 +337,10 @@
     finally { b.disabled = false; }
   });
 
+  // pas de réseau : Bim Bim rentre la tête et les pattes ; elle ressort au retour du réseau
+  const reseau = () => fab.classList.toggle("horsligne", navigator.onLine === false);
+  addEventListener("offline", reseau); addEventListener("online", reseau); reseau();
+
   window.addEventListener("brvm:pret", () => { majBouton(); chargerHisto(); setTimeout(cligner, 900); planifierAmbiance(); });
 
   // ---------------------------------------------------------------- boutons flottants : ils s'effacent quand on descend
@@ -357,7 +359,7 @@
   if (window.BRVM_APP) majBouton();
 })();
 
-// Les boutons flottants (BafiBot, coffre) se replient quand on fait défiler vers le bas — ils ne masquent plus
+// Les boutons flottants (Bim Bim, coffre) se replient quand on fait défiler vers le bas — ils ne masquent plus
 // les montants — et reviennent dès qu'on remonte, ou en haut et en bas de page.
 (() => {
   let y0 = scrollY, tic = false;

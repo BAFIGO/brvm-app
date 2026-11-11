@@ -1,7 +1,7 @@
 /* BafiBourse – glossaire au toucher.
  * Les mots techniques des écrans (SGI, OPCVM, coupon, prix limite…) sont soulignés en pointillé à leur première
  * apparition dans chaque écran ; un toucher ouvre une bulle qui les explique en une phrase, avec un lien
- * « Demander au robot » pour aller plus loin. Désactivable dans le Profil (Aide à la prise en main). */
+ * « Demander à Bim Bim » pour aller plus loin. Désactivable dans le Profil (Aide à la prise en main). */
 (() => {
   "use strict";
 
@@ -100,7 +100,7 @@
   // ---------------------------------------------------------------- bulle d'explication
   document.body.insertAdjacentHTML("beforeend", `<div id="gl-bulle" role="dialog" aria-labelledby="gl-t" hidden>
       <div class="gl-tete"><h3 id="gl-t"></h3><button type="button" class="gl-x" aria-label="Fermer l'explication">×</button></div>
-      <p id="gl-d"></p><button type="button" class="btn link small gl-robot">Demander à BafiBot</button></div>`);
+      <p id="gl-d"></p><button type="button" class="btn link small gl-robot">Demander à Bim Bim</button></div>`);
   const bulle = $("#gl-bulle");
   let source = null;
   function montrer(b) {

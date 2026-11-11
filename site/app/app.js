@@ -429,7 +429,7 @@
         return { tarifs: t.data || [], quotas: q.data || [] };
       },
       definirParrain: async (code) => { const { data } = await sb.rpc("definir_parrain", { p_code: code }); return data; },
-      // BafiBot : historique (50 derniers échanges, gardés par la base) et alertes déjà vues — chacun ne voit que les siens (RLS)
+      // Bim Bim : historique (50 derniers échanges, gardés par la base) et alertes déjà vues — chacun ne voit que les siens (RLS)
       bafibotHisto: async () => r(await sb.from("bafibot_messages").select("id,role,contenu,sources").order("id", { ascending: false }).limit(100)),
       bafibotAjouter: async (rows) => r(await sb.from("bafibot_messages").insert(rows)),
       bafibotEffacer: async (uid) => r(await sb.from("bafibot_messages").delete().eq("user_id", uid)),
@@ -1581,7 +1581,7 @@
       ordres_du_soir: (S.ordres || []).slice(0, 10).map((o) => ({ code: o.code, sens: o.sens, quantite: o.quantite, prix_limite: o.prix_limite, motif: o.motif })),
       indices: Object.values(derniers).map((i) => ({ code: i.code, date: i.date, cloture: i.cloture, variation: i.variation })),
       meilleures_analyses: { actions: top(S.mk.actions, 5), obligations: top(S.mk.obligations, 3), opcvm: top(S.mk.opcvm, 3) },
-      // le marché complet de la séance, en tableau compact : BafiBot peut répondre sur n'importe quel titre ou secteur
+      // le marché complet de la séance, en tableau compact : Bim Bim peut répondre sur n'importe quel titre ou secteur
       marche_de_la_seance: (() => {
         const A = (S.mk.actions || []).filter((r) => ok(r.cours));
         const v = A.filter((r) => ok(r.var_1j)), tri = [...v].sort((a, b) => b.var_1j - a.var_1j);
@@ -1600,7 +1600,7 @@
         };
       })(),
       titres_cites: titresCites(question),
-      // budget, coffre et projets (budget.js), épargne, cercles : BafiBot répond avec les vrais chiffres de l'utilisateur
+      // budget, coffre et projets (budget.js), épargne, cercles : Bim Bim répond avec les vrais chiffres de l'utilisateur
       budget: window.BafiBudget?.contexte?.() || null,
       epargne: (() => { const e = epargne(); return e ? { solde_du_coffre: Math.round(e.solde || 0), serie: e.serie || 0, plan: e.plan || null } : null; })(),
       cercles: (window.BafiBudget?.cercles?.() || []).slice(0, 3).map((c) => ({ nom: c.nom, membres: (c.membres || []).length,
@@ -3650,7 +3650,7 @@
     const plusTard = (() => { try { return sessionStorage.getItem("brvm-ob-plus-tard"); } catch (e) { return null; } })();
     if (("onboarding_etape" in S.profil && !S.profil.onboarding_fini_le && !plusTard) || (DEMO && new URLSearchParams(location.search).has("onboarding"))) {
       // l'inscription se déroule seule à l'écran (pas de menu ni de bouton flottant : aucune impasse) ;
-      // quand elle se termine, l'application s'initialise normalement (menu, budget, BafiBot, visite)
+      // quand elle se termine, l'application s'initialise normalement (menu, budget, Bim Bim, visite)
       document.body.classList.add("en-onboarding");
       await new Promise((ok) => onboarding(false, ok));
       document.body.classList.remove("en-onboarding");
@@ -3761,7 +3761,7 @@
                         },
                         evenement: (e, x) => { api.evenementTutoriel(e, x ?? null).catch(() => {}); },
                         prenom: () => S.profil?.prenom || "", urgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).length,
-                        // clés des alertes urgentes (titre + niveau) : la pastille de BafiBot ne compte que celles pas encore vues
+                        // clés des alertes urgentes (titre + niveau) : la pastille de Bim Bim ne compte que celles pas encore vues
                         clesUrgentes: () => (S.alertes || []).filter((a) => NIVEAUX[a.alerte]?.urgent).map((a) => `${a.ticker}|${a.alerte}`),
                         bafibot: { histo: () => api.bafibotHisto(), ajouter: (rows) => api.bafibotAjouter(rows), effacer: () => api.bafibotEffacer(S.user.id),
                                    etat: () => api.bafibotEtat(), vu: (vues) => api.bafibotVu(S.user.id, vues) } };

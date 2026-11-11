@@ -972,7 +972,7 @@
   const invitation = () => (S.charge && !S.erreur && !S.profil && !S.invitationFermee ? `<section class="card bu-invit"><span class="bu-tuile amb">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>')}</span>
       <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : BafiBourse vous dit ce que vous pouvez garder.</p>
         <a class="btn primary small" href="#budget">Commencer (1 minute)</a> <button type="button" class="btn link small" data-bu="fermer-invit">Plus tard</button></div></section>` : "");
-  // Données du budget transmises à BafiBot (montants en F CFA ; aucune donnée d'un autre utilisateur)
+  // Données du budget transmises à Bim Bim (montants en F CFA ; aucune donnée d'un autre utilisateur)
   function contexte() {
     if (!S.charge || !S.profil) return { budget_configure: false, aide: "Le budget n'est pas encore configuré : menu ☰ > Mon budget, 1 minute." };
     const c = calculs(), r = (x) => Math.round(+x || 0), a = avenir(c);

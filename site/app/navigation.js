@@ -14,7 +14,7 @@
   const ic = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 
   // Menu : chaque rubrique ouvre exactement son écran (les quatre rubriques du Portefeuille sont séparées).
-  // BafiBot n'y figure pas : son bouton flottant est toujours là.
+  // Bim Bim n'y figure pas : son bouton flottant est toujours là.
   const RUBRIQUES = [
     { id: "aujourdhui", esp: 1, simple: true, nom: "Aujourd'hui", href: "#aujourdhui",
       ic: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>') },
@@ -207,7 +207,7 @@
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !geste) remettre(); });
 
   // ---------------------------------------------------------------- boutons flottants : ils s'effacent quand on lit
-  // On fait défiler vers le bas : BafiBot et le coffre glissent hors de l'écran (ils ne cachent plus les montants) ;
+  // On fait défiler vers le bas : Bim Bim et le coffre glissent hors de l'écran (ils ne cachent plus les montants) ;
   // on remonte un peu, ou on arrive en bas de la page : ils reviennent.
   let yPrec = scrollY;
   addEventListener("scroll", () => {
