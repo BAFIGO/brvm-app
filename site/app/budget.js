@@ -1002,6 +1002,16 @@
         .reduce((o, m) => { const k = libCat(m); o[k] = (o[k] || 0) + (+m.montant || 0); return o; }, {})).sort((x, y) => y[1] - x[1])),
       dernieres_operations: S.mv.filter((m) => m.type !== "rien").slice(0, 8).map((m) => ({ date: m.date, type: m.type === "revenu" ? "gagné" : "dépensé", categorie: libCat(m), montant: r(m.montant) })),
       budget_prevu_par_mois: { depenses: c.pv.depenses, revenus: c.pv.revenus },
+      // itération 10 · pour le conseiller budget : 3 derniers mois par catégorie, et prévu face au dépensé ce mois-ci
+      depenses_3_derniers_mois_par_categorie: (() => {
+        const o = {};
+        for (let i = 0; i < 3; i++) {
+          const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); const k = iso(d).slice(0, 7);
+          o[k] = {}; for (const m of S.mv) if (m.type === "depense" && m.date?.slice(0, 7) === k) { const l = libCat(m); o[k][l] = (o[k][l] || 0) + Math.round(+m.montant || 0); }
+        }
+        return o;
+      })(),
+      prevu_face_au_depense_ce_mois: Object.fromEntries(Object.entries(c.pv.depenses).map(([k, x]) => [catDep(k)[1], { prevu: r(x), depense: r(c.depParCat[k] || 0) }])),
       depenses_de_chaque_mois: c.abonnements.map((m) => ({ categorie: libCat(m), montant: r(m.montant) })),
       coffre: { total_garde: r(c.solde), securite: { garde: r(c.securite), objectif: r(c.securiteObj), pleine: c.securite >= c.securiteObj && c.securiteObj > 0 },
         projets: c.projets.map((x) => ({ nom: x.nom, objectif: r(x.montant), garde: r(x.garde), pour: x.date_cible || null })) },

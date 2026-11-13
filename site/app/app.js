@@ -390,7 +390,7 @@
       publierCercle: async (id, pub, pres) => { const { data, error } = await sb.rpc("publier_cercle", { p_cercle: id, p_public: pub, p_presentation: pres || null }); if (error) throw new Error(error.message); return data; },
       publierRegularite: async (x) => { const { error } = await sb.from("epargne_publique").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }); if (error) throw error; },
       // Rappels du soir (rappels.sql)
-      rappels: async () => r(await sb.from("rappels").select("push, heure, epargne, bilan_hebdo, badge").maybeSingle()),
+      rappels: async () => r(await sb.from("rappels").select("*").maybeSingle()),     // toutes les colonnes : les nouvelles options suivent seules
       // Budget personnel (supabase 24-budget.sql) : données strictement privées (RLS : la personne seule)
       budgetProfil: async () => r(await sb.from("budget_profils").select("*").maybeSingle()),
       budgetSauverProfil: async (x) => r(await sb.from("budget_profils").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }, { onConflict: "user_id" })),
@@ -1635,7 +1635,7 @@
   function suggestionsAssistant() {
     const L = replay(S.ops);
     const bud = window.BafiBudget?.mode?.() && window.BafiBudget?.contexte?.()?.budget_configure;
-    const s = bud ? ["Combien puis-je dépenser aujourd'hui ?", "Où en sont mes projets ?"] : [];
+    const s = bud ? ["Combien puis-je dépenser aujourd'hui ?", acces(2) ? "Où puis-je économiser ce mois-ci ?" : "Où en sont mes projets ?"] : [];
     s.push(L.positions.length ? "Où en est mon portefeuille ?" : "Par où commencer avec mon budget ?", "Comment va le marché aujourd'hui ?");
     if ((S.alertes || []).length) s.push("Que faire de mes alertes ?");
     s.push(SIM() ? "Que dit la simulation du soir ?" : "Que me recommandez-vous ?");

@@ -10,7 +10,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const HEURES = ["19:30", "20:00", "20:30", "21:00", "21:30", "22:00"];
   const CLE_PUB = (window.BRVM_CONFIG || {}).vapidPublique || "";
-  const DEFAUT = { push: false, heure: "20:00", epargne: true, bilan_hebdo: true, badge: true };
+  const DEFAUT = { push: false, heure: "20:00", epargne: true, bilan_hebdo: true, bilan_mensuel: true, badge: true };
   let app = null, reglages = null, charge = false, abonnement = null;
 
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -85,6 +85,7 @@
           <select data-rp="heure" aria-label="Heure du rappel du soir">${HEURES.map((x) => `<option value="${x}"${x === h ? " selected" : ""}>${heureFr(x)}</option>`).join("")}</select></label>
         ${opt("epargne", "Mon épargne du jour", "Si elle n'est pas faite", r.epargne)}
         ${opt("bilan_hebdo", "Bilan de la semaine", "Le dimanche soir", r.bilan_hebdo !== false)}
+        ${opt("bilan_mensuel", "Bilan du mois", "Le 1er : gagné, dépensé, gardé", r.bilan_mensuel !== false)}
         ${opt("badge", "Pastille sur l'icône", "Le nombre de choses à regarder", r.badge !== false)}
       </div>
       <div class="actions"><button type="button" class="btn" data-rp="essai"${actif ? "" : " disabled"}>M'envoyer un essai</button></div>
@@ -101,7 +102,7 @@
     el.disabled = true;
     try {
       if (k === "heure") { await sauver({ heure: el.value }); app.toast(`Rappel du soir à ${heureFr(el.value)}.`); }
-      if (k === "epargne" || k === "bilan_hebdo" || k === "badge") await sauver({ [k]: el.checked });
+      if (k === "epargne" || k === "bilan_hebdo" || k === "bilan_mensuel" || k === "badge") await sauver({ [k]: el.checked });
       if (k === "appareil") { if (el.checked) await activerPush(); else { await couperPush(); await sauver({ push: false }); } refaire(); }
     } catch (e) { app.toast("Enregistrement impossible : " + e.message); refaire(); }
     el.disabled = false;
