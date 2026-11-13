@@ -9,7 +9,7 @@
   const RUBRIQUES = [
     ["coord", "Mes informations", 0, (c) => c.id === "f-identite"],
     ["abo", "Mon abonnement", 1, (c) => c.classList.contains("abo-carte")],
-    ["rappels", "Mes rappels du soir", 2, (c) => c.classList.contains("rp-carte")],
+    ["rappels", "Mes rappels et notifications", 2, (c) => c.classList.contains("rp-carte")],
     ["plan", "Mon rythme pour garder", 3, (c) => c.id === "f-plan"],
     ["invest", "Mon profil d'investisseur", 4, (c) => c.id === "f-profil"],
     ["comptes", "Mes comptes et placements", 5, (c) => c.id === "f-univers"],
@@ -26,8 +26,9 @@
   function etat(k, carte) {
     const app = window.BRVM_APP;
     if (k === "rappels") {
-      const h = carte.querySelector('[data-rp="heure"]')?.value, push = /Activées/.test(carte.textContent), wa = carte.querySelector('[data-rp="whatsapp"]')?.checked;
-      return [h ? `À ${h.replace(":", " h ")}` : "", push ? "notifications activées" : "", wa ? "WhatsApp" : ""].filter(Boolean).join(" · ") || "Pas encore activés";
+      const h = carte.querySelector('[data-rp="heure"]')?.value, push = !!carte.querySelector('[data-rp="appareil"]:checked'),
+            bilan = carte.querySelector('[data-rp="bilan_hebdo"]')?.checked;
+      return push ? [h ? `Le soir à ${h.replace(":", " h ").replace(/ 00$/, "")}` : "", bilan ? "bilan du dimanche" : ""].filter(Boolean).join(" · ") : "Notification pas encore activée";
     }
     if (k === "avis") return carte.querySelector(".av-fixes") ? `${carte.querySelector(".av-fixes").getAttribute("aria-label")} · ${carte.querySelector(".small.muted")?.textContent || ""}` : "Pas encore donné";
     if (k === "aide") return "Visite guidée, portrait, glossaire";

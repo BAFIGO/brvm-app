@@ -1,4 +1,5 @@
-/* BafiBourse – service worker : affiche le rappel du soir et ouvre l'application quand on le touche.
+/* BafiBourse – service worker : affiche le rappel du soir et le bilan du dimanche, pose la pastille sur l'icône,
+ * et ouvre l'application quand on touche la notification.
  * Il ne met rien en cache : l'application reste toujours à jour. */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
@@ -6,12 +7,20 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("push", (e) => {
   let m = {};
   try { m = e.data ? e.data.json() : {}; } catch (err) { m = { texte: e.data ? e.data.text() : "" }; }
-  e.waitUntil(self.registration.showNotification(m.titre || "BafiBourse", {
-    body: m.texte || "Votre récap du soir est prêt.",
-    icon: "../icon-192.png?v=carapace1", badge: "../icon-192.png?v=carapace1", lang: "fr",
-    tag: "recap-du-soir", renotify: true,                  // un seul rappel affiché à la fois
-    data: { url: m.url || "./#aujourdhui" },
-  }));
+  const tag = m.tag === "bilan-semaine" ? "bilan-semaine" : "recap-du-soir";       // un seul de chaque sorte affiché à la fois
+  // adresse d'ouverture : toujours cette application ; seul l'écran demandé (#budget…) est repris du message
+  let url = "./#aujourdhui";
+  try { const h = new URL(m.url || url, self.registration.scope).hash; if (/^#[a-z-]{2,30}$/.test(h)) url = "./" + h; } catch (err) { /* adresse illisible */ }
+  const badge = Math.max(0, Math.min(99, parseInt(m.badge, 10) || 0));
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(String(m.titre || "BafiBourse").slice(0, 80), {
+      body: String(m.texte || "Votre récap du soir est prêt.").slice(0, 240),
+      icon: "../icon-192.png?v=carapace1", badge: "../icon-192.png?v=carapace1", lang: "fr",
+      tag, renotify: true, data: { url },
+    }),
+    // pastille sur l'icône de l'application installée (quand le téléphone le permet)
+    badge && self.navigator && "setAppBadge" in self.navigator ? self.navigator.setAppBadge(badge).catch(() => {}) : Promise.resolve(),
+  ]));
 });
 
 self.addEventListener("notificationclick", (e) => {

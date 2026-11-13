@@ -98,7 +98,7 @@
                  `${n(d.pages)} page${d.pages > 1 ? "s" : ""} importée${d.pages > 1 ? "s" : ""} par mois`] },
       { k: "essentiel", nom: "Essentiel", mois: o.essentiel_mois?.[1], an: o.essentiel_an?.[1], pour: "Pour épargner et investir sereinement", reco: true,
         plus: "Tout Découverte, plus :",
-        points: ["Affichage détaillé du budget : enveloppes, profil réglable", "Rappels par WhatsApp", "Cercles illimités et encouragements",
+        points: ["Affichage détaillé du budget : enveloppes, profil réglable", "Cercles illimités et encouragements",
                  "Simulateur : la répartition de votre profil", "Ce qui fait la note de chaque titre", "Performance complète et export",
                  `Bim Bim : ${n(e.questions)} questions par mois`, `${n(e.pages)} pages importées par mois`] },
       { k: "investisseur", nom: "Investisseur", mois: o.investisseur_mois?.[1], an: o.investisseur_an?.[1], pour: "Pour suivre plusieurs lignes en détail",

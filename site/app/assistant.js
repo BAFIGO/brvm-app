@@ -391,6 +391,7 @@
     fab.setAttribute("aria-label", n ? `Ouvrir Bim Bim (${n} nouvelle${n > 1 ? "s" : ""} alerte${n > 1 ? "s" : ""})` : "Ouvrir Bim Bim");
     if (n > dernierCompte && !CALME) { fab.classList.remove("cligne", "regarde", "saut"); void fab.offsetWidth; fab.classList.add("saut"); }   // un petit saut, seulement quand il y a du nouveau
     dernierCompte = n;
+    window.dispatchEvent(new CustomEvent("bafi:alertes", { detail: { n } }));   // pastille de l'icône et de l'onglet (rappels.js)
   }
   // ---------------------------------------------------------------- petites animations d'ambiance (robot et coffre)
   // Discrètes et limitées : la première vers 10 s, puis une toutes les 20 à 40 s, 6 au plus par visite, jamais pendant que l'utilisateur

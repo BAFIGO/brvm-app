@@ -6,6 +6,8 @@
 
   const CFG = window.BRVM_CONFIG;
   const DEMO = new URLSearchParams(location.search).has("demo");
+  // Connexion par numéro + code WhatsApp (itération 9) : activée dans config.js une fois Twilio branché à Supabase Auth.
+  const TEL_ON = CFG?.connexion?.whatsapp === true;
   // Arrivée par le lien de l'e-mail (lu avant que Supabase ne nettoie l'adresse)
   const VIENT_DU_LIEN = /access_token=|[?&]code=|type=(magiclink|signup|email)/.test(location.hash + location.search);
   const DEMO_DEBUT = DEMO && new URLSearchParams(location.search).get("demo") === "debut";   // démo « mes premiers jours »
@@ -289,6 +291,15 @@
       // creer = false : reconnexion seulement (erreur si aucun compte avec cette adresse)
       login: async (email, creer) => r(await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: !!creer, emailRedirectTo: location.origin + location.pathname } })),
       verify: async (email, token) => r(await sb.auth.verifyOtp({ email, token, type: "email" })),
+      // Connexion par téléphone (itération 9) : code envoyé sur WhatsApp par Supabase Auth + Twilio. Numéro au format +221…
+      loginTel: async (phone, creer) => r(await sb.auth.signInWithOtp({ phone, options: { channel: "whatsapp", shouldCreateUser: !!creer } })),
+      verifyTel: async (phone, token) => r(await sb.auth.verifyOtp({ phone, token, type: "sms" })),
+      // ajouter ou changer le numéro d'un compte existant : code sur WhatsApp, puis confirmation
+      ajouterTel: async (phone) => r(await sb.auth.updateUser({ phone, channel: "whatsapp" })),
+      verifierAjoutTel: async (phone, token) => r(await sb.auth.verifyOtp({ phone, token, type: "phone_change" })),
+      // adresse e-mail facultative : un lien de confirmation part à cette adresse
+      ajouterEmail: async (email) => r(await sb.auth.updateUser({ email }, { emailRedirectTo: location.origin + location.pathname })),
+      utilisateur: async () => (await sb.auth.getUser()).data.user,
       logout: async () => { await sb.auth.signOut(); sortir(); },   // retour à la page d'accueil, sans retour possible
       // tous les appareils : les jetons de renouvellement sont révoqués côté serveur (téléphone perdu, ordinateur partagé)
       logoutPartout: async () => { await sb.auth.signOut({ scope: "global" }); sortir(); },
@@ -379,7 +390,7 @@
       publierCercle: async (id, pub, pres) => { const { data, error } = await sb.rpc("publier_cercle", { p_cercle: id, p_public: pub, p_presentation: pres || null }); if (error) throw new Error(error.message); return data; },
       publierRegularite: async (x) => { const { error } = await sb.from("epargne_publique").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }); if (error) throw error; },
       // Rappels du soir (rappels.sql)
-      rappels: async () => r(await sb.from("rappels").select("push, whatsapp, heure, epargne").maybeSingle()),
+      rappels: async () => r(await sb.from("rappels").select("push, heure, epargne, bilan_hebdo, badge").maybeSingle()),
       // Budget personnel (supabase 24-budget.sql) : données strictement privées (RLS : la personne seule)
       budgetProfil: async () => r(await sb.from("budget_profils").select("*").maybeSingle()),
       budgetSauverProfil: async (x) => r(await sb.from("budget_profils").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }, { onConflict: "user_id" })),
@@ -653,6 +664,8 @@
       signalerCercle: async () => {},
       publierCercle: async (id, pub, pres) => { const c = cerclesDemo.find((x) => x.id === id); if (c) { c.public = pub; c.presentation = pres; c.capacite = pub ? 30 : 20; } return { public: pub }; },
       abonnerPush: async () => {}, desabonnerPush: async () => {}, essaiRappel: async () => ({ demo: true }),
+      ajouterTel: async () => {}, verifierAjoutTel: async (phone, token) => { if (token !== "123456") throw new Error("Token has expired or is invalid"); S.user.phone = phone.replace(/^\+/, ""); },
+      ajouterEmail: async () => {}, utilisateur: async () => S.user,
       donnerAvis: async (a) => {
         const st = a.publication && (a.commentaire || "").length >= 20 ? "en_attente" : "prive";
         avisDemo = { ...a, statut: st }; return { statut: st };
@@ -2392,10 +2405,23 @@
       <optgroup label="Tous les pays">${reste.map(opt).join("")}</optgroup>` : "");
   }
   // Prénom, nom, pays (drapeau + indicatif) et téléphone sans indicatif : assistant et Profil
-  function champsIdentite(p, lib) {
+  function champsIdentite(p, lib) { return `<div class="ident-champs">${champsIdentite0(p, lib)}</div>`; }
+  function champsIdentite0(p, lib) {
     const pays = p.pays || paysParDefaut();
     let tel = "";
     try { tel = p.telephone && lib ? lib.parsePhoneNumberFromString(p.telephone)?.formatNational() || "" : p.telephone || ""; } catch (e) { tel = p.telephone || ""; }
+    // numéro confirmé sur WhatsApp (connexion par téléphone) : affiché, modifiable seulement par un nouveau code
+    const tc = TEL_ON ? telConfirme() : "";
+    if (tc) {
+      let aff = tc, pc = pays;
+      try { const n = lib?.parsePhoneNumberFromString(tc); if (n) { aff = n.formatInternational(); pc = n.country || pays; } } catch (e) { /* tel quel */ }
+      return `<div class="grid2"><label>Prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}"></label>
+        <label>Nom<input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
+        <input type="hidden" name="pays" value="${esc(p.pays || pc)}"><input type="hidden" name="telephone" value="">
+        <div class="tel-ok"><span><span class="muted small">Numéro WhatsApp</span><b>${drapeau(pc)} ${esc(aff)}</b><small class="tel-v">✓ Confirmé</small></span>
+          <button type="button" class="btn small" data-tel="changer">Changer</button></div>
+        ${S.user?.email ? "" : `<label>Adresse e-mail <span class="muted">(facultatif)</span><input name="email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="pour recevoir aussi vos récaps par e-mail"></label>`}`;
+    }
     // Pays et téléphone sur une seule ligne : le sélecteur (drapeau + indicatif) donne aussi le pays enregistré
     return `<div class="grid2"><label>Prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}"></label>
         <label>Nom<input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
@@ -2404,9 +2430,17 @@
         <select name="pays" aria-label="Pays (et indicatif)">${optionsPays(lib, pays)}</select></span>
         <input id="ob-tel" name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" value="${esc(tel)}" placeholder="Numéro sans l'indicatif"></div>
       <p class="small muted">Touchez le drapeau pour choisir votre pays. Le numéro sert seulement à vous recontacter si vous demandez de l'aide
-        (par exemple pour ouvrir un compte chez une SGI) ; il n'est jamais transmis à des tiers.</p>`;
+        (par exemple pour ouvrir un compte chez une SGI) ; il n'est jamais transmis à des tiers.</p>
+      ${TEL_ON ? `<p class="small"><button type="button" class="btn link" data-tel="confirmer">Confirmer mon numéro sur WhatsApp</button> : il deviendra votre identifiant de connexion.</p>` : ""}`;
   }
   function brancherIdentite(f, lib) {
+    f.querySelector("[data-tel]")?.addEventListener("click", async () => {
+      if (await confirmerTel()) {
+        const z = f.querySelector(".ident-champs");
+        if (z) { z.outerHTML = champsIdentite({ ...S.profil, prenom: f.prenom.value, nom: f.nom.value }, lib); brancherIdentite(f, lib); }
+      }
+    });
+    if (f.pays.type === "hidden") return;
     f.pays.addEventListener("change", () => {
       const c = f.pays.value;
       $(".indicatif .drapeau", f).innerHTML = `${drapeau(c)} +${esc(indicatif(lib, c))} <span class="chevron">▾</span>`;
@@ -2417,11 +2451,71 @@
       if (lib && t) try { f.telephone.value = new lib.AsYouType(f.pays.value).input(t); } catch (e) { /* laissé tel quel */ }
     });
   }
+  // numéro saisi sans indicatif → format international (+221…), ou message d'erreur (tout texte qui ne commence pas par +)
+  function lireNumero(brut, pays, lib) {
+    brut = String(brut || "").trim();
+    if (!brut) return "Saisissez votre numéro de téléphone.";
+    if (lib) {
+      let n = null;
+      try { n = lib.parsePhoneNumberFromString(brut, pays); } catch (e) { n = null; }
+      if (!n || !n.isValid()) return `Ce numéro ne correspond pas à un numéro de ${nomPays(pays)} : saisissez-le sans l'indicatif +${indicatif(lib, pays)}.`;
+      return n.number;
+    }
+    const d = brut.replace(/\D/g, "");
+    if (d.length < 6 || d.length > 12) return "Numéro de téléphone invalide.";
+    return "+" + indicatif(null, pays) + d;
+  }
+  // sélecteur pays (drapeau + indicatif) et numéro : connexion et confirmation du numéro
+  function champTel(id, pays, lib) {
+    return `<div class="tel"><span class="indicatif"><span class="drapeau" aria-hidden="true">${drapeau(pays)} +${indicatif(lib, pays)} <span class="chevron">▾</span></span>
+        <select name="pays" aria-label="Pays (et indicatif)">${optionsPays(lib, pays)}</select></span>
+        <input id="${id}" name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="Numéro sans l'indicatif" required></div>`;
+  }
+  function brancherTel(f, lib) {
+    f.pays.addEventListener("change", () => {
+      $(".indicatif .drapeau", f).innerHTML = `${drapeau(f.pays.value)} +${esc(indicatif(lib, f.pays.value))} <span class="chevron">▾</span>`;
+      f.telephone.focus();
+    });
+    f.telephone.addEventListener("blur", () => {
+      const t = f.telephone.value.trim();
+      if (lib && t) try { f.telephone.value = new lib.AsYouType(f.pays.value).input(t); } catch (e) { /* laissé tel quel */ }
+    });
+  }
+  // formulaire de connexion par numéro (écran de connexion), placé avant celui de l'e-mail
+  function formTel() {
+    const fl = $("#f-login");
+    fl.insertAdjacentHTML("beforebegin", `<form id="f-tel" novalidate>
+        <label for="tel-login">Votre numéro WhatsApp</label>
+        <div class="ft-champ"><p class="small muted">Chargement…</p></div>
+        <label class="switch" id="auth-tel-cgu" hidden><input type="checkbox" name="cgu"> <span>J'accepte les <a href="#" id="lire-cgu-tel">conditions d'utilisation</a></span></label>
+        <button class="btn primary" type="submit">Recevoir mon code sur WhatsApp</button>
+        <p class="msg" role="status" aria-live="polite"></p>
+        <p class="small muted" id="auth-aide-tel"></p>
+        <p class="small"><button class="btn link" type="button" id="vers-email">Utiliser plutôt mon adresse e-mail</button></p>
+      </form>`);
+    fl.insertAdjacentHTML("beforeend", `<p class="small" id="auth-tel-alt" hidden><button class="btn link" type="button" id="vers-tel">Utiliser plutôt mon numéro WhatsApp</button></p>`);
+    const ft = $("#f-tel");
+    // champ provisoire, remplacé dès que la bibliothèque des numéros est là
+    $(".ft-champ", ft).innerHTML = champTel("tel-login", paysParDefaut(), null);
+    chargerTel().then((lib) => {
+      const v = ft.telephone.value, p = ft.pays.value;
+      $(".ft-champ", ft).innerHTML = champTel("tel-login", p, lib);
+      ft.telephone.value = v;
+      brancherTel(ft, lib);
+    });
+    return ft;
+  }
   // → { prenom, nom, pays, telephone } (téléphone au format international), ou message d'erreur
   function lireIdentite(f, lib) {
     const prenom = f.prenom.value.trim(), nom = f.nom.value.trim(), pays = f.pays.value, brut = f.telephone.value.trim();
     if (!prenom || !nom) return "Indiquez votre prénom et votre nom.";
     let telephone = null;
+    const tc = TEL_ON ? telConfirme() : "";
+    if (tc) {
+      const email = f.email?.value.trim();
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return "Adresse e-mail invalide (ou laissez le champ vide).";
+      return { prenom, nom, pays, telephone: tc, ...(email ? { _email: email } : {}) };
+    }
     if (brut) {
       if (lib) {
         let n = null;
@@ -2498,7 +2592,7 @@
         fini();
       };
       const corps = (e) => {
-        if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace. Votre adresse : <b>${esc(S.user.email || p.email || "")}</b></p>` + champsIdentite(p, lib);
+        if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace.${S.user.email || p.email ? ` Votre adresse : <b>${esc(S.user.email || p.email)}</b>` : ""}</p>` + champsIdentite(p, lib);
         if (e.n === 6) return `<p class="small muted">Quatre questions pour vous proposer un rythme d'épargne à votre mesure. Vous pourrez tout changer.</p>`
           + QUESTIONS_EP.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
           + `<label>Combien gagnez-vous à peu près ${rep.ep_revenu === "jour" ? "par jour" : "par mois"} ? <small class="muted">(facultatif)</small>
@@ -2536,6 +2630,7 @@
         if (e.n === 1) {
           const upd = await lireIdentite(f, lib);
           if (typeof upd === "string") return upd;
+          if (upd._email) { await ajouterEmail(upd._email); delete upd._email; }
           // pas encore de compte-titres : les SGI de son pays sont cochées d'office (modifiable dans Profil › Mes comptes)
           const pays = upd.pays || p.pays;
           if (pays && S.univ && !(p.mes_sgi || []).length) upd.mes_sgi = S.univ.sgi.filter((n) => S.univ.paysSgi?.get(n) === pays);
@@ -2832,6 +2927,7 @@
         ev.preventDefault();
         const upd = lireIdentite(fi, lib), msg = $(".msg", fi);
         if (typeof upd === "string") { msg.textContent = upd; return; }
+        if (upd._email) { await ajouterEmail(upd._email); delete upd._email; }
         msg.textContent = "";
         const fin = occupe(ev.submitter || $('[type="submit"]', fi));
         try { await api.saveProfil(S.user.id, upd); Object.assign(S.profil, upd); fin("✓ Enregistré"); confirmeForm(fi, ""); }
@@ -3632,6 +3728,92 @@
     });
   }
 
+  // ---------------------------------------------------------------- numéro WhatsApp confirmé (itération 9)
+  // Le numéro devient l'identifiant principal. Comptes créés avec un e-mail : on leur propose d'ajouter et de confirmer
+  // leur numéro (code sur WhatsApp). Le numéro confirmé est aussi enregistré dans le profil.
+  const telConfirme = () => (S.user?.phone ? "+" + String(S.user.phone).replace(/^\+/, "") : "");
+  async function confirmerTel(raison = "") {
+    if (!TEL_ON) return false;
+    const lib = await chargerTel();
+    let d = $("#dlg-tel");
+    d?.remove();
+    document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-tel" aria-labelledby="dlg-tel-t"><form method="dialog" novalidate>
+      <h2 id="dlg-tel-t">${telConfirme() ? "Changer mon numéro" : "Confirmer mon numéro WhatsApp"}</h2>
+      <p class="small muted">${esc(raison || "Votre numéro devient votre identifiant : vous pourrez vous connecter avec un simple code reçu sur WhatsApp.")}</p>
+      <div class="dt-1"><label for="dlg-tel-n">Numéro WhatsApp</label>${champTel("dlg-tel-n", S.profil?.pays || paysParDefaut(), lib)}</div>
+      <div class="dt-2" hidden><p class="notice info small">Code envoyé sur WhatsApp au <b class="dt-num"></b>.</p>
+        <label for="dlg-tel-c">Code à 6 chiffres</label><input id="dlg-tel-c" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" class="code"></div>
+      <p class="msg" role="status" aria-live="polite"></p>
+      <div class="actions"><button type="button" class="btn" value="non" data-dt="fermer">Plus tard</button>
+        <button type="submit" class="btn primary" data-dt="ok">Recevoir le code</button></div></form></dialog>`);
+    d = $("#dlg-tel");
+    const f = $("form", d), msg = $(".msg", d), ok = $('[data-dt="ok"]', d);
+    brancherTel(f, lib);
+    if (S.profil?.telephone && !telConfirme()) try {
+      const n = lib?.parsePhoneNumberFromString(S.profil.telephone);
+      if (n) { f.pays.value = n.country || f.pays.value; f.pays.dispatchEvent(new Event("change")); f.telephone.value = n.formatNational(); }
+    } catch (e) { /* numéro illisible : champ vide */ }
+    let numero = "";
+    return new Promise((fini) => {
+      $('[data-dt="fermer"]', d).addEventListener("click", () => { d.close(); });
+      d.addEventListener("close", () => { fini(!!numero && telConfirme() === numero); d.remove(); });
+      f.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        msg.textContent = "";
+        ok.disabled = true;
+        try {
+          if (!numero) {
+            const n = lireNumero(f.telephone.value, f.pays.value, lib);
+            if (!/^\+\d{6,15}$/.test(n)) { msg.textContent = n; ok.disabled = false; return; }
+            await api.ajouterTel(n);
+            numero = n;
+            $(".dt-num", d).textContent = lib?.parsePhoneNumberFromString(n)?.formatInternational() || n;
+            $(".dt-1", d).hidden = true; $(".dt-2", d).hidden = false; ok.textContent = "Confirmer";
+            setTimeout(() => f.code.focus(), 50);
+            if (DEMO) msg.textContent = "Démonstration : saisissez 123456.";
+          } else {
+            const c = f.code.value.replace(/\s/g, "");
+            if (!/^[0-9]{6,10}$/.test(c)) { msg.textContent = "Saisissez le code à 6 chiffres reçu sur WhatsApp."; ok.disabled = false; return; }
+            await api.verifierAjoutTel(numero, c);
+            const u = await api.utilisateur().catch(() => null);
+            if (u) S.user = u;
+            if (!DEMO && !S.user.phone) S.user.phone = numero.replace(/^\+/, "");
+            try { await api.saveProfil(S.user.id, { telephone: numero }); S.profil.telephone = numero; } catch (e) { /* recopié par la base */ }
+            toast("Numéro confirmé.", { detail: "Vous pourrez vous connecter avec un code reçu sur WhatsApp." });
+            d.close();
+            if (!document.body.classList.contains("en-onboarding") && tab() !== "profil") render();
+          }
+        } catch (e) {
+          const m = String(e.message || e);
+          msg.textContent = /already|exists|registered|taken/i.test(m) ? "Ce numéro est déjà utilisé par un autre compte BafiBourse."
+            : /expired|invalid/i.test(m) ? "Code incorrect ou expiré : vérifiez le dernier message WhatsApp reçu."
+            : /rate limit|too many|429|security purposes/i.test(m) ? "Trop de demandes : réessayez dans quelques minutes."
+            : /fetch|network|load failed/i.test(m) ? "Pas de connexion internet pour le moment."
+            : "Action impossible pour le moment. Réessayez plus tard.";
+        }
+        ok.disabled = false;
+      });
+      d.showModal();
+      setTimeout(() => f.telephone.focus(), 50);
+    });
+  }
+  // adresse e-mail facultative (comptes créés par téléphone) : lien de confirmation envoyé à cette adresse
+  async function ajouterEmail(email) {
+    try { await api.ajouterEmail(email); toast("Un e-mail de confirmation est parti.", { detail: `Touchez le lien reçu à ${email} pour l'ajouter à votre compte.` }); }
+    catch (e) { toast(/already|exists|registered/i.test(String(e.message)) ? "Cette adresse est déjà utilisée par un autre compte." : "L'adresse n'a pas pu être ajoutée pour le moment."); }
+  }
+  // compte sans numéro confirmé : une invitation discrète, au plus tous les 3 jours
+  function inviterTel() {
+    if (!TEL_ON || DEMO || telConfirme()) return;
+    try {
+      const der = +localStorage.getItem("brvm-invit-tel") || 0;
+      if (Date.now() - der < 3 * 864e5) return;
+      localStorage.setItem("brvm-invit-tel", String(Date.now()));
+    } catch (e) { return; }
+    setTimeout(() => toast("Confirmez votre numéro WhatsApp", { detail: "Il devient votre identifiant : connexion par un simple code, sans e-mail.",
+      actions: [{ label: "Confirmer", fn: () => confirmerTel() }] }), 4000);
+  }
+
   let started = false;
   async function start(user) {
     if (started) return;
@@ -3662,7 +3844,8 @@
       await new Promise((ok) => onboarding(false, ok));
       document.body.classList.remove("en-onboarding");
     }
-    if (inscription && S.profil.onboarding_fini_le) setTimeout(() => toast("Vous aviez déjà un compte avec cette adresse : bienvenue !"), 600);
+    if (inscription && S.profil.onboarding_fini_le) setTimeout(() => toast(`Vous aviez déjà un compte avec ${telConfirme() && !S.user.email ? "ce numéro" : "cette adresse"} : bienvenue !`), 600);
+    else inviterTel();
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = false));
     if (!TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search + "#aujourdhui");
     render();
@@ -3688,6 +3871,7 @@
                         rappels: () => api.rappels(), sauverRappels: (x) => api.sauverRappels(x), abonnerPush: (a) => api.abonnerPush(a),
                         desabonnerPush: (e) => api.desabonnerPush(e), essaiRappel: () => api.essaiRappel(),
                         telephone: () => S.profil?.telephone || "",
+                        telConfirme, confirmerTel: (r) => confirmerTel(r), connexionTel: TEL_ON,
                         // cercles d'épargne (cercles.js) : seulement des indicateurs de régularité, jamais de montant
                         cercles: () => api.cercles(), creerCercle: (n, o) => api.creerCercle(n, o), apercuCercle: (c) => api.apercuCercle(c),
                         rejoindreCercle: (c) => api.rejoindreCercle(c), quitterCercle: (id) => api.quitterCercle(id),
@@ -3819,7 +4003,13 @@
     const fl = $("#f-login"), fc = $("#f-code"), m = $(".msg", fl);
     let mode = location.hash === "#connexion" ? "connexion" : location.hash === "#inscription" ? "inscription"
       : (() => { try { return localStorage.getItem("brvm-a-un-compte") ? "connexion" : "inscription"; } catch (e) { return "inscription"; } })();
-    let cgu = null, wait = 0;
+    let cgu = null, wait = 0, canal = TEL_ON ? "tel" : "email", telE164 = "";
+    const ft = TEL_ON ? formTel() : null, notice0 = $(".notice", fc).innerHTML;
+    const montrerCanal = () => {
+      if (!ft) return;
+      ft.hidden = canal !== "tel"; fl.hidden = canal !== "email";
+      $("#auth-tel-alt").hidden = canal !== "email";
+    };
     const regler = () => {
       const ins = mode === "inscription";
       document.querySelectorAll("[data-auth]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.auth === mode)));
@@ -3829,13 +4019,29 @@
       $("#auth-cgu").hidden = !ins || !cgu;
       if (cgu) $("#lire-cgu").textContent = cgu.titre || "conditions d'utilisation";
       m.textContent = "";
+      if (ft) {
+        $("#auth-tel-cgu").hidden = !ins || !cgu;
+        if (cgu) $("#lire-cgu-tel").textContent = cgu.titre || "conditions d'utilisation";
+        $("#auth-aide-tel").textContent = ins ? "Votre numéro sert d'identifiant : pas de mot de passe à retenir." : "Saisissez le numéro de votre compte : nous vous envoyons un code sur WhatsApp.";
+        $(".msg", ft).textContent = "";
+        if (canal === "email") $("#auth-aide").textContent = ins ? "Vous pourrez ajouter votre numéro WhatsApp ensuite." : "Pour les comptes créés avec une adresse e-mail.";
+        $(".auth-pied").innerHTML = `Pas de mot de passe : un code vous est envoyé ${canal === "tel" ? "sur WhatsApp" : "par e-mail"}.
+          <a href="?demo=1">Essayer la démo</a> sans compte (données fictives).`;
+      }
+      montrerCanal();
     };
     document.querySelectorAll("[data-auth]").forEach((b) => b.addEventListener("click", () => {
       mode = b.dataset.auth; fc.hidden = true; fl.hidden = false; regler();
       history.replaceState(null, "", location.pathname + location.search + "#" + mode);
-      fl.email.focus();
+      (canal === "tel" ? ft.telephone : fl.email).focus();
     }));
     $("#lire-cgu").addEventListener("click", (ev) => { ev.preventDefault(); if (cgu) showCgu(cgu, false); });
+    if (ft) {
+      $("#lire-cgu-tel").addEventListener("click", (ev) => { ev.preventDefault(); if (cgu) showCgu(cgu, false); });
+      $("#vers-email").addEventListener("click", () => { canal = "email"; regler(); fl.email.focus(); });
+      $("#vers-tel").addEventListener("click", () => { canal = "tel"; regler(); ft.telephone.focus(); });
+      ft.addEventListener("submit", (ev) => { ev.preventDefault(); envoyer(); });
+    }
     api.documents().then((docs) => { cgu = (docs || []).find((d) => d.type === "cgu") || null; regler(); }).catch(() => {});
     regler();
     try {
@@ -3847,18 +4053,68 @@
         history.replaceState(null, "", location.pathname + location.search.replace(/[?&]error[^&]*/g, ""));
       }
     } catch (e) { /* adresse illisible : rien à signaler */ }
-    const bouton = fl.querySelector("button[type=submit]"), label = bouton.textContent, renvoi = $("#code-renvoi");
+    const renvoi = $("#code-renvoi");
     const attendre = (sec) => {
       wait = sec;
+      const bouton = (canal === "tel" ? ft : fl).querySelector("button[type=submit]"), label = bouton.dataset.label ||= bouton.textContent;
+      const quoi = canal === "tel" ? "le code" : "l'e-mail";
       const tick = () => {
-        if (wait <= 0) { bouton.disabled = renvoi.disabled = false; bouton.textContent = label; renvoi.textContent = "Renvoyer l'e-mail"; return; }
+        if (wait <= 0) { bouton.disabled = renvoi.disabled = false; bouton.textContent = label; renvoi.textContent = `Renvoyer ${quoi}`; return; }
         bouton.textContent = `Nouvel envoi possible dans ${wait} s`;
-        renvoi.textContent = `Renvoyer l'e-mail (${wait--} s)`;
+        renvoi.textContent = `Renvoyer ${quoi} (${wait--} s)`;
         setTimeout(tick, 1000);
       };
       bouton.disabled = renvoi.disabled = true; tick();
     };
+    const versCode = (ou) => {
+      $(".notice", fc).innerHTML = canal === "tel"
+        ? `<b>C'est envoyé sur WhatsApp au <span id="code-email"></span>.</b> Ouvrez WhatsApp, copiez le <b>code à 6 chiffres</b> reçu de BafiBourse, puis revenez <b>ici</b> pour le saisir.`
+        : notice0;
+      $("#code-email").textContent = ou;
+      $('label[for="code"]', fc).textContent = canal === "tel" ? "Code reçu sur WhatsApp" : "Code reçu par e-mail";
+      $("#code-modifier").textContent = canal === "tel" ? "Modifier le numéro" : "Modifier l'adresse";
+      $(".msg", fc).textContent = "";
+      fl.hidden = true; if (ft) ft.hidden = true; $(".auth-choix").hidden = true;
+      fc.hidden = false; fc.code.value = "";
+      setTimeout(() => fc.code.focus(), 50);
+      attendre(60);                                  // évite les demandes répétées (limite d'envoi)
+    };
+    const envoyerTel = async () => {
+      const mt = $(".msg", ft), creer = mode === "inscription", lib = await chargerTel();
+      const n = lireNumero(ft.telephone.value, ft.pays.value, lib);
+      if (!/^\+\d{6,15}$/.test(n)) { mt.textContent = n; return; }
+      if (creer && cgu && !ft.cgu.checked) { mt.textContent = "Acceptez les conditions d'utilisation pour créer votre compte."; return; }
+      const b = ft.querySelector("button[type=submit]"); b.disabled = true;
+      try {
+        await api.loginTel(n, creer);
+        telE164 = n;
+        try {
+          if (creer && cgu) sessionStorage.setItem("brvm-cgu-acceptee", String(cgu.version));
+          if (creer) sessionStorage.setItem("brvm-inscription", "1");
+        } catch (e) { /* stockage indisponible */ }
+        mt.textContent = "";
+        versCode(lib ? lib.parsePhoneNumberFromString(n)?.formatInternational() || n : n);
+      } catch (e) {
+        const msg = String(e.message || e);
+        b.disabled = false;
+        if (!creer && /signup|not allowed|not found|otp_disabled/i.test(msg)) {
+          mt.innerHTML = `Aucun compte avec ce numéro. <button class="btn link" type="button" id="vers-inscription-tel">Créer un compte avec ce numéro</button>
+            · <button class="btn link" type="button" id="vers-email-2">J'ai un compte avec mon e-mail</button>`;
+          $("#vers-inscription-tel").addEventListener("click", () => { mode = "inscription"; regler(); history.replaceState(null, "", location.pathname + location.search + "#inscription"); });
+          $("#vers-email-2").addEventListener("click", () => { canal = "email"; regler(); fl.email.focus(); });
+        } else if (/rate limit|too many|429|security purposes/i.test(msg)) {
+          mt.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un code sur WhatsApp, saisissez-le ; sinon réessayez dans quelques minutes.";
+        } else if (/fetch|network|failed to fetch|load failed/i.test(msg)) {
+          mt.textContent = "Pas de connexion internet pour le moment : vérifiez votre réseau, puis réessayez.";
+        } else if (/provider|disabled|unsupported|sms_send_failed|whatsapp/i.test(msg)) {
+          mt.innerHTML = `L'envoi par WhatsApp n'est pas disponible pour le moment. <button class="btn link" type="button" id="vers-email-3">Utiliser mon adresse e-mail</button>`;
+          $("#vers-email-3").addEventListener("click", () => { canal = "email"; regler(); fl.email.focus(); });
+        } else mt.textContent = "Le code n'a pas pu être envoyé. Réessayez dans quelques minutes ; si cela continue, écrivez-nous.";
+      }
+    };
     const envoyer = async () => {
+      if (canal === "tel") return envoyerTel();
+      const bouton = fl.querySelector("button[type=submit]");
       const email = fl.email.value.trim(), creer = mode === "inscription";
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { m.textContent = "Adresse e-mail invalide."; return; }
       if (creer && cgu && !fl.cgu.checked) { m.textContent = "Acceptez les conditions d'utilisation pour créer votre compte."; return; }
@@ -3870,13 +4126,7 @@
           if (creer) sessionStorage.setItem("brvm-inscription", "1");
         } catch (e) { /* stockage indisponible */ }
         m.textContent = "";
-        $("#code-email").textContent = email;
-        $(".msg", fc).textContent = "";
-        fl.hidden = true; $(".auth-choix").hidden = true;          // une seule chose à faire : ouvrir l'e-mail
-        fc.hidden = false;
-        fc.code.value = "";
-        setTimeout(() => fc.code.focus(), 50);          // le code d'abord : il ne dépend pas du navigateur qui s'ouvre
-        attendre(60);                                  // évite les demandes répétées (limite d'envoi)
+        versCode(email);                               // une seule chose à faire : ouvrir l'e-mail, le code d'abord
       } catch (e) {
         const msg = String(e.message || e);
         bouton.disabled = false;
@@ -3893,13 +4143,14 @@
     };
     fl.addEventListener("submit", (ev) => { ev.preventDefault(); envoyer(); });
     $("#code-renvoi").addEventListener("click", () => envoyer());
-    $("#code-modifier").addEventListener("click", () => { fc.hidden = true; fl.hidden = false; $(".auth-choix").hidden = false; fl.email.focus(); });
+    $("#code-modifier").addEventListener("click", () => { fc.hidden = true; $(".auth-choix").hidden = false; fl.hidden = false; montrerCanal(); (canal === "tel" ? ft.telephone : fl.email).focus(); });
     fc.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const mc = $(".msg", fc), code = fc.code.value.replace(/\s/g, "");
-      if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = "Saisissez le code reçu par e-mail (6 chiffres), ou touchez simplement le lien de l'e-mail."; return; }
-      try { await api.verify(fl.email.value.trim(), code); }
-      catch (e) { mc.textContent = /expired|invalid|not found/i.test(String(e.message)) ? "Code incorrect ou expiré : vérifiez qu'il vient du dernier e-mail reçu, ou demandez-en un nouveau." : "Code refusé : " + e.message; }
+      const tel = canal === "tel";
+      if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = tel ? "Saisissez le code à 6 chiffres reçu sur WhatsApp." : "Saisissez le code reçu par e-mail (6 chiffres), ou touchez simplement le lien de l'e-mail."; return; }
+      try { await (tel ? api.verifyTel(telE164, code) : api.verify(fl.email.value.trim(), code)); }
+      catch (e) { mc.textContent = /expired|invalid|not found/i.test(String(e.message)) ? `Code incorrect ou expiré : vérifiez qu'il vient du dernier ${tel ? "message WhatsApp" : "e-mail"} reçu, ou demandez-en un nouveau.` : "Code refusé : " + e.message; }
     });
   }
 

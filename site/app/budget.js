@@ -19,6 +19,7 @@
 
   // ------------------------------------------------------------------ catégories (pictogrammes) et enveloppes
   const P = {
+    cloche: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
     flamme: '<path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-3 2-4 2-7 1 1 2 2 3 4"/>',
     nourriture: '<path d="M4 11h16l-1.5 8h-13z"/><path d="M8 11l4-6 4 6"/>',
     transport: '<rect x="3" y="8" width="18" height="9" rx="2"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="16.5" cy="17" r="1.5"/>',
@@ -279,11 +280,21 @@
       <p class="small bu-effort" id="bu-effort" aria-live="polite"></p>
       <p class="bu-q2">À quelle heure, le soir, voulez-vous votre petit rappel ?</p>
       <div class="bu-puces">${[["19:30", "19 h 30"], ["20:00", "20 h"], ["21:00", "21 h"], ["22:00", "22 h"]].map(([h, l]) => `<button type="button" class="bu-puce" data-bu="heure" data-v="${h}" aria-pressed="${(b.heure || "20:00") === h}">${l}</button>`).join("")}</div>
-      ${app().telephone?.() ? `<label class="bu-case"><input type="checkbox" id="bu-wa"${b.whatsapp ? " checked" : ""}> Recevoir aussi le rappel par WhatsApp</label>`
-        : `<p class="small muted center">Pour un rappel par WhatsApp, ajoutez votre numéro dans Profil.</p>`}
+      ${blocNotif(b)}
       <button type="button" class="btn primary bu-suite" data-bu="terminer"${b.objectif_icone ? "" : " disabled"}>C'est parti</button>
       <p class="small muted bu-note">Vous pourrez tout changer plus tard. Vos chiffres restent privés.</p>`;
   }
+  // rappel par notification (gratuit) : proposé à la fin du démarrage, coché par défaut quand l'appareil le permet
+  function blocNotif(b) {
+    const R = window.BafiRappels, e = R?.etatAppareil?.() || "impossible";
+    const bilan = `<p class="small muted center bu-bilan">Chaque dimanche, votre <b>bilan de la semaine</b> vous attend dans l'application.</p>`;
+    if (R?.active?.()) return `<p class="small center bu-notif-ok">✓ Notification déjà activée sur cet appareil.</p>${bilan}`;
+    if (e === "ok") return `<label class="bu-notif"><span class="bu-tuile">${ic(P.cloche)}</span><span><b>Notification sur ce téléphone</b><small>Gratuit. Un seul rappel par soir.</small></span>
+        <input type="checkbox" id="bu-notif"${b.notif !== false ? " checked" : ""}></label>${bilan}`;
+    if (e === "ios") return `<p class="small muted center">Sur iPhone : ajoutez d'abord BafiBourse à l'écran d'accueil (<b>Partager</b> › <b>Sur l'écran d'accueil</b>), puis activez la notification dans Profil › Mes rappels.</p>${bilan}`;
+    return bilan;
+  }
+  document.addEventListener("change", (ev) => { if (ev.target.id === "bu-notif") S.brouillon.notif = ev.target.checked; });
   // ouvre la fenêtre « Je garde » du coffre, montant prérempli
   function garder(montant) {
     const b = document.createElement("button"); b.type = "button"; b.dataset.coffre = "verser"; b.hidden = true;
@@ -304,18 +315,21 @@
   const lireNombre = (v) => +String(v || "").replace(/[^\d]/g, "") || 0;
   async function terminerDemarrage() {
     const b = S.brouillon;
+    // la demande d'autorisation doit partir tout de suite, pendant le geste de l'utilisateur (sinon le téléphone la bloque)
+    const notif = $("#bu-notif")?.checked ? window.BafiRappels?.activerPush?.({ heure: b.heure || "20:00", discret: true }).catch(() => false) : null;
     b.objectif_montant = lireNombre($("#bu-obj-m")?.value) || null;
     const lib = $("#bu-obj-n")?.value.trim() || (OBJ.find((o) => o[0] === b.objectif_icone) || ["", "Mon projet"])[1];
     const profil = { mode: "simple", rythme: b.rythme || "mois", revenu: b.revenu || 0, profil: "equilibre", jour_paie: b.rythme === "mois" ? (b.jour_paie || null) : null,
                      objectif_nom: $("#bu-obj-n")?.value.trim() || (b.objectif_icone === "securite" ? "Mes imprévus" : lib === "École" ? "L'école" : lib),
                      objectif_icone: b.objectif_icone, objectif_montant: b.objectif_montant, objectif_date: $("#bu-obj-d")?.value ? $("#bu-obj-d").value + "-01" : null };
     try { await app().budget.sauverProfil(profil); S.profil = { ...(S.profil || {}), ...profil };
-          const wa = !!$("#bu-wa")?.checked;
-          app().sauverRappels?.({ heure: b.heure || "20:00", epargne: true, ...(wa ? { whatsapp: true, whatsapp_le: new Date().toISOString() } : {}) })?.catch?.(() => {});
+          if (!notif) app().sauverRappels?.({ heure: b.heure || "20:00", epargne: true })?.catch?.(() => {});
           if (b.objectif_icone) try { const x = await app().budget.ajouterProjet?.({ nom: profil.objectif_nom, icone: b.objectif_icone, montant: profil.objectif_montant, date_cible: profil.objectif_date, ordre: 0 }); if (x) S.projets = [x]; } catch (e) { /* table non installée : le projet du profil sert */ } }
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); return; }
     const e = (S.profil.revenu || 0) * (S.profil.rythme === "jour" ? 0.2 : 0.2);
-    app().toast("Votre budget est prêt.", { detail: `Vous pourriez garder environ ${F(e)} ${S.profil.rythme === "jour" ? "par jour" : "par mois"}.` });
+    const notifOk = notif ? await notif : false;
+    app().toast("Votre budget est prêt.", { detail: `Vous pourriez garder environ ${F(e)} ${S.profil.rythme === "jour" ? "par jour" : "par mois"}.`
+      + (notifOk ? ` Rappel par notification à ${String(b.heure || "20:00").replace(":", " h ").replace(/ 00$/, "")}.` : "") });
     rendre();
   }
 
