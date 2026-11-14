@@ -60,7 +60,7 @@
 /* ---------------------------------------------------------------- éléments codés en dur dans l'ancienne charte */
 [data-charte="indigo"] .syn-grid { border-top-color: hsl(230 55% 32% / .18); }
 
-/* ---------------------------------------------------------------- nom de marque : « Bafi » en ambre doré, « Bourse » en indigo
+/* ---------------------------------------------------------------- nom de marque : « Bafi » en ambre doré, « Finance » en indigo
  * (le texte d'un logo ou d'un nom de marque n'est pas soumis aux exigences de contraste WCAG) */
 [data-charte="indigo"] .brand .marque { color: var(--brand); font-weight: 800; letter-spacing: -.01em; }
 [data-charte="indigo"] .brand .m-bafi { color: hsl(35 92% 55%); font-weight: inherit; }

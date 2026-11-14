@@ -1,0 +1,99 @@
+/* Bafi Finance – le Profil en sommaire : chaque carte devient une rubrique repliée, une ligne avec son état
+ * (« 2 500 F par jour · objectif 500 000 F »), rangée par fréquence d'usage. Une seule rubrique ouverte à la fois.
+ * Fonctionne aussi pour les cartes ajoutées par les autres modules (rappels, avis, aide). */
+(() => {
+  "use strict";
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // [clé, titre, ordre, reconnaissance de la carte]
+  const RUBRIQUES = [
+    ["coord", "Mes informations", 0, (c) => c.id === "f-identite"],
+    ["abo", "Mon abonnement", 1, (c) => c.classList.contains("abo-carte")],
+    ["rappels", "Mes rappels et notifications", 2, (c) => c.classList.contains("rp-carte")],
+    ["plan", "Mon rythme pour garder", 3, (c) => c.id === "f-plan"],
+    ["invest", "Mon profil d'investisseur", 4, (c) => c.id === "f-profil"],
+    ["comptes", "Mes comptes et placements", 5, (c) => c.id === "f-univers"],
+    ["aide", "Aide et prise en main", 6, (c) => c.classList.contains("tuto-aide")],
+    ["contact", "Nous contacter", 6.5, (c) => c.classList.contains("ct-carte")],
+    ["avis", "Donner mon avis", 7, (c) => c.classList.contains("av-profil")],
+    ["demo", "Essayer les félicitations", 8, (c) => /félicitations/i.test(c.querySelector("h2")?.textContent || "") && !c.id],
+    ["gloss", "Souligner les mots expliqués", 5.5, (c) => c.classList.contains("gl-carte")],
+    ["lexique", "Lexique", 7.5, (c) => c.classList.contains("gl-lexique")],
+    ["docs", "Documents légaux", 8.5, (c) => c.classList.contains("pr-docs")],
+    ["apropos", "À propos", 9, (c) => /À propos/.test(c.querySelector("h2")?.textContent || "")],
+  ];
+  const ouverte = () => { try { return sessionStorage.getItem("brvm-rubrique") || ""; } catch (e) { return ""; } };
+  function etat(k, carte) {
+    const app = window.BRVM_APP;
+    if (k === "rappels") {
+      const h = carte.querySelector('[data-rp="heure"]')?.value, push = !!carte.querySelector('[data-rp="appareil"]:checked'),
+            bilan = carte.querySelector('[data-rp="bilan_hebdo"]')?.checked;
+      return push ? [h ? `Le soir à ${h.replace(":", " h ").replace(/ 00$/, "")}` : "", bilan ? "bilan du dimanche" : ""].filter(Boolean).join(" · ") : "Notification pas encore activée";
+    }
+    if (k === "avis") return carte.querySelector(".av-fixes") ? `${carte.querySelector(".av-fixes").getAttribute("aria-label")} · ${carte.querySelector(".small.muted")?.textContent || ""}` : "Pas encore donné";
+    if (k === "aide") return "Visite guidée, portrait, glossaire";
+    if (k === "contact") return "Une question, un problème, une idée · WhatsApp";
+    if (k === "demo") return "Démonstration uniquement";
+    if (k === "apropos") return "Version de l'application, déconnexion de tous mes appareils";
+    if (k === "lexique") return "Tous les mots expliqués : SGI, séance, OPCVM…";
+    if (k === "docs") return "Conditions, confidentialité, risques";
+    return app?.etatRubrique?.(k) || "";
+  }
+  function ranger() {
+    const v = $("#v-profil");
+    if (!v || v.hidden) return;
+    let som = $(".sommaire", v);
+    if (!som) { som = document.createElement("div"); som.className = "sommaire"; ($(".profil-tete", v) || $("h1", v))?.after(som); }
+    else if ($(".profil-tete", v) && som.previousElementSibling !== $(".profil-tete", v)) $(".profil-tete", v).after(som);
+    // une rubrique = une seule carte : une carte glissée par un autre module ressort, une rubrique vide disparaît
+    som.querySelectorAll("details.rubrique").forEach((d) => {
+      const cartes = [...d.querySelectorAll(":scope > .card")];
+      if (!cartes.length) return d.remove();
+      const test = RUBRIQUES.find(([k]) => k === d.dataset.rub)?.[3];
+      const garde = cartes.find((c) => test?.(c)) || cartes[0];          // la carte de la rubrique reste, les autres ressortent
+      cartes.filter((c) => c !== garde).forEach((c) => v.append(c));
+    });
+    for (const carte of [...v.children]) {
+      if (!carte.matches?.(".card")) continue;
+      const r = RUBRIQUES.find(([, , , test]) => test(carte));
+      const [k, titre, ordre] = r || ["autre" + Math.random().toString(36).slice(2, 6), carte.querySelector("h2")?.textContent || "Réglages", 10];
+      if (k === "gloss") {                                   // un interrupteur : la ligne agit directement, sans se déplier
+        const d = document.createElement("div");
+        d.className = "rubrique rub-direct"; d.dataset.rub = k; d.dataset.ordre = ordre; d.append(carte);
+        som.insertBefore(d, [...som.children].find((x) => +x.dataset.ordre > ordre) || null);
+        continue;
+      }
+      const d = document.createElement("details");
+      d.className = "rubrique"; d.dataset.rub = k; d.dataset.ordre = ordre;
+      d.innerHTML = `<summary><span class="rub-t">${esc(titre)}</span><span class="rub-e">${esc(etat(k, carte))}</span></summary>`;
+      d.append(carte);
+      if (ouverte() === k) d.open = true;
+      const apres = [...som.children].find((x) => +x.dataset.ordre > ordre);
+      som.insertBefore(d, apres || null);
+      d.addEventListener("toggle", () => {
+        if (!d.open) return;
+        try { sessionStorage.setItem("brvm-rubrique", k); } catch (e) { /* rien */ }
+        som.querySelectorAll("details.rubrique[open]").forEach((x) => x !== d && (x.open = false));   // une seule ouverte
+      });
+    }
+    // trois groupes, lus d'un coup d'œil : Mon compte, Mes réglages, Aide
+    som.querySelectorAll(".rub-groupe").forEach((x) => x.remove());
+    let gPrec = "";
+    for (const d of som.querySelectorAll(".rubrique")) {
+      const o = +d.dataset.ordre, g = o <= 1 ? "Mon compte" : o < 6 ? "Mes réglages" : "Aide et informations";
+      if (g !== gPrec) { const h = document.createElement("h2"); h.className = "rub-groupe"; h.textContent = g; som.insertBefore(h, d); gPrec = g; }
+    }
+    // mettre à jour les états (après un enregistrement, par exemple)
+    som.querySelectorAll("details.rubrique").forEach((d) => { const c = d.querySelector(".card"), e = d.querySelector(".rub-e"); if (c && e) e.textContent = etat(d.dataset.rub, c); });
+    // une rubrique-interrupteur sortie de sa ligne (profil redessiné) retrouve sa place au prochain passage
+    som.querySelectorAll(".rub-direct").forEach((d) => { if (!d.querySelector(".card")) d.remove(); });
+  }
+  let prevu = 0;
+  const planifier = () => { clearTimeout(prevu); prevu = setTimeout(ranger, 30); };
+  const v = document.getElementById("v-profil");
+  if (v) new MutationObserver((ms) => { if (ms.some((m) => [...m.addedNodes, ...m.removedNodes].some((n) => n.classList?.contains("card")))) planifier(); })
+    .observe(v, { childList: true, subtree: true });
+  window.addEventListener("brvm:maj", () => setTimeout(ranger, 150));
+  // un réglage modifié dans une rubrique : son état se met à jour
+  v?.addEventListener("change", () => setTimeout(ranger, 400));
+})();

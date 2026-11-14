@@ -1,4 +1,4 @@
-/* BafiBourse – fenêtre « Nous contacter » et petite question (vitrine, connexion, application) */
+/* Bafi Finance – fenêtre « Nous contacter » et petite question (vitrine, connexion, application) */
 .ct-dlg { width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; border: 0; border-radius: 22px; padding: 0;
   background: var(--surface, #fff); color: var(--text, #1b1d2a); box-shadow: 0 30px 80px -30px rgba(20, 24, 60, .5); }
 .ct-dlg::backdrop { background: rgba(15, 18, 40, .45); }

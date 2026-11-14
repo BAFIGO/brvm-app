@@ -476,7 +476,7 @@
   if (!hero || document.getElementById("v-invite")) return;
   hero.insertAdjacentHTML("beforebegin", `<section id="v-invite" class="v-invite" aria-labelledby="v-invite-t">
     <div class="v-invite-in"><span class="v-invite-ic" aria-hidden="true">🎁</span>
-      <div><h2 id="v-invite-t">Un proche vous invite sur BafiBourse</h2>
+      <div><h2 id="v-invite-t">Un proche vous invite sur Bafi Finance</h2>
         <p>Votre invitation vous offre <b>14 jours de la formule Essentiel</b>. Prenez 2 minutes pour essayer l'application avec des données fictives, puis créez votre compte : l'invitation est gardée.</p>
         <div class="v-invite-b"><a class="btn primary" href="app/?demo=1">Essayer la démo (2 minutes)</a>
           <a class="btn" href="app/?offre=decouverte#inscription">Créer mon compte</a></div></div></div></section>`);

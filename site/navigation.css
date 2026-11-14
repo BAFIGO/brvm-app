@@ -1,0 +1,175 @@
+/* Bafi Finance – menu latéral, en-tête à titre central, fenêtre « i », glissement des écrans (navigation.js).
+ * Chargé en dernier : il remplace la barre d'onglets du bas et les onglets du haut. Clair et sombre via les variables de la charte. */
+
+/* ---------------------------------------------------------------- la barre d'onglets disparaît : place libérée en bas */
+body.nav-tiroir .tabs-bottom, body.nav-tiroir .tabs-top { display: none !important; }
+body.nav-tiroir { padding-bottom: env(safe-area-inset-bottom) !important; }
+body.nav-tiroir .fab, body.nav-tiroir .fab-ia { bottom: calc(18px + env(safe-area-inset-bottom)) !important; }
+body.nav-tiroir.has-fab .fab-ia { bottom: calc(18px + 58px + 12px + env(safe-area-inset-bottom)) !important; }
+body.nav-tiroir .defile { bottom: calc(18px + env(safe-area-inset-bottom)) !important; }
+
+/* ---------------------------------------------------------------- en-tête : ☰ · titre · avatar (et « i » sur Profil) */
+body.nav-tiroir .topbar { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 10px; border-bottom: 0;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); }
+body.nav-tiroir .topbar .brand { display: none; }
+body.nav-tiroir .topbar #badge-demo { position: absolute; left: 70px; top: calc(4px + env(safe-area-inset-top)); font-size: .7rem; }
+.nav-ouvrir, .nav-info { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 0; background: var(--surface); color: var(--accent); box-shadow: 0 2px 10px hsl(232 50% 20% / .10); }
+.nav-ouvrir svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.nav-titre { margin: 0; text-align: center; font-weight: 700; font-size: 1.08rem; color: var(--brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-info { grid-column: 3; font: 700 1.2rem/1 Georgia, "Times New Roman", serif; box-shadow: inset 0 0 0 2px var(--accent), 0 2px 10px hsl(232 50% 20% / .10); }
+body.nav-tiroir .topbar .moi { margin-left: 0; grid-column: 3; }
+body.nav-tiroir .topbar:has(.nav-info:not([hidden])) .moi { display: none; }      /* sur Profil, le « i » prend la place de l'avatar */
+@media (max-width: 420px) { body.nav-tiroir .topbar .moi-nom { display: none; } body.nav-tiroir .topbar .moi { padding-right: 3px; } }
+
+/* ---------------------------------------------------------------- le menu */
+/* Le menu est posé SOUS l'écran ; c'est l'écran qui glisse vers la droite pour le découvrir (comme dans l'application Claude). */
+.tiroir { position: fixed; z-index: 1; top: 0; bottom: 0; left: 0; width: min(320px, 84vw); display: flex; flex-direction: column;
+  background: var(--surface-2); color: var(--text); padding: calc(14px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom)); box-sizing: border-box;
+  opacity: calc(.4 + .6 * var(--ouverture, 0)); }
+.ecran { position: relative; z-index: 3; min-height: 100vh; min-height: 100dvh; background: var(--bg);
+  transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+body.tiroir-visible .ecran { will-change: transform; }
+/* bord gauche de l'écran : ombre douce et léger voile, qui montent avec l'ouverture */
+.ecran::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 50; background: hsl(232 40% 10% / calc(.10 * var(--ouverture, 0)));
+  box-shadow: -14px 0 36px hsl(232 50% 12% / calc(.30 * var(--ouverture, 0))); opacity: 0; transition: opacity .2s; }
+body.tiroir-visible .ecran::after { opacity: 1; }
+.ecran-voile { position: fixed; z-index: 4; top: 0; bottom: 0; right: 0; left: min(320px, 84vw); background: transparent; }
+body.tiroir-ouvert { overflow: hidden; }
+body.tiroir-visible .fab, body.tiroir-visible .fab-ia, body.tiroir-visible .defile, body.tiroir-visible #bandeau-env { opacity: 0 !important; pointer-events: none !important; }
+
+.ti-tete { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 16px; }
+.ti-marque { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-size: 1.35rem; letter-spacing: -.02em; color: var(--brand); }
+.ti-marque .m-bafi { color: hsl(35 92% 55%); font-weight: inherit; }
+.ti-cadeau { position: relative; width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--surface); color: var(--accent); display: grid; place-items: center;
+  cursor: pointer; box-shadow: 0 2px 10px hsl(232 50% 20% / .10); }
+.ti-cadeau svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ti-cadeau:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ti-defile { flex: 1; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
+.ti-liste, .ti-recents { list-style: none; margin: 0; padding: 0; }
+.ti-item { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 14px; border-radius: 14px; text-decoration: none;
+  color: var(--text); font-size: 1.02rem; font-weight: 500; }
+.ti-item svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ti-item:hover { background: color-mix(in srgb, var(--accent-soft) 60%, transparent); }
+.ti-item[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.ti-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ti-liste.petite .ti-item { min-height: 44px; font-size: .97rem; }
+.ti-pastille { width: 22px; height: 22px; flex: none; border-radius: 7px; display: grid; place-items: center; font-size: .7rem; font-weight: 800;
+  background: var(--brand); color: var(--surface); }
+.ti-pastille.rond { border-radius: 50%; background: hsl(35 92% 55%); color: hsl(232 34% 12%); }
+.ti-sous { margin: 20px 14px 6px; font-size: .86rem; font-weight: 600; color: var(--muted); }
+.ti-recents li { display: flex; justify-content: space-between; gap: 10px; min-height: 36px; align-items: center; padding: 0 14px; font-size: .95rem; }
+.ti-recents li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ti-recents .muted { font-size: .8rem; flex: none; }
+.ti-pied { display: flex; align-items: center; gap: 12px; padding-top: 12px; }
+/* pied du menu : votre avatar et votre prénom, qui mènent à Profil et réglages */
+.ti-moi { flex: 1; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 14px 6px 6px; border-radius: 30px; text-decoration: none;
+  background: var(--surface); color: var(--text); box-shadow: 0 1px 4px hsl(232 50% 20% / .12); }
+.ti-moi .av-img, .ti-moi .av-ini { width: 40px; height: 40px; flex: none; }
+.ti-moi[aria-current="page"] { box-shadow: 0 0 0 2px var(--accent); }
+.ti-moi-nom { min-width: 0; display: flex; flex-direction: column; font-weight: 700; font-size: 1rem; line-height: 1.2; overflow: hidden; }
+.ti-moi-nom small { font-weight: 500; font-size: .8rem; color: var(--muted); }
+.ti-moi:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- fenêtre « i » : ancrée en haut à droite */
+dialog.infos { margin: calc(62px + env(safe-area-inset-top)) 12px auto auto; width: min(300px, calc(100vw - 24px)); padding: 16px 6px 6px; border: 0;
+  border-radius: 22px; background: var(--surface); color: var(--text); box-shadow: 0 14px 44px hsl(232 50% 15% / .28); }
+dialog.infos::backdrop { background: hsl(232 40% 10% / .14); }
+.inf-tete { padding: 0 14px 12px; border-bottom: 1px solid var(--border); }
+.inf-marque { margin: 0; font-weight: 800; font-size: 1.1rem; color: var(--brand); } .inf-marque .m-bafi { color: hsl(35 92% 55%); }
+.inf-tete .small { margin: 2px 0 0; }
+.inf-liste { list-style: none; margin: 4px 0 0; padding: 0; }
+.inf-liste button, .inf-liste a, .inf-absent { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px;
+  padding: 6px 14px; border-radius: 14px; cursor: pointer; color: var(--text); font-size: 1rem; }
+.inf-liste button:hover, .inf-liste a:hover { background: var(--accent-soft); }
+.inf-liste button:focus-visible, .inf-liste a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.inf-liste svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.inf-absent { cursor: default; color: var(--muted); }
+.inf-absent svg { stroke: var(--muted); }
+.inf-absent small { display: block; font-size: .78rem; }
+.inf-sep { height: 1px; background: var(--border); margin: 6px 14px; }
+
+/* ---------------------------------------------------------------- l'écran arrive de la droite */
+@media (prefers-reduced-motion: no-preference) {
+  .view.glisse { animation: ecran-glisse .28s cubic-bezier(.2, .8, .2, 1) both; }
+  dialog.infos[open] { animation: infos-in .18s ease-out both; transform-origin: top right; }
+}
+@keyframes ecran-glisse { from { transform: translateX(36px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes infos-in { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ecran { transition: none; } }
+
+/* noms longs : coupés proprement */
+.ti-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* au-dessus de tout, même du bandeau « version de test » */
+
+/* la fenêtre « i » reste une petite fenêtre ancrée en haut à droite, même sur téléphone (pas un panneau du bas) */
+dialog.infos, dialog.infos:not(.ia):not(.bravo) { margin: calc(62px + env(safe-area-inset-top)) 12px auto auto !important; width: min(300px, calc(100vw - 24px)) !important;
+  max-width: none !important; max-height: calc(100vh - 90px) !important; padding: 16px 6px 6px !important; border-radius: 22px !important; border: 0 !important; }
+dialog.infos > div:first-child::before { content: none !important; }
+@media (prefers-reduced-motion: no-preference) { dialog.infos[open] { animation: infos-in .18s ease-out both !important; } }
+
+/* astuce quand rien n'est épinglé */
+.ti-astuce { margin: 2px 14px 0; color: var(--muted); line-height: 1.4; }
+
+/* bouton « Épingler » sur chaque ligne de Mes placements */
+.epingler { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 2px 10px 2px 8px; margin-right: 6px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted); font: inherit; font-size: .78rem; font-weight: 600; }
+.epingler svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.epingler[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.epingler[aria-pressed="true"] svg { fill: currentColor; }
+.epingler:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* la ligne visée depuis un épinglé s'éclaire un instant */
+@media (prefers-reduced-motion: no-preference) { .pos-vise { animation: pos-vise 1.6s ease-out; } }
+@media (prefers-reduced-motion: reduce) { .pos-vise { outline: 2px solid var(--accent); outline-offset: 2px; } }
+@keyframes pos-vise { 0%, 40% { background: color-mix(in srgb, hsl(35 92% 55%) 22%, transparent); } 100% { background: transparent; } }
+.pf-cer-intro { margin: 0 2px 8px; }
+/* quatre rubriques dans le Portefeuille : elles tiennent sur un petit écran */
+@media (max-width: 420px) { .pf-onglets button { font-size: .78rem !important; padding-left: 4px !important; padding-right: 4px !important; } }
+
+/* ---------------------------------------------------------------- fenêtre du parrainage (le cadeau) */
+dialog.parrainage, dialog.parrainage:not(.ia):not(.bravo) { width: min(420px, calc(100vw - 24px)) !important; max-width: none !important; margin: auto !important;
+  max-height: calc(100dvh - 32px) !important; padding: 0 !important; border: 0 !important; border-radius: 26px !important; background: var(--surface); color: var(--text);
+  box-shadow: 0 20px 60px hsl(232 50% 12% / .35); }
+dialog.parrainage::backdrop { background: hsl(232 40% 10% / .45); }
+dialog.parrainage > div:first-child::before { content: none !important; }
+.parr { position: relative; padding: 26px 22px calc(20px + env(safe-area-inset-bottom)); text-align: left; }
+.parr-fermer { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--text);
+  display: grid; place-items: center; cursor: pointer; }
+.parr-fermer svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.parr-ic { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: hsl(35 92% 55%); color: hsl(232 34% 12%);
+  box-shadow: 0 8px 18px -8px hsl(35 92% 40% / .7); }
+.parr-ic svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.parr h2 { margin: 16px 0 6px; font-size: 1.35rem; line-height: 1.2; color: var(--brand); }
+.parr-lead { margin: 0 0 16px; color: var(--text); line-height: 1.5; }
+.parr-etapes { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 12px; }
+.parr-etapes li { display: flex; gap: 12px; align-items: flex-start; }
+.parr-etapes li > span { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .85rem;
+  background: var(--accent-soft); color: var(--accent); }
+.parr-etapes b { display: block; font-size: .97rem; } .parr-etapes small { display: block; color: var(--muted); font-size: .85rem; line-height: 1.4; }
+.parr-code { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 16px; background: var(--surface-2); }
+.parr-code code { font: 800 1.15rem/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .12em; color: var(--brand); }
+.parr-bilan { margin: 10px 2px 0; color: var(--good); font-weight: 600; }
+.parr-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.parr-actions .btn { min-height: 48px; }
+.parr-note { margin: 12px 2px 0; line-height: 1.45; }
+@media (prefers-reduced-motion: no-preference) { dialog.parrainage[open] { animation: infos-in .2s ease-out both !important; transform-origin: center; } }
+/* coin arrondi de l'écran quand il glisse */
+body.tiroir-visible .ecran { border-top-left-radius: 28px; border-bottom-left-radius: 28px; overflow: clip; }
+
+/* le titre est dans l'en-tête : les titres en double dans la page et les sous-onglets du Portefeuille disparaissent
+   (les titres restent lus par les lecteurs d'écran) */
+body.nav-tiroir :is(#h-auj, #h-pf, #h-mk, #h-pr, #h-perf, #h-bud, #h-obj, #h-av) { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+body.nav-tiroir .pf-onglets { display: none !important; }
+body.nav-tiroir .view > :is(#h-auj, #h-pf, #h-mk, #h-pr, #h-perf) + * { margin-top: 4px; }
+.ti-defile { min-height: 0; } .ti-pied { flex: none; }
+/* l'écran décalé ne doit jamais élargir la page (sinon le téléphone dézoome) */
+html:has(body.nav-tiroir), body.nav-tiroir { overflow-x: clip; }
+html:has(body.tiroir-visible), body.tiroir-visible { overflow: hidden; }
+#tiroir .ti-esp { padding: 14px 14px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); list-style: none; }
+#tiroir .ti-esp:first-child { padding-top: 4px; }
+/* boutons flottants qui s'effacent pendant la lecture */
+.fab-ia, .fab { transition: transform .25s ease, opacity .25s ease; }
+body.fab-cache .fab-ia, body.fab-cache .fab { transform: translateY(150%); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .fab-ia, .fab { transition: none; } }
+main .view:not([hidden]) { padding-bottom: 96px; }

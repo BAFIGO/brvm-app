@@ -1,4 +1,4 @@
-/* BafiBourse – aide au défilement : deux petits boutons ↑ ↓ qui apparaissent quand on fait défiler une longue page,
+/* Bafi Finance – aide au défilement : deux petits boutons ↑ ↓ qui apparaissent quand on fait défiler une longue page,
  * puis s'effacent après quelques secondes d'immobilité, pour ne jamais gêner la lecture ni les images.
  *   ↑ : revenir en haut de la page.
  *   ↓ : vitrine → section suivante ; application → bas de la page.

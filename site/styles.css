@@ -390,3 +390,10 @@ input.code { font-size: 1.4rem; letter-spacing: .3em; text-align: center; font-v
 .pays-titre { display: inline-block; margin-right: 2px; }
 .pays-titre.uemoa { font-size: .62rem; font-weight: 800; letter-spacing: .03em; padding: 1px 4px; border-radius: 4px;
   background: var(--accent-soft); color: var(--accent); vertical-align: 2px; font-family: inherit; }
+
+/* Bafi Finance : logo Bim Bim (tortue claire sur fond clair, version indigo et crème sur fond sombre) */
+.logo-bb { flex: none; display: inline-block; }
+.bb-sombre { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bb-clair { display: none; } :root:not([data-theme="light"]) .bb-sombre { display: inline-block; } }
+:root[data-theme="dark"] .bb-clair { display: none; }
+:root[data-theme="dark"] .bb-sombre { display: inline-block; }

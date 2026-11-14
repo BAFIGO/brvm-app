@@ -1,0 +1,31 @@
+{
+  "name": "Bafi Finance",
+  "short_name": "Bafi Finance",
+  "description": "Épargne régulière et suivi de vos placements à la BRVM, recalculés chaque soir de séance.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1B286A",
+  "theme_color": "#25347e",
+  "icons": [
+    {
+      "src": "../icon-192.png?v=bimbim1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icon-512.png?v=bimbim1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icon-indigo.svg?v=bimbim1",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

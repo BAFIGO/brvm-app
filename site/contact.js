@@ -1,4 +1,4 @@
-// BafiBourse – Nous contacter, signaler un problème, proposer une idée, petite question après une nouveauté.
+// Bafi Finance – Nous contacter, signaler un problème, proposer une idée, petite question après une nouveauté.
 // Un seul module pour la vitrine, l'écran de connexion et l'application. Fonctionne SANS compte :
 // le message passe par la fonction envoyer_message (28-contact-retours.sql), avec la clé publique du site.
 (() => {
@@ -28,7 +28,7 @@
     return r.json();
   }
   const TITRES = {
-    contact: ["Nous contacter", "Une question sur BafiBourse, votre abonnement ou un partenariat ? Nous répondons sous 48 h."],
+    contact: ["Nous contacter", "Une question sur Bafi Finance, votre abonnement ou un partenariat ? Nous répondons sous 48 h."],
     probleme: ["Signaler un problème", "Dites-nous ce qui ne va pas : l'écran et la version de l'application sont joints automatiquement."],
     idee: ["Proposer une idée", "Une fonction qui vous manque, une amélioration ? Toutes les idées sont lues."],
   };
@@ -61,7 +61,7 @@
           await envoyer({ type: dlg.dataset.type, sujet: f.sujet.value, theme: dlg.dataset.type === "idee" ? f.sujet.value : null, nom: f.nom.value.trim(),
                           coordonnee: f.coordonnee.value.trim(), message: f.message.value.trim(), site: f.site.value,
                           ecran: dlg.dataset.ecran || location.hash.slice(1) || "accueil", depuis: dlg.dataset.depuis });
-          f.innerHTML = `<h2>Merci, c'est reçu.</h2><p>${dlg.dataset.type === "contact" ? "Nous vous répondons sous 48 h." : "Votre message aide à améliorer BafiBourse."}</p>
+          f.innerHTML = `<h2>Merci, c'est reçu.</h2><p>${dlg.dataset.type === "contact" ? "Nous vous répondons sous 48 h." : "Votre message aide à améliorer Bafi Finance."}</p>
             <div class="ct-b"><button type="button" class="ct-ok" onclick="this.closest('dialog').close()">Fermer</button></div>`;
           setTimeout(() => { dlg?.remove(); dlg = null; }, 300000);
         } catch (e) { msg.textContent = e.message; b.disabled = false; }
