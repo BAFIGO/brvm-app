@@ -1,4 +1,4 @@
-/* Console d'administration BafiBourse.
+/* Console d'administration Bafi Finance.
  * Aucune décision de sécurité n'est prise ici : chaque action appelle une fonction admin_* de Supabase,
  * qui vérifie la permission et la double authentification (supabase/admin.sql). L'interface ne fait
  * qu'afficher ou masquer selon les permissions renvoyées par admin_moi().
@@ -1379,7 +1379,7 @@
         extra += `<details class="q-rel q-not"><summary><b>Notations d'agences</b>
             <span class="small muted">${N(notees.length)} société(s) notée(s) sur ${N(NOT.length)} · ${N(anciennes.length)} à renouveler · ${N(sans.length)} sans notation</span></summary>
           <p class="small muted">Notations délivrées par les agences agréées par l'AMF-UMOA (Bloomfield, WARA…). « À renouveler » : notation de plus de 18 mois ou échue,
-            à vérifier sur le site de l'agence. Le diagnostic BafiBourse n'est pas une notation.</p>
+            à vérifier sur le site de l'agence. Le diagnostic Bafi Finance n'est pas une notation.</p>
           ${notees.length ? `<div class="scroll-x"><table class="dtable"><thead><tr><th>Société</th><th>Agence</th><th>Long terme</th><th>Court terme</th><th>Perspective</th><th>Période</th><th></th></tr></thead><tbody>
             ${notees.map((x) => `<tr><td><b>${esc(x.code)}</b> <span class="small muted">${esc(x.nom || "")}</span></td><td>${esc(x.agence)}</td><td>${esc(x.long_terme || "–")}</td>
               <td>${esc(x.court_terme || "–")}</td><td>${esc(x.perspective || "–")}</td><td>${esc(x.periode || "–")}${x.ancienne ? ' <span class="chip warn">à renouveler</span>' : ""}</td>
@@ -1679,7 +1679,7 @@
           ${m.note ? `<div class="sub">Note : ${esc(m.note)}</div>` : ""}</div>
           <div class="right"><select data-msg-statut="${m.id}" aria-label="Statut">${Object.entries(STATUTS_MSG).map(([k, t]) => `<option value="${k}"${m.statut === k ? " selected" : ""}>${t}</option>`).join("")}</select>
           ${(() => { const ok = (x) => /^[^@\s?&#<>"']+@[^@\s?&#<>"']+\.[a-z]{2,}$/i.test(x || ""), e = ok(m.coordonnee) ? m.coordonnee : ok(m.email_compte) ? m.email_compte : "";
-            return e ? `<a class="btn small" href="mailto:${encodeURIComponent(e).replace("%40", "@")}?subject=${encodeURIComponent("BafiBourse : votre message")}">Répondre</a>` : ""; })()}
+            return e ? `<a class="btn small" href="mailto:${encodeURIComponent(e).replace("%40", "@")}?subject=${encodeURIComponent("Bafi Finance : votre message")}">Répondre</a>` : ""; })()}
           ${/\d{8,}/.test((m.coordonnee || "").replace(/\D/g, "")) ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${(m.coordonnee || "").replace(/\D/g, "")}">WhatsApp</a>` : ""}
           <button type="button" class="btn small" data-msg-note="${m.id}">Note</button></div></li>`).join("")}</ul>` : `<p class="muted">Aucun message ici.</p>`}`;
     $("#msg-liste").onclick = async (ev) => {
