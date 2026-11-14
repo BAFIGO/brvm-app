@@ -14,10 +14,13 @@ window.BRVM_CONFIG = {
   // « test » : base de test ; « test-sur-production » : version de test sans base de test, branchée sur la production (prudence)
   environnement: BAFI_EST_TEST ? (BAFI_TEST.supabaseUrl ? "test" : "test-sur-production") : "production",
   fraisCourtage: 0.013,
-  // Connexion par numéro de téléphone avec un code WhatsApp (itération 9).
-  // Laissez false tant que Twilio n'est pas branché dans Supabase (Authentication › Sign In / Providers › Phone) :
-  // sinon personne ne pourrait recevoir son code. Passez à true une fois l'essai réussi (voir LISEZ-MOI).
-  connexion: { whatsapp: false },
+  // Connexion par numéro de téléphone avec un code WhatsApp (itérations 9 et 12).
+  //   whatsapp       : false tant que Twilio n'est pas branché dans Supabase ; true pour l'ouvrir à tous (voir LISEZ-MOI).
+  //                    Pour essayer avant : ouvrez l'application avec ?whatsapp=essai (cet onglet seulement).
+  //   ajoutNumero    : proposer aux comptes créés avec un e-mail de confirmer leur numéro (false pour le couper seul).
+  //   numeroWhatsApp : numéro WhatsApp Business de Bafi Finance, chiffres seulement (ex. "221771234567") : bouton « Ouvrir WhatsApp ».
+  //   longueurCode   : nombre de chiffres du code (6 par défaut, comme dans Supabase).
+  connexion: { whatsapp: false, ajoutNumero: true, numeroWhatsApp: "", longueurCode: 6 },
   vapidPublique: "BMicomj2VSAFjpnSgPx3QX-Oj4H_fIv_7QCDXg06sCtQDrQ-C6hqgJsOcGxsvpzZ8Z-ALlNJLa0Uu4mgWNa5_kU",   // clé publique des notifications (rappels du soir)
   // Paiement des abonnements, en attendant l'agrégateur : numéros marchands affichés à l'utilisateur.
   // Laissez vide un moyen non utilisé : il n'est pas proposé.
