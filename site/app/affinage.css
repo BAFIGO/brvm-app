@@ -583,3 +583,7 @@ li.pos-vise { animation: pos-vise 1.6s ease; }
 .cer-classement .cer-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cer-pays-opt { margin: 0; padding: 10px 14px 12px; border-top: 1px solid var(--border); color: var(--muted); }
 .cer-pays-opt span { font-size: .84rem; }
+/* itération 12 : écran du code WhatsApp (ouvrir WhatsApp, coller le code) */
+.code-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.code-actions .btn { min-height: 40px; }
+#f-code .code { letter-spacing: .3em; font-size: 1.25rem; text-align: center; }

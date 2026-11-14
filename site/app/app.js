@@ -7,7 +7,20 @@
   const CFG = window.BRVM_CONFIG;
   const DEMO = new URLSearchParams(location.search).has("demo");
   // Connexion par numéro + code WhatsApp (itération 9) : activée dans config.js une fois Twilio branché à Supabase Auth.
-  const TEL_ON = CFG?.connexion?.whatsapp === true;
+  // Essai avant l'ouverture à tous : ouvrir l'application avec « ?whatsapp=essai » affiche la connexion par numéro
+  // pour cet onglet seulement (sans effet sur les autres utilisateurs). Cela ne contourne rien : sans Twilio branché
+  // dans Supabase, aucun code ne part.
+  const TEL_ESSAI = (() => {
+    try {
+      if (new URLSearchParams(location.search).get("whatsapp") === "essai") sessionStorage.setItem("brvm-whatsapp-essai", "1");
+      return sessionStorage.getItem("brvm-whatsapp-essai") === "1";
+    } catch (e) { return false; }
+  })();
+  const TEL_ON = CFG?.connexion?.whatsapp === true || TEL_ESSAI;
+  // ajout du numéro aux comptes créés avec un e-mail (peut être coupé seul si besoin)
+  const TEL_AJOUT = TEL_ON && CFG?.connexion?.ajoutNumero !== false;
+  const LONG_CODE = Math.min(10, Math.max(6, +CFG?.connexion?.longueurCode || 6));      // longueur du code (réglage Supabase)
+  const NUM_WA = String(CFG?.connexion?.numeroWhatsApp || "").replace(/\D/g, "");        // numéro WhatsApp de Bafi Finance (expéditeur)
   // Arrivée par le lien de l'e-mail (lu avant que Supabase ne nettoie l'adresse)
   const VIENT_DU_LIEN = /access_token=|[?&]code=|type=(magiclink|signup|email)/.test(location.hash + location.search);
   const DEMO_DEBUT = DEMO && new URLSearchParams(location.search).get("demo") === "debut";   // démo « mes premiers jours »
@@ -2419,7 +2432,7 @@
         <label>Nom<input name="nom" autocomplete="family-name" maxlength="80" value="${esc(p.nom || "")}"></label></div>
         <input type="hidden" name="pays" value="${esc(p.pays || pc)}"><input type="hidden" name="telephone" value="">
         <div class="tel-ok"><span><span class="muted small">Numéro WhatsApp</span><b>${drapeau(pc)} ${esc(aff)}</b><small class="tel-v">✓ Confirmé</small></span>
-          <button type="button" class="btn small" data-tel="changer">Changer</button></div>
+          ${TEL_AJOUT ? `<button type="button" class="btn small" data-tel="changer">Changer</button>` : ""}</div>
         ${S.user?.email ? "" : `<label>Adresse e-mail <span class="muted">(facultatif)</span><input name="email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="pour recevoir aussi vos récaps par e-mail"></label>`}`;
     }
     // Pays et téléphone sur une seule ligne : le sélecteur (drapeau + indicatif) donne aussi le pays enregistré
@@ -2431,7 +2444,7 @@
         <input id="ob-tel" name="telephone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" value="${esc(tel)}" placeholder="Numéro sans l'indicatif"></div>
       <p class="small muted">Touchez le drapeau pour choisir votre pays. Le numéro sert seulement à vous recontacter si vous demandez de l'aide
         (par exemple pour ouvrir un compte chez une SGI) ; il n'est jamais transmis à des tiers.</p>
-      ${TEL_ON ? `<p class="small"><button type="button" class="btn link" data-tel="confirmer">Confirmer mon numéro sur WhatsApp</button> : il deviendra votre identifiant de connexion.</p>` : ""}`;
+      ${TEL_AJOUT ? `<p class="small"><button type="button" class="btn link" data-tel="confirmer">Confirmer mon numéro sur WhatsApp</button> : il deviendra votre identifiant de connexion.</p>` : ""}`;
   }
   function brancherIdentite(f, lib) {
     f.querySelector("[data-tel]")?.addEventListener("click", async () => {
@@ -2496,7 +2509,8 @@
     fl.insertAdjacentHTML("beforeend", `<p class="small" id="auth-tel-alt" hidden><button class="btn link" type="button" id="vers-tel">Utiliser plutôt mon numéro WhatsApp</button></p>`);
     const ft = $("#f-tel");
     // champ provisoire, remplacé dès que la bibliothèque des numéros est là
-    $(".ft-champ", ft).innerHTML = champTel("tel-login", paysParDefaut(), null);
+    const paysMemo = (() => { try { return localStorage.getItem("brvm-pays-tel") || ""; } catch (e) { return ""; } })();
+    $(".ft-champ", ft).innerHTML = champTel("tel-login", /^[A-Z]{2}$/.test(paysMemo) ? paysMemo : paysParDefaut(), null);
     chargerTel().then((lib) => {
       const v = ft.telephone.value, p = ft.pays.value;
       $(".ft-champ", ft).innerHTML = champTel("tel-login", p, lib);
@@ -3733,7 +3747,7 @@
   // leur numéro (code sur WhatsApp). Le numéro confirmé est aussi enregistré dans le profil.
   const telConfirme = () => (S.user?.phone ? "+" + String(S.user.phone).replace(/^\+/, "") : "");
   async function confirmerTel(raison = "") {
-    if (!TEL_ON) return false;
+    if (!TEL_AJOUT) return false;
     const lib = await chargerTel();
     let d = $("#dlg-tel");
     d?.remove();
@@ -3804,7 +3818,7 @@
   }
   // compte sans numéro confirmé : une invitation discrète, au plus tous les 3 jours
   function inviterTel() {
-    if (!TEL_ON || DEMO || telConfirme()) return;
+    if (!TEL_AJOUT || DEMO || telConfirme()) return;
     try {
       const der = +localStorage.getItem("brvm-invit-tel") || 0;
       if (Date.now() - der < 3 * 864e5) return;
@@ -4069,28 +4083,48 @@
       };
       bouton.disabled = renvoi.disabled = true; tick();
     };
-    const versCode = (ou) => {
+    const mobile = matchMedia("(pointer: coarse)").matches;
+    const versCode = (ou, relance = true) => {
+      const wa = NUM_WA ? `https://wa.me/${NUM_WA}` : mobile ? "whatsapp://" : "";
       $(".notice", fc).innerHTML = canal === "tel"
-        ? `<b>C'est envoyé sur WhatsApp au <span id="code-email"></span>.</b> Ouvrez WhatsApp, copiez le <b>code à 6 chiffres</b> reçu de Bafi Finance, puis revenez <b>ici</b> pour le saisir.`
+        ? `<b>C'est envoyé sur WhatsApp au <span id="code-email"></span>.</b> Dans le message de Bafi Finance, touchez <b>Copier le code</b>, puis revenez <b>ici</b> : il se colle en un geste.
+          <span class="code-actions">${wa ? `<a class="btn small" id="code-wa" href="${wa}" rel="noopener">Ouvrir WhatsApp</a>` : ""}
+            ${navigator.clipboard?.readText ? `<button type="button" class="btn small" id="code-coller">Coller le code</button>` : ""}</span>`
         : notice0;
       $("#code-email").textContent = ou;
+      $("#code-coller")?.addEventListener("click", async () => {
+        try {
+          const t = (await navigator.clipboard.readText()).replace(/\D/g, "").slice(0, LONG_CODE);
+          if (t.length === LONG_CODE) { fc.code.value = t; fc.requestSubmit(); }
+          else { $(".msg", fc).textContent = "Aucun code dans le presse-papiers : copiez-le dans WhatsApp, puis réessayez."; fc.code.focus(); }
+        } catch (e) { fc.code.focus(); }                // collage refusé : la personne colle elle-même dans le champ
+      });
+      if (canal === "tel") try { sessionStorage.setItem("brvm-tel-attente", JSON.stringify({ n: telE164, ou, mode, t: Date.now() })); } catch (e) { /* stockage indisponible */ }
       $('label[for="code"]', fc).textContent = canal === "tel" ? "Code reçu sur WhatsApp" : "Code reçu par e-mail";
       $("#code-modifier").textContent = canal === "tel" ? "Modifier le numéro" : "Modifier l'adresse";
       $(".msg", fc).textContent = "";
       fl.hidden = true; if (ft) ft.hidden = true; $(".auth-choix").hidden = true;
       fc.hidden = false; fc.code.value = "";
+      fc.code.maxLength = canal === "tel" ? LONG_CODE : 10;
       setTimeout(() => fc.code.focus(), 50);
-      attendre(60);                                  // évite les demandes répétées (limite d'envoi)
+      if (relance) attendre(60);                     // évite les demandes répétées (limite d'envoi)
     };
+    // retour depuis WhatsApp : sur iPhone, l'application est parfois rechargée ; on retrouve l'écran du code (10 minutes)
+    if (ft) try {
+      const a = JSON.parse(sessionStorage.getItem("brvm-tel-attente") || "null");
+      if (a && /^\+\d{6,15}$/.test(a.n) && Date.now() - a.t < 10 * 60000) { canal = "tel"; mode = a.mode === "connexion" ? "connexion" : "inscription"; telE164 = a.n; regler(); versCode(String(a.ou || a.n), false); }
+    } catch (e) { /* rien à reprendre */ }
     const envoyerTel = async () => {
-      const mt = $(".msg", ft), creer = mode === "inscription", lib = await chargerTel();
-      const n = lireNumero(ft.telephone.value, ft.pays.value, lib);
+      const renvoiCode = !fc.hidden && telE164;                               // « Renvoyer le code » depuis l'écran du code
+      const mt = $(".msg", renvoiCode ? fc : ft), creer = mode === "inscription", lib = await chargerTel();
+      const n = renvoiCode ? telE164 : lireNumero(ft.telephone.value, ft.pays.value, lib);
       if (!/^\+\d{6,15}$/.test(n)) { mt.textContent = n; return; }
       if (creer && cgu && !ft.cgu.checked) { mt.textContent = "Acceptez les conditions d'utilisation pour créer votre compte."; return; }
       const b = ft.querySelector("button[type=submit]"); b.disabled = true;
       try {
         await api.loginTel(n, creer);
         telE164 = n;
+        if (!renvoiCode) try { localStorage.setItem("brvm-pays-tel", ft.pays.value); } catch (e) { /* stockage indisponible */ }
         try {
           if (creer && cgu) sessionStorage.setItem("brvm-cgu-acceptee", String(cgu.version));
           if (creer) sessionStorage.setItem("brvm-inscription", "1");
@@ -4109,7 +4143,10 @@
           mt.textContent = "Trop de demandes en peu de temps. Si vous avez déjà reçu un code sur WhatsApp, saisissez-le ; sinon réessayez dans quelques minutes.";
         } else if (/fetch|network|failed to fetch|load failed/i.test(msg)) {
           mt.textContent = "Pas de connexion internet pour le moment : vérifiez votre réseau, puis réessayez.";
-        } else if (/provider|disabled|unsupported|sms_send_failed|whatsapp/i.test(msg)) {
+        } else if (/invalid.*(to|phone)|not a valid|60200|60205|63024|unreachable|not.*whatsapp/i.test(msg)) {
+          mt.innerHTML = `Ce numéro ne semble pas avoir WhatsApp. Vérifiez-le, ou <button class="btn link" type="button" id="vers-email-3">utilisez votre adresse e-mail</button>.`;
+          $("#vers-email-3").addEventListener("click", () => { canal = "email"; regler(); fl.email.focus(); });
+        } else if (/provider|disabled|unsupported|sms_send_failed|error sending|whatsapp/i.test(msg)) {
           mt.innerHTML = `L'envoi par WhatsApp n'est pas disponible pour le moment. <button class="btn link" type="button" id="vers-email-3">Utiliser mon adresse e-mail</button>`;
           $("#vers-email-3").addEventListener("click", () => { canal = "email"; regler(); fl.email.focus(); });
         } else mt.textContent = "Le code n'a pas pu être envoyé. Réessayez dans quelques minutes ; si cela continue, écrivez-nous.";
@@ -4146,14 +4183,30 @@
     };
     fl.addEventListener("submit", (ev) => { ev.preventDefault(); envoyer(); });
     $("#code-renvoi").addEventListener("click", () => envoyer());
-    $("#code-modifier").addEventListener("click", () => { fc.hidden = true; $(".auth-choix").hidden = false; fl.hidden = false; montrerCanal(); (canal === "tel" ? ft.telephone : fl.email).focus(); });
+    $("#code-modifier").addEventListener("click", () => { try { sessionStorage.removeItem("brvm-tel-attente"); } catch (e) { /* rien */ } fc.hidden = true; $(".auth-choix").hidden = false; fl.hidden = false; montrerCanal(); (canal === "tel" ? ft.telephone : fl.email).focus(); });
+    let verif = false;
+    fc.code.addEventListener("input", () => {
+      const v = fc.code.value, d = v.replace(/\D/g, "");
+      if (v !== d) fc.code.value = d;                                        // collage « 123 456 » ou « Code : 123456 »
+      if (canal === "tel" && d.length === LONG_CODE && !verif) fc.requestSubmit();   // validé dès le dernier chiffre
+    });
     fc.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const mc = $(".msg", fc), code = fc.code.value.replace(/\s/g, "");
+      if (verif) return;
+      const mc = $(".msg", fc), code = fc.code.value.replace(/\D/g, "");
       const tel = canal === "tel";
       if (!/^[0-9]{6,10}$/.test(code)) { mc.textContent = tel ? "Saisissez le code à 6 chiffres reçu sur WhatsApp." : "Saisissez le code reçu par e-mail (6 chiffres), ou touchez simplement le lien de l'e-mail."; return; }
-      try { await (tel ? api.verifyTel(telE164, code) : api.verify(fl.email.value.trim(), code)); }
-      catch (e) { mc.textContent = /expired|invalid|not found/i.test(String(e.message)) ? `Code incorrect ou expiré : vérifiez qu'il vient du dernier ${tel ? "message WhatsApp" : "e-mail"} reçu, ou demandez-en un nouveau.` : "Code refusé : " + e.message; }
+      verif = true; mc.textContent = "Vérification…";
+      try {
+        await (tel ? api.verifyTel(telE164, code) : api.verify(fl.email.value.trim(), code));
+        try { sessionStorage.removeItem("brvm-tel-attente"); } catch (e) { /* rien */ }
+      } catch (e) {
+        mc.textContent = /expired|invalid|not found/i.test(String(e.message)) ? `Code incorrect ou expiré : vérifiez qu'il vient du dernier ${tel ? "message WhatsApp" : "e-mail"} reçu, ou demandez-en un nouveau.`
+          : /rate limit|too many|429/i.test(String(e.message)) ? "Trop d'essais : attendez quelques minutes avant de réessayer."
+          : /fetch|network|load failed/i.test(String(e.message)) ? "Pas de connexion internet pour le moment : vérifiez votre réseau, puis réessayez." : "Code refusé : " + e.message;
+        fc.code.select();
+      }
+      verif = false;
     });
   }
 
