@@ -1,4 +1,4 @@
-/* BafiBourse – affinage visuel (itérations 1 et 2, révision validée le 11/11/2026) : surfaces, boutons, pictogrammes, boutons flottants, focus.
+/* Bafi Finance – affinage visuel (itérations 1 et 2, révision validée le 11/11/2026) : surfaces, boutons, pictogrammes, boutons flottants, focus.
  * Chargée en dernier. Aucune règle ne touche à la structure ni au comportement : uniquement l'apparence.
  * Principes : couleurs à plat (plus de dégradés), ombres très légères, bordures fines,
  * indigo pour les actions, ambre réservé à la marque et au coffre, focus toujours visible. */
@@ -557,3 +557,29 @@ li.pos-vise { animation: pos-vise 1.6s ease; }
 #dlg-tel .code { letter-spacing: .3em; font-size: 1.2rem; text-align: center; }
 #f-tel .tel { margin-bottom: 4px; }
 #auth-tel-alt { margin-top: 6px; }
+
+/* Bafi Finance — cercles : série + drapeau sur une même pastille, à cheval sous la bulle ; classement du mois pliant */
+.cs-m { gap: 0; }
+.cs-etiq { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 4px; margin-top: -9px; padding: 2px 3px 2px 7px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 2px 6px -3px rgba(27, 40, 106, .35); }
+.cs-etiq .cs-serie { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font-size: .68rem; white-space: nowrap; }
+.cs-etiq:not(:has(.cer-drap)) { padding-right: 7px; }
+.cer-drap { display: inline-flex; flex: none; width: 20px; height: 14px; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px var(--border); }
+.cer-drap svg { width: 100%; height: 100%; display: block; }
+.cer-drap.emoji { font-family: "Twemoji Country Flags", system-ui, sans-serif; box-shadow: none; width: auto; font-size: 14px; line-height: 14px; overflow: visible; }
+.cer-plie { margin: 12px 0 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.cer-plie > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; cursor: pointer; list-style: none; min-height: 44px; }
+.cer-plie > summary::-webkit-details-marker { display: none; }
+.cer-plie > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 14px; }
+.cer-plie-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cer-plie-t .small { overflow-wrap: anywhere; }
+.cer-plie-t sup { font-size: .7em; }
+.cer-plie-v { flex: none; color: var(--accent); font-weight: 600; font-size: .88rem; }
+.cer-plie-v .ouvert, .cer-plie[open] .cer-plie-v .ferme { display: none; }
+.cer-plie[open] .cer-plie-v .ouvert { display: inline; }
+.cer-plie .cer-classement { margin: 0; padding: 0 14px; }
+.cer-classement li { grid-template-columns: 20px 20px minmax(0, 1fr) auto; }
+.cer-pays { display: flex; align-items: center; min-height: 14px; }
+.cer-classement .cer-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cer-pays-opt { margin: 0; padding: 10px 14px 12px; border-top: 1px solid var(--border); color: var(--muted); }
+.cer-pays-opt span { font-size: .84rem; }

@@ -1,4 +1,4 @@
-/* BafiBourse – glossaire au toucher.
+/* Bafi Finance – glossaire au toucher.
  * Les mots techniques des écrans (SGI, OPCVM, coupon, prix limite…) sont soulignés en pointillé à leur première
  * apparition dans chaque écran ; un toucher ouvre une bulle qui les explique en une phrase, avec un lien
  * « Demander à Bim Bim » pour aller plus loin. Désactivable dans le Profil (Aide à la prise en main). */
@@ -32,15 +32,15 @@
     ["Prix limite", ["prix limite", "limite"], "Le prix maximum que vous acceptez de payer à l'achat, ou le minimum à la vente : votre ordre ne passe pas au-delà."],
     ["Cours", ["dernier cours", "cours du jour"], "Le dernier prix auquel un titre s'est échangé en bourse."],
     ["Clôture", ["clôture"], "Le cours d'un titre ou d'un indice à la fin de la séance de bourse."],
-    ["Séance", ["séance"], "Une journée de cotation à la BRVM. BafiBourse refait ses calculs chaque soir de séance."],
+    ["Séance", ["séance"], "Une journée de cotation à la BRVM. Bafi Finance refait ses calculs chaque soir de séance."],
     ["Plus-value", ["plus-value", "plus-values", "moins-value", "moins-values"], "Le gain (plus-value) ou la perte (moins-value) entre le prix de vente, ou le cours du jour, et le prix d'achat."],
     ["Liquidité", ["liquidité"], "La facilité à acheter ou vendre un titre sans faire bouger son prix. À la BRVM, beaucoup de titres s'échangent peu."],
     ["Droits de garde", ["droits de garde", "droit de garde"], "Les frais facturés par la SGI pour conserver vos titres sur votre compte."],
     ["Volatilité", ["volatilité"], "L'ampleur des variations d'un cours : plus elle est forte, plus le prix monte et descend."],
     ["Diversification", ["diversification"], "Répartir son argent sur plusieurs titres et types de placements pour limiter le risque."],
     ["Plancher", ["plancher"], "Le niveau sous lequel une alerte vous invite à examiner un titre : 15 % sous le plus haut atteint depuis votre achat. Jamais une vente automatique."],
-    ["Score", ["score"], "Le score BafiBourse, sur 100 : la synthèse de la santé financière de l'entreprise et de la tendance de son cours, avec le dividende, la valorisation et la liquidité. Un repère, pas un conseil."],
-    ["Diagnostic financier", ["diagnostic financier", "santé financière"], "L'appréciation par BafiBourse des états financiers publiés de l'entreprise (très solide, solide, correct, fragile, très fragile) : croissance, rentabilité, solidité, régularité. Elle répond à la question « les comptes sont-ils solides ? ». Ce n'est pas une notation financière : seules les agences agréées par l'AMF-UMOA (Bloomfield, WARA…) délivrent des notations."],
+    ["Score", ["score"], "Le score Bafi Finance, sur 100 : la synthèse de la santé financière de l'entreprise et de la tendance de son cours, avec le dividende, la valorisation et la liquidité. Un repère, pas un conseil."],
+    ["Diagnostic financier", ["diagnostic financier", "santé financière"], "L'appréciation par Bafi Finance des états financiers publiés de l'entreprise (très solide, solide, correct, fragile, très fragile) : croissance, rentabilité, solidité, régularité. Elle répond à la question « les comptes sont-ils solides ? ». Ce n'est pas une notation financière : seules les agences agréées par l'AMF-UMOA (Bloomfield, WARA…) délivrent des notations."],
     ["Tendance du cours", ["tendance du cours"], "Le sens du cours sur les trois derniers mois : en hausse, stable ou en baisse. Elle répond à la question « est-ce un bon moment ? », à court terme."],
   ];
   const DEF = new Map(TERMES.map(([t, , d]) => [t, d]));

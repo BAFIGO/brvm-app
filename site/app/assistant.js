@@ -1,4 +1,4 @@
-/* BafiBourse – assistant (robot de discussion).
+/* Bafi Finance – assistant (robot de discussion).
  * Bouton fixe en bas à droite → fenêtre de discussion avec questions proposées, saisie et dictée facultative.
  * Les réponses viennent de la fonction Supabase « assistant » (clé de l'API Claude gardée sur le serveur).
  * app.js fournit window.BRVM_APP (données de l'écran) puis émet « brvm:pret » ; « brvm:maj » à chaque affichage. */
@@ -11,7 +11,7 @@
   const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const MAX_HISTO = 8;                         // échanges renvoyés au serveur pour garder le fil de la conversation
 
-  // Bim Bim, la petite tortue de BafiBourse (patience et discipline). Chaque dessin a son propre dégradé (identifiant unique).
+  // Bim Bim, la petite tortue de Bafi Finance (patience et discipline). Chaque dessin a son propre dégradé (identifiant unique).
   let nTortue = 0;
   const tortue = (cls = "ia-tortue") => { const id = "tt" + (++nTortue); return `<svg class="${cls}" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="tt-h"/><stop offset="1" class="tt-b"/></linearGradient></defs><g class="tt-corps"><ellipse class="tt-sol" cx="16" cy="27.2" rx="10.5" ry="1"/><path class="tt-patte g tt-peau" d="M9.9 21.9c-2.7.3-4.8 2.2-5 4.5h5.1c.1-1.5.6-2.6 1.3-3.5z"/><path class="tt-patte d tt-peau" d="M22.1 21.9c2.7.3 4.8 2.2 5 4.5h-5.1c-.1-1.5-.6-2.6-1.3-3.5z"/><path class="tt-bord" d="M3.7 19C5.9 22.5 26.1 22.5 28.3 19" fill="url(#${id})"/><ellipse class="tt-creux" cx="16" cy="19.5" rx="5.6" ry="2.4"/><g class="tt-tete"><ellipse class="tt-peau" cx="16" cy="21.5" rx="4.8" ry="4.45"/><g class="tt-yeux"><ellipse class="tt-oeil" cx="14.2" cy="20.9" rx=".88" ry="1.08"/><ellipse class="tt-oeil" cx="17.8" cy="20.9" rx=".88" ry="1.08"/><circle class="tt-lum" cx="14.5" cy="20.5" r=".32"/><circle class="tt-lum" cx="18.1" cy="20.5" r=".32"/></g><path class="tt-bouche" d="M15 23.3c.6.42 1.4.42 2 0"/><ellipse class="tt-joue" cx="13" cy="22.9" rx=".85" ry=".55"/><ellipse class="tt-joue" cx="19" cy="22.9" rx=".85" ry=".55"/></g><path class="tt-dome" d="M2.5 18.6C2.5 11.5 8.5 7.5 16 7.5S29.5 11.5 29.5 18.6Q16 14.9 2.5 18.6Z" fill="url(#${id})"/><path class="tt-ecailles" d="M13.7 8.4h4.6l1.55 2.7-1.55 2.7h-4.6L12.15 11.1z M12.15 11.1L6 13.5 M19.85 11.1L26 13.5 M13.7 13.8l-1.2 2.6 M18.3 13.8l1.2 2.6"/><path class="tt-reflet" d="M6.2 13.4C7.6 10.9 10.2 9.3 12.8 8.7"/></g></svg>`; };
   const ICONE_MICRO = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>`;

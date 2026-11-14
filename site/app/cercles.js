@@ -1,4 +1,4 @@
-/* BafiBourse – cercles d'épargne entre proches, inspirés de la tontine.
+/* Bafi Finance – cercles d'épargne entre proches, inspirés de la tontine.
  * Des proches se fixent un objectif commun de jours d'épargne par mois et voient la régularité de chacun :
  * série en cours, jours d'épargne du mois. Jamais aucun montant, et l'argent reste chez chacun.
  * Carte dans Portefeuille (sous « Mon épargne »), invitation par lien ou par code. */
@@ -9,6 +9,32 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pl = (n, u) => `${n} ${u === "mois" ? "mois" : u + (n > 1 ? "s" : "")}`;
   const CLE = "brvm-cercle-invite";
+  // Drapeau d'un membre : petit dessin pour les pays de l'UEMOA (lisible partout, y compris sous Windows),
+  // emoji pour les autres ; rien si le pays est inconnu ou masqué. Seul un code ISO à 2 lettres est accepté.
+  const etoile = (cx, cy, r, c) => {
+    const pts = [...Array(10)].map((_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5, q = i % 2 ? r * 0.4 : r; return `${(cx + q * Math.cos(a)).toFixed(2)},${(cy + q * Math.sin(a)).toFixed(2)}`; });
+    return `<polygon points="${pts.join(" ")}" fill="${c}"/>`;
+  };
+  const vert3 = (a, b, c) => `<rect width="1" height="2" fill="${a}"/><rect x="1" width="1" height="2" fill="${b}"/><rect x="2" width="1" height="2" fill="${c}"/>`;
+  const DESSINS = {
+    CI: vert3("#F77F00", "#FFFFFF", "#009E60"),
+    ML: vert3("#14B53A", "#FCD116", "#CE1126"),
+    SN: vert3("#00853F", "#FDEF42", "#E31B23") + etoile(1.5, 1, 0.32, "#00853F"),
+    BF: `<rect width="3" height="1" fill="#EF2B2D"/><rect y="1" width="3" height="1" fill="#009E49"/>` + etoile(1.5, 1, 0.36, "#FCD116"),
+    BJ: `<rect width="3" height="2" fill="#E8112D"/><rect width="3" height="1" fill="#FCD116"/><rect width="1.2" height="2" fill="#008751"/>`,
+    NE: `<rect width="3" height=".67" fill="#E05206"/><rect y=".67" width="3" height=".66" fill="#FFFFFF"/><rect y="1.33" width="3" height=".67" fill="#0DB02B"/><circle cx="1.5" cy="1" r=".24" fill="#E05206"/>`,
+    TG: [0, 1, 2, 3, 4].map((i) => `<rect y="${(i * 0.4).toFixed(1)}" width="3" height=".4" fill="${i % 2 ? "#FFE000" : "#006A4E"}"/>`).join("")
+      + `<rect width="1.2" height="1.2" fill="#D21034"/>` + etoile(0.6, 0.6, 0.36, "#FFFFFF"),
+    GW: `<rect width="3" height="1" fill="#FCD116"/><rect y="1" width="3" height="1" fill="#009E49"/><rect width="1" height="2" fill="#CE1126"/>` + etoile(0.5, 1, 0.3, "#000000"),
+  };
+  const nomPays = (c) => { try { return new Intl.DisplayNames(["fr"], { type: "region" }).of(c) || c; } catch (e) { return c; } };
+  function drapeauMembre(c) {
+    if (!/^[A-Z]{2}$/.test(c || "")) return "";
+    const nom = esc(nomPays(c));
+    if (DESSINS[c]) return `<span class="cer-drap" role="img" aria-label="${nom}" title="${nom}"><svg viewBox="0 0 3 2" preserveAspectRatio="none" aria-hidden="true">${DESSINS[c]}</svg></span>`;
+    return `<span class="cer-drap emoji" role="img" aria-label="${nom}" title="${nom}">${String.fromCodePoint(...[...c].map((x) => 0x1f1e6 + x.charCodeAt(0) - 65))}</span>`;
+  }
+  const ouverts = new Set();      // classements dépliés, gardés le temps de la session
   let app = null, cercles = null, charge = false, invitationVue = false;
 
   // Lien d'invitation : on garde le code le temps de la connexion ou de l'inscription
@@ -97,7 +123,7 @@
     dlg.querySelector("input, select, .btn.primary")?.focus();
   }
   const lienInvitation = (code) => `${location.origin}${location.pathname}?cercle=${encodeURIComponent(code)}`;
-  const texteInvitation = (c) => `Rejoins mon cercle d'épargne « ${c.nom} » sur BafiBourse : chacun à son rythme, on vise de le tenir ${objectifTexte(c)} ce mois-ci, `
+  const texteInvitation = (c) => `Rejoins mon cercle d'épargne « ${c.nom} » sur Bafi Finance : chacun à son rythme, on vise de le tenir ${objectifTexte(c)} ce mois-ci, `
     + `chacun chez soi, sans jamais montrer de montant. Code : ${c.code} · ${lienInvitation(c.code)}`;
 
   f.addEventListener("submit", async (ev) => {
@@ -188,16 +214,29 @@
             <button type="button" class="cer-menu" data-cercle="gerer" data-id="${esc(c.id)}" aria-label="Gérer le cercle ${esc(c.nom)}${c.demandes ? `, ${c.demandes} demande${c.demandes > 1 ? "s" : ""} en attente` : ""}">⋯${c.demandes ? `<span class="cer-pastille">${c.demandes}</span>` : ""}</button></div>
           ${scene(c, ms, fait, but, pc)}
           <p class="small">Ensemble : <b>${pc} % de régularité</b> ce mois-ci, pour un objectif de ${obj} %${pc >= obj && attendues ? ". Objectif atteint ✓" : ""}</p>
-          <ol class="cer-classement" aria-label="Classement du mois, par régularité">${[...ms].map((m) => ({ m, t: +m.tenues || 0, at: +m.attendues || 0 }))
-            .map((x) => ({ ...x, mp: x.at ? Math.round((100 * x.t) / x.at) : 0 }))
-            .sort((a, b) => b.mp - a.mp || (b.m.serie || 0) - (a.m.serie || 0)).map(({ m, t, at, mp }, i) =>
-            `<li class="${m.moi ? "moi" : ""}"><span class="cer-rang">${i + 1}</span>
-              <span class="cer-nom">${m.moi ? "Vous" : esc(m.pseudo)}<span class="cer-mini" aria-hidden="true"><i style="width:${Math.min(100, mp)}%"></i></span></span>
-              <span class="cer-chiffres num">${at ? `${t}/${pl(at, m.unite)}${mp >= obj ? " ✓" : ""}` : "pas encore de rythme"}<br>${m.serie > 0 ? `série ${court(+m.serie, m.unite)}` : "pas de série"}</span></li>`).join("")}</ol>
+          ${classement(c, ms, obj, court)}
           ${ms.length < cap ? `<button type="button" class="btn primary cer-inviter" data-cercle="inviter" data-id="${esc(c.id)}">Inviter des proches</button>` : ""}</section>`;
       }).join("")}
-      <p class="small muted">Seules la série et la régularité sont visibles des membres, jamais vos montants.</p>
+      <p class="small muted">Seuls la série, la régularité et le drapeau de votre pays (si vous le montrez) sont visibles des membres, jamais vos montants.</p>
       <div class="cer-top" data-cer-top></div></div>`;
+  }
+  // Classement du mois dans une liste pliante : le résumé dit qui mène, la liste donne le détail (drapeau, nom, rythme)
+  function classement(c, ms, obj, court) {
+    const L = [...ms].map((m) => ({ m, t: +m.tenues || 0, at: +m.attendues || 0 }))
+      .map((x) => ({ ...x, mp: x.at ? Math.round((100 * x.t) / x.at) : 0 }))
+      .sort((a, b) => b.mp - a.mp || (b.m.serie || 0) - (a.m.serie || 0));
+    const chiffre = ({ t, at, mp, m }) => (at ? `${t}/${pl(at, m.unite)}${mp >= obj ? " ✓" : ""}` : "pas encore de rythme");
+    const t1 = L[0], cache = !!app?.paysCache?.();
+    const resume = t1 ? `1<sup>er</sup> : ${t1.m.moi ? "Vous" : esc(t1.m.pseudo)} · ${chiffre(t1)} · ${ms.length} membre${ms.length > 1 ? "s" : ""}` : "";
+    return `<details class="cer-plie" data-cer-plie="${esc(c.id)}"${ouverts.has(c.id) ? " open" : ""}>
+        <summary><span class="cer-plie-t"><b>Classement du mois</b><span class="small muted">${resume}</span></span>
+          <span class="cer-plie-v" aria-hidden="true"><span class="ferme">Voir ›</span><span class="ouvert">Replier ˄</span></span></summary>
+        <ol class="cer-classement" aria-label="Classement du mois, par régularité">${L.map((x, i) => `<li class="${x.m.moi ? "moi" : ""}"><span class="cer-rang">${i + 1}</span>
+            <span class="cer-pays">${drapeauMembre(x.m.pays)}</span>
+            <span class="cer-nom"><span class="cer-n">${x.m.moi ? "Vous" : esc(x.m.pseudo)}</span><span class="cer-mini" aria-hidden="true"><i style="width:${Math.min(100, x.mp)}%"></i></span></span>
+            <span class="cer-chiffres num">${chiffre(x)}<br>${x.m.serie > 0 ? `série ${court(+x.m.serie, x.m.unite)}` : "pas de série"}</span></li>`).join("")}</ol>
+        ${app?.cacherPays ? `<label class="switch cer-pays-opt small"><input type="checkbox" data-cer-pays${cache ? "" : " checked"}> <span>Montrer le drapeau de mon pays aux membres de mes cercles</span></label>` : ""}
+      </details>`;
   }
   // Le top 3 du mois sous les cercles : une invitation à découvrir, pas un tableau de plus
   async function remplirTop(v) {
@@ -306,7 +345,7 @@
         const actif = m.maj_le && String(m.maj_le).slice(0, 10) === auj;
         return `<div class="cs-m${m.moi ? " moi" : ""}${actif ? " actif" : ""}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;--d:${(i * 0.12).toFixed(2)}s;--f:${(1 + (i % 3) * 0.7).toFixed(1)}s">
           <span class="cs-av" style="--h:${TEINTES[i % TEINTES.length]}">${esc(ini)}</span>
-          <span class="cs-serie">${m.serie > 0 ? `${+m.serie} ${({ jour: "j", semaine: "sem.", mois: "mois" })[m.unite] || "j"}` : "–"}</span></div>`;
+          <span class="cs-etiq"><span class="cs-serie">${m.serie > 0 ? `${+m.serie} ${({ jour: "j", semaine: "sem.", mois: "mois" })[m.unite] || "j"}` : "–"}</span>${drapeauMembre(m.pays)}</span></div>`;
       }).join("")}</div>`;
   }
   function animerScenes(v) {
@@ -335,6 +374,25 @@
     if (a === "decouvrir") return decouvrir("top");
     if (a === "inviter" && c) return ouvrir("inviter", { cercle: c });
     if (a === "gerer" && c) return ouvrir("gerer", { cercle: c });
+  });
+
+  document.addEventListener("toggle", (ev) => {
+    const d = ev.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.dataset.cerPlie) return;
+    if (d.open) ouverts.add(d.dataset.cerPlie); else ouverts.delete(d.dataset.cerPlie);
+  }, true);
+  document.addEventListener("change", async (ev) => {
+    const x = ev.target;
+    if (!x.matches?.("input[data-cer-pays]") || !app?.cacherPays) return;
+    const cacher = !x.checked;
+    x.disabled = true;
+    try {
+      await app.cacherPays(cacher);
+      // ma bulle et ma ligne changent tout de suite ; les autres membres le verront à leur prochaine ouverture
+      (cercles || []).forEach((c) => (c.membres || []).forEach((m) => { if (m.moi) m.pays = cacher ? null : app.monPays?.() || null; }));
+      app.toast(cacher ? "Votre drapeau est masqué dans vos cercles." : "Votre drapeau est visible des membres de vos cercles.");
+      carte();
+    } catch (e) { x.checked = cacher; x.disabled = false; app.toast("Enregistrement impossible : " + (e.message || e)); }
   });
 
   // ---------------------------------------------------------------- données

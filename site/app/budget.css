@@ -1,4 +1,4 @@
-/* BafiBourse – Mon budget (budget.js) : gros boutons, pictogrammes en tuiles, peu de texte. Clair et sombre via la charte. */
+/* Bafi Finance – Mon budget (budget.js) : gros boutons, pictogrammes en tuiles, peu de texte. Clair et sombre via la charte. */
 #v-budget { display: flex; flex-direction: column; gap: 14px; }
 .bu-tuile { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff;
   background: linear-gradient(135deg, hsl(232 45% 24%), hsl(230 55% 38%)); box-shadow: 0 6px 14px -8px hsl(232 50% 15% / .55); }

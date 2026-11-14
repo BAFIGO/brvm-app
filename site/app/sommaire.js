@@ -1,4 +1,4 @@
-/* BafiBourse – le Profil en sommaire : chaque carte devient une rubrique repliée, une ligne avec son état
+/* Bafi Finance – le Profil en sommaire : chaque carte devient une rubrique repliée, une ligne avec son état
  * (« 2 500 F par jour · objectif 500 000 F »), rangée par fréquence d'usage. Une seule rubrique ouverte à la fois.
  * Fonctionne aussi pour les cartes ajoutées par les autres modules (rappels, avis, aide). */
 (() => {

@@ -1,8 +1,8 @@
-/* BafiBourse – rappels par notification (itération 9 : plus de rappel quotidien par WhatsApp, payant).
+/* Bafi Finance – rappels par notification (itération 9 : plus de rappel quotidien par WhatsApp, payant).
  * Carte « Mes rappels » du Profil : notification sur cet appareil, heure du rappel du soir, épargne du jour,
  * bilan de la semaine (dimanche soir), pastille sur l'icône, essai immédiat.
  * Pastille : nombre d'alertes non vues sur l'icône de l'application installée (Badging API), dans le titre de
- * l'onglet « (2) BafiBourse » et sur la petite icône de l'onglet.
+ * l'onglet « (2) Bafi Finance » et sur la petite icône de l'onglet.
  * L'envoi est fait par la fonction Supabase « rappels » (soir de séance publiée, et dimanche pour le bilan). */
 (() => {
   "use strict";
@@ -69,7 +69,7 @@
   function blocAppareil() {
     const e = app?.demo ? "ok" : etatAppareil(), ici = !!abonnement;
     if (e === "ios") return `<div class="rp-opt rp-info"><span><b>Notification sur ce téléphone</b>
-        <small>Sur iPhone, ajoutez d'abord BafiBourse à l'écran d'accueil : touchez <b>Partager</b>, puis <b>Sur l'écran d'accueil</b>, et ouvrez l'application depuis l'icône.</small></span></div>`;
+        <small>Sur iPhone, ajoutez d'abord Bafi Finance à l'écran d'accueil : touchez <b>Partager</b>, puis <b>Sur l'écran d'accueil</b>, et ouvrez l'application depuis l'icône.</small></span></div>`;
     if (e === "impossible") return `<div class="rp-opt rp-info"><span><b>Notification</b><small>Ce navigateur ne permet pas les notifications.</small></span></div>`;
     if (e === "bloque") return `<div class="rp-opt rp-info"><span><b>Notification bloquée</b><small>Autorisez les notifications pour ce site dans les réglages du navigateur.</small></span></div>`;
     return opt("appareil", "Notification sur cet appareil", ici ? `✓ Activée${appareil() === "Navigateur" ? " sur cet appareil" : " sur " + appareil()}` : "Gratuit. Un seul rappel par soir.", ici);

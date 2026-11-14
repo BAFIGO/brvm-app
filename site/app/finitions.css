@@ -1,4 +1,4 @@
-/* BafiBourse – finitions visuelles (livraison 1 : écran Aujourd'hui, montants, boutons flottants).
+/* Bafi Finance – finitions visuelles (livraison 1 : écran Aujourd'hui, montants, boutons flottants).
  * Chargée après styles.css ; mêmes couleurs, clair et sombre. */
 
 /* ---------------------------------------------------------------- montants : l'unité plus discrète que le nombre */
@@ -493,7 +493,7 @@ details.rubrique[open] { box-shadow: 0 6px 20px -14px rgba(0, 0, 0, .35); }
 .porte span { font-size: .88rem; color: var(--muted); line-height: 1.4; }
 .porte:hover, .porte:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px var(--accent-soft); }
 
-/* BafiBot : même écriture que BafiBourse (« Bafi » ambre, « Bot » indigo) */
+/* BafiBot : même écriture que Bafi Finance (« Bafi » ambre, « Bot » indigo) */
 .marque-bot { font-weight: 800; letter-spacing: -.01em; color: var(--brand, var(--accent)); }
 .marque-bot .mb-bafi { font-weight: inherit; color: hsl(35 92% 55%); }
 
@@ -1067,7 +1067,7 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .etats thead th:first-child { text-align: left; }
 .etats td.num { padding-left: 8px; }
 
-/* Diagnostic financier BafiBourse : en mots (pas de lettre, pour ne pas imiter une échelle de notation d'agence) */
+/* Diagnostic financier Bafi Finance : en mots (pas de lettre, pour ne pas imiter une échelle de notation d'agence) */
 .diag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: .9rem; white-space: nowrap; }
 .diag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .diag.sm { font-size: .75rem; padding: 2px 8px; }
@@ -1077,7 +1077,7 @@ dialog[open] ~ .defile, body:has(dialog[open]) .defile { display: none; }
 .diag.d-x { background: var(--surface-2); color: var(--muted); }
 .diag-mention { margin: 6px 0 10px; line-height: 1.45; }
 .fin-head .diag { font-size: 1rem; padding: 6px 12px; }
-/* notation d'une agence agréée (prime sur le diagnostic BafiBourse quand elle est valide) */
+/* notation d'une agence agréée (prime sur le diagnostic Bafi Finance quand elle est valide) */
 .notation { border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin: 6px 0 14px; background: var(--surface); }
 .notation.ancienne { opacity: .85; }
 .nt-tete { display: flex; gap: 12px; align-items: center; }

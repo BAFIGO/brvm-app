@@ -1,4 +1,4 @@
-/* BafiBourse – Mon budget (livraison 1).
+/* Bafi Finance – Mon budget (livraison 1).
  * Deux parcours sur les mêmes données :
  *   – mode SIMPLE (par défaut) : trois gros boutons « J'ai gagné », « J'ai dépensé », « Je garde », une phrase
  *     « Aujourd'hui vous pouvez dépenser … », le projet en image, le coffre en deux étages (sécurité puis projet) ;
@@ -291,7 +291,7 @@
     if (R?.active?.()) return `<p class="small center bu-notif-ok">✓ Notification déjà activée sur cet appareil.</p>${bilan}`;
     if (e === "ok") return `<label class="bu-notif"><span class="bu-tuile">${ic(P.cloche)}</span><span><b>Notification sur ce téléphone</b><small>Gratuit. Un seul rappel par soir.</small></span>
         <input type="checkbox" id="bu-notif"${b.notif !== false ? " checked" : ""}></label>${bilan}`;
-    if (e === "ios") return `<p class="small muted center">Sur iPhone : ajoutez d'abord BafiBourse à l'écran d'accueil (<b>Partager</b> › <b>Sur l'écran d'accueil</b>), puis activez la notification dans Profil › Mes rappels.</p>${bilan}`;
+    if (e === "ios") return `<p class="small muted center">Sur iPhone : ajoutez d'abord Bafi Finance à l'écran d'accueil (<b>Partager</b> › <b>Sur l'écran d'accueil</b>), puis activez la notification dans Profil › Mes rappels.</p>${bilan}`;
     return bilan;
   }
   document.addEventListener("change", (ev) => { if (ev.target.id === "bu-notif") S.brouillon.notif = ev.target.checked; });
@@ -575,7 +575,7 @@
     const csv = "\ufeff" + lignes.map((l) => l.map(cellule).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = `bafibourse-budget-${auj()}.csv`; document.body.appendChild(a); a.click();
+    a.download = `bafi-finance-budget-${auj()}.csv`; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     app().toast("Fichier prêt : il s'ouvre avec Excel.");
   }
@@ -585,10 +585,10 @@
     const c = calculs(), l = douzeMois(), w = window.open("", "_blank");
     if (!w) { app().toast("Autorisez l'ouverture d'une fenêtre pour imprimer."); return; }
     w.opener = null;
-    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Mon budget – BafiBourse</title>
+    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Mon budget – Bafi Finance</title>
       <style>body{font:14px system-ui,sans-serif;color:#1b1d2a;margin:28px}h1{color:#25347E;margin:0 0 4px}h2{color:#25347E;font-size:16px;margin:22px 0 8px}
       table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left}td.n,th.n{text-align:right}.m{color:#666;font-size:12px}</style></head>
-      <body><h1>Mon budget</h1><p class="m">BafiBourse · ${esc(new Date().toLocaleDateString("fr-FR"))} · données privées</p>
+      <body><h1>Mon budget</h1><p class="m">Bafi Finance · ${esc(new Date().toLocaleDateString("fr-FR"))} · données privées</p>
       <h2>${esc(c.moisLib)}</h2><table><tr><td>Gagné</td><td class="n">${esc(F(c.revMois))}</td></tr><tr><td>Dépensé</td><td class="n">${esc(F(c.depMois))}</td></tr>
         <tr><td>Gardé</td><td class="n">${esc(F(c.garde))}</td></tr><tr><td>Reste à vivre</td><td class="n">${esc(F(Math.max(0, c.reste)))}</td></tr><tr><td>Dans mon coffre</td><td class="n">${esc(F(c.solde))}</td></tr></table>
       <h2>Prévu et dépensé ce mois-ci</h2><table><tr><th>Ligne</th><th class="n">Dépensé</th><th class="n">Prévu</th></tr>
@@ -984,7 +984,7 @@
   }
   // invitation sur l'ancien accueil (personnes déjà installées, sans budget) : un seul geste pour commencer
   const invitation = () => (S.charge && !S.erreur && !S.profil && !S.invitationFermee ? `<section class="card bu-invit"><span class="bu-tuile amb">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>')}</span>
-      <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : BafiBourse vous dit ce que vous pouvez garder.</p>
+      <div><b>Nouveau : mon budget</b><p class="small">Notez ce que vous gagnez et dépensez : Bafi Finance vous dit ce que vous pouvez garder.</p>
         <a class="btn primary small" href="#budget">Commencer (1 minute)</a> <button type="button" class="btn link small" data-bu="fermer-invit">Plus tard</button></div></section>` : "");
   // Données du budget transmises à Bim Bim (montants en F CFA ; aucune donnée d'un autre utilisateur)
   function contexte() {

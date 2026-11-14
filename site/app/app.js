@@ -1,4 +1,4 @@
-/* BafiBourse – application web (sans framework, sans étape de compilation).
+/* Bafi Finance – application web (sans framework, sans étape de compilation).
  * Données : Supabase (règles RLS : chacun ne voit que ses propres profil, journal et propositions).
  * Mode démo : ?demo=1 charge demo.json (données fictives), rien n'est enregistré. */
 (() => {
@@ -86,7 +86,7 @@
     if (/illiquide/i.test(t)) return "Peu échangé";
     return t.charAt(0) + t.slice(1).toLowerCase();
   }
-  // Les trois repères d'une action : diagnostic financier (en mots), tendance du cours, score BafiBourse
+  // Les trois repères d'une action : diagnostic financier (en mots), tendance du cours, score Bafi Finance
   // Historique boursier sur 5 ans : des faits passés (cours ajustés des fractionnements, dividendes), jamais une prévision
   function histoAnnuel(h, type = "action") {
     if (!h?.annees?.length) return "";
@@ -112,9 +112,9 @@
         Performances passées${act ? ", ajustées des fractionnements" : ""} : elles ne préjugent pas des performances futures.</p></div>`;
   }
   const SANTE = { A: "Très solide", B: "Solide", C: "Correct", D: "Fragile", E: "Très fragile" };
-  // Diagnostic financier BafiBourse : affiché en MOTS (jamais en lettres), pour ne pas imiter l'échelle d'une notation
+  // Diagnostic financier Bafi Finance : affiché en MOTS (jamais en lettres), pour ne pas imiter l'échelle d'une notation
   // financière, activité réservée aux agences agréées par l'AMF-UMOA. La lettre reste un code interne.
-  const MENTION_DIAG = "Analyse des états financiers publiés, réalisée par BafiBourse. Ne constitue pas une notation financière au sens de la réglementation UMOA.";
+  const MENTION_DIAG = "Analyse des états financiers publiés, réalisée par Bafi Finance. Ne constitue pas une notation financière au sens de la réglementation UMOA.";
   // Notation d'une agence agréée (Bloomfield, WARA…) : encore valide, elle prime sur notre diagnostic financier
   const notationValide = (a) => (a?.notation?.long_terme && !a.notation.ancienne ? a.notation : null);
   function blocNotation(n) {
@@ -124,15 +124,15 @@
         <div><b>Notation financière ${esc(n.agence || "")}</b>
           <div class="sub">Long terme ${esc(n.long_terme)}${n.court_terme ? ` · court terme ${esc(n.court_terme)}` : ""}${n.perspective ? ` · perspective ${esc(String(n.perspective).toLowerCase())}` : ""}
             ${n.periode ? ` · ${esc(n.periode)}` : ""}${n.precedente && n.tendance && n.tendance !== "stable" ? ` · ${n.tendance === "hausse" ? "relevée" : "abaissée"} (avant : ${esc(n.precedente)})` : ""}</div></div></div>
-      ${n.ancienne ? `<p class="small muted">Notation de plus de 18 mois ou échue : elle est donnée pour mémoire, le diagnostic BafiBourse ci-dessous prend le relais.</p>` : ""}
+      ${n.ancienne ? `<p class="small muted">Notation de plus de 18 mois ou échue : elle est donnée pour mémoire, le diagnostic Bafi Finance ci-dessous prend le relais.</p>` : ""}
       ${r && (r.plus?.length || r.moins?.length) ? `<div class="nt-res">${r.plus?.length ? `<div><b>Points forts relevés par l'agence</b><ul>${li(r.plus)}</ul></div>` : ""}
           ${r.moins?.length ? `<div><b>Points de vigilance</b><ul>${li(r.moins)}</ul></div>` : ""}</div>
-        <p class="small muted">Résumé rédigé par BafiBourse à partir du rapport de l'agence${r.periode && r.periode !== n.periode ? ` (${esc(r.periode)})` : ""}, relu par notre analyste.</p>` : ""}
+        <p class="small muted">Résumé rédigé par Bafi Finance à partir du rapport de l'agence${r.periode && r.periode !== n.periode ? ` (${esc(r.periode)})` : ""}, relu par notre analyste.</p>` : ""}
       ${n.url && n.url !== "#" ? `<p class="small"><a href="${esc(n.url)}" target="_blank" rel="noopener">Lire le rapport de l'agence</a></p>` : ""}
-      <p class="small muted">Notation délivrée par une agence agréée par l'AMF-UMOA. BafiBourse n'est pas une agence de notation.</p></div>`;
+      <p class="small muted">Notation délivrée par une agence agréée par l'AMF-UMOA. Bafi Finance n'est pas une agence de notation.</p></div>`;
   }
   const diagMot = (note, sm) => note && SANTE[note]
-    ? `<span class="diag d-${esc(note)}${sm ? " sm" : ""}" title="Diagnostic financier BafiBourse">${SANTE[note]}</span>` : "";
+    ? `<span class="diag d-${esc(note)}${sm ? " sm" : ""}" title="Diagnostic financier Bafi Finance">${SANTE[note]}</span>` : "";
   function tendanceCours(c, raisons) {
     const m = /Tech\.\s*(Hausse|Baisse|Neutre|Stable)\s*\((\d+)\s*%\)/i.exec(raisons || "");
     if (m) {
@@ -169,7 +169,7 @@
           : r.analyse?.fiabilite === "partielle" ? `<span class="rp-val muted">En attente de vérification</span>` : `<span class="rp-val muted">Non disponible</span>`}</div>`}
       <div class="rp-tuile"><span class="rp-lbl">Tendance du cours</span>
         ${t ? `<span class="rp-val t-${t.k}">${t.fl} ${t.lib} <small>${t.conf ? `confiance ${t.conf} %` : `${P(t.ch)} sur 3 mois`}</small></span>` : `<span class="rp-val muted">–</span>`}</div>
-      <div class="rp-tuile"><span class="rp-lbl">Score BafiBourse</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chipSante(r.decision, r.analyse?.note)}</span></div>
+      <div class="rp-tuile"><span class="rp-lbl">Score Bafi Finance</span><span class="rp-val">${N(r.score)}<small>/100</small> ${chipSante(r.decision, r.analyse?.note)}</span></div>
     </div>
     ${note && t ? `<div class="quadrant" role="img" aria-label="${esc(phraseReperes(note, t))}">
       <span></span><span class="q-tete">Cours en hausse</span><span class="q-tete">Cours en baisse</span>
@@ -195,12 +195,12 @@
     const attente = a.fiabilite === "partielle" && !a.note;
     // Notation d'agence en tête quand elle existe ; notre diagnostic suit, sous un titre qui le distingue
     const nv = notationValide(a);
-    const tete = blocNotation(a.notation) + (nv ? `<h3 class="fin-sous">Les chiffres de la société · diagnostic BafiBourse</h3>` : "");
+    const tete = blocNotation(a.notation) + (nv ? `<h3 class="fin-sous">Les chiffres de la société · diagnostic Bafi Finance</h3>` : "");
     let h = tete + (attente
       ? `<div class="fin"><div class="fin-head"><span class="grade g-x" aria-hidden="true">…</span>
       <div><b>Diagnostic financier : en attente de vérification</b><div class="sub">Il sera publié dès que toute l'analyse sera vérifiée</div></div></div>`
       : `<div class="fin"><div class="fin-head">${diagMot(a.note) || '<span class="diag d-x">Non disponible</span>'}
-      <div><b>Diagnostic financier BafiBourse</b><div class="sub">Perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>
+      <div><b>Diagnostic financier Bafi Finance</b><div class="sub">Perspective ${esc((a.perspective || "–").toLowerCase())}</div></div></div>
       <p class="small muted diag-mention">${MENTION_DIAG}</p>`);
     // analyse incomplète (indicateur manquant ou douteux) : pas de note, et l'utilisateur sait ce qui reste à vérifier
     if (a.fiabilite === "partielle") h += `<div class="notice small">ⓘ <b>Analyse en cours de vérification.</b> Certains indicateurs de cette société sont en cours de vérification par notre équipe${a.a_verifier?.length ? ` (${esc(a.a_verifier.join(", ").toLowerCase())})` : ""} :
@@ -1051,10 +1051,10 @@
   const METAUX = { bronze: ["#d08a4a", "#7a4a1f"], argent: ["#eef1f5", "#8e96a3"], or: ["#ffd75e", "#b8860b"], platine: ["#f2f2f0", "#9aa3ad"],
     diamant: ["#c8f4ff", "#3fa6cf"], legende: ["#d9a3ff", "#6a1b9a"], emeraude: ["#6be39a", "#1e7a4f"], saphir: ["#8fa2ff", "#1b2a8a"], rubis: ["#ff6f9b", "#8b0a3a"] };
   const URL_SITE = location.origin + location.pathname.replace(/(app|admin)\/.*$/, "");   // l'adresse du site, quel que soit le domaine
-  const phraseTrophee = (t) => /^serie-/.test(t.id || "") ? `J'ai épargné ${String(t.titre).toLowerCase()} avec BafiBourse !`
-    : t.id === "premier" ? "J'ai mis de côté mes premiers francs avec BafiBourse !"
-    : t.id === "sgi" ? "J'ai investi mon épargne à la BRVM avec BafiBourse !"
-    : `J'ai décroché la médaille « ${t.titre} » sur BafiBourse !`;
+  const phraseTrophee = (t) => /^serie-/.test(t.id || "") ? `J'ai épargné ${String(t.titre).toLowerCase()} avec Bafi Finance !`
+    : t.id === "premier" ? "J'ai mis de côté mes premiers francs avec Bafi Finance !"
+    : t.id === "sgi" ? "J'ai investi mon épargne à la BRVM avec Bafi Finance !"
+    : `J'ai décroché la médaille « ${t.titre} » sur Bafi Finance !`;
   async function imageTrophee(t) {
     const W = 1080, H = 1350, c = document.createElement("canvas");
     c.width = W; c.height = H;
@@ -1069,8 +1069,8 @@
     // marque
     g.textAlign = "center"; g.textBaseline = "alphabetic";
     g.font = `800 64px ${police}`;
-    const wB = g.measureText("Bafi").width, wT = g.measureText("BafiBourse").width, x0 = W / 2 - wT / 2;
-    g.textAlign = "left"; g.fillStyle = "#F69E23"; g.fillText("Bafi", x0, 150); g.fillStyle = "#ffffff"; g.fillText("Bourse", x0 + wB, 150);
+    const wB = g.measureText("Bafi ").width, wT = g.measureText("Bafi Finance").width, x0 = W / 2 - wT / 2;
+    g.textAlign = "left"; g.fillStyle = "#F69E23"; g.fillText("Bafi", x0, 150); g.fillStyle = "#ffffff"; g.fillText("Finance", x0 + wB, 150);
     g.textAlign = "center";
     // médaille : ruban, disque, chiffre
     const [clair, fonce] = METAUX[t.metal] || METAUX.bronze, cx = W / 2, cy = 590, r = 190;
@@ -1098,7 +1098,7 @@
   async function partagerTrophee(t) {
     if (!t) return;
     const texte = `${phraseTrophee(t)} ${URL_SITE}`;
-    const blob = await imageTrophee(t), fichier = new File([blob], "trophee-bafibourse.png", { type: "image/png" });
+    const blob = await imageTrophee(t), fichier = new File([blob], "trophee-bafi-finance.png", { type: "image/png" });
     try {
       if (navigator.canShare?.({ files: [fichier] })) return await navigator.share({ files: [fichier], text: texte });
     } catch (e) { if (e.name === "AbortError") return; }
@@ -1106,7 +1106,7 @@
     const url = URL.createObjectURL(blob);
     showInfo("Partager mon trophée", `<img src="${url}" alt="Image du trophée ${esc(t.titre)}" class="tr-apercu">
       <p class="small muted">Aucun montant n'apparaît sur l'image : seulement votre réussite.</p>
-      <div class="actions"><a class="btn" href="${url}" download="trophee-bafibourse.png">Enregistrer l'image</a>
+      <div class="actions"><a class="btn" href="${url}" download="trophee-bafi-finance.png">Enregistrer l'image</a>
         <a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">Envoyer sur WhatsApp</a></div>`);
   }
 
@@ -1666,10 +1666,10 @@
   let RECUES_DEMO = [{ id: 901, cercle_id: "c1", cercle: "Les amis de la fac", pseudo: "Aminata K.", message: "Je viens de la page des cercles, j'aimerais épargner avec vous !", cree_le: new Date().toISOString() }];
   let cerclesDemo = [{ id: "c1", nom: "Les amis de la fac", code: "A1B2C3D4", objectif_jours: 15, objectif_pct: 80, createur: true, public: true,
     presentation: "Anciens de la fac, tous les rythmes sont bienvenus.", capacite: 30, demandes: 1, bravos: ["Awa D."], jai_encourage: false, membres: [
-    { pseudo: "Awa D.", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, tenues: 16, attendues: 17, regularite: 0.92, maj_le: new Date().toISOString() },
-    { pseudo: "Vous", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 },
-    { pseudo: "Koffi A.", moi: false, serie: 2, unite: "semaine", record: 5, jours_mois: 2, tenues: 2, attendues: 3, regularite: 0.6 },
-    { pseudo: "Mariam S.", moi: false, serie: 1, unite: "mois", record: 4, jours_mois: 1, tenues: 1, attendues: 1, regularite: 1 }] }];
+    { pseudo: "Awa D.", pays: "CI", moi: false, serie: 12, unite: "jour", record: 12, jours_mois: 16, tenues: 16, attendues: 17, regularite: 0.92, maj_le: new Date().toISOString() },
+    { pseudo: "Vous", pays: "SN", moi: true, serie: 6, unite: "jour", record: 9, jours_mois: 14, tenues: 14, attendues: 17, regularite: 0.8 },
+    { pseudo: "Koffi Amenyo-Mensah A.", pays: "TG", moi: false, serie: 2, unite: "semaine", record: 5, jours_mois: 2, tenues: 2, attendues: 3, regularite: 0.6 },
+    { pseudo: "Mariam S.", pays: "ML", moi: false, serie: 1, unite: "mois", record: 4, jours_mois: 1, tenues: 1, attendues: 1, regularite: 1 }] }];
   const cleTuto = () => "brvm-tuto-" + (S.user?.id || "x");
   function etatTutoriel() {
     if (S.profil && "tutoriel" in S.profil) return S.profil.tutoriel || {};
@@ -2067,7 +2067,7 @@
         ${ep.aFaire ? `<p><button type="button" class="btn primary" data-coffre="verser">J'ai épargné aujourd'hui</button></p>` : `<p class="small">Votre épargne du jour est faite : bravo !</p>`}`, "rc-epargne");
     }
     carte("🌙", "À demain !", `<p class="rc-ligne">Vous êtes à jour pour ce soir.</p>
-      <p>${ep?.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} continue : c'est la régularité qui construit un patrimoine.` : "Chaque soir de séance, BafiBourse refait le point pour vous."}</p>
+      <p>${ep?.serie > 0 ? `Votre série de ${pluriel(ep.serie, ep.unite)} continue : c'est la régularité qui construit un patrimoine.` : "Chaque soir de séance, Bafi Finance refait le point pour vous."}</p>
       <p class="small muted">Aide à la décision, pas un conseil en investissement.</p>`, "rc-fin");
     return cartes;
   }
@@ -2876,7 +2876,7 @@
           <button class="btn small" data-essai="objectif">Objectif atteint</button><button class="btn small" data-essai="seuil">Prêt à investir</button>
           <button class="btn small" data-essai="perdue">Série perdue</button></div></div>` : ""}
       <div class="card ct-carte"><h2>Nous contacter</h2>
-        <p class="small muted">Une question, un souci, une idée : l'équipe BafiBourse lit chaque message.</p>
+        <p class="small muted">Une question, un souci, une idée : l'équipe Bafi Finance lit chaque message.</p>
         <div class="ct-carte-b"><button type="button" class="btn" data-contact="contact">Nous écrire</button>
           <button type="button" class="btn" data-contact="probleme">Signaler un problème</button>
           <button type="button" class="btn" data-contact="idee">Proposer une idée</button>
@@ -3619,7 +3619,7 @@
     const csv = "\ufeff" + [cols.join(";"), ...S.ops.map((o) => cols.map((c) => cel(o[c])).join(";"))].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = `bafibourse-journal-${today()}.csv`; document.body.append(a); a.click(); a.remove();
+    a.download = `bafi-finance-journal-${today()}.csv`; document.body.append(a); a.click(); a.remove();
     toast("Journal exporté.", { detail: "Le fichier s'ouvre dans Excel, LibreOffice ou Google Sheets." });
   }
 
@@ -3785,7 +3785,7 @@
           }
         } catch (e) {
           const m = String(e.message || e);
-          msg.textContent = /already|exists|registered|taken/i.test(m) ? "Ce numéro est déjà utilisé par un autre compte BafiBourse."
+          msg.textContent = /already|exists|registered|taken/i.test(m) ? "Ce numéro est déjà utilisé par un autre compte Bafi Finance."
             : /expired|invalid/i.test(m) ? "Code incorrect ou expiré : vérifiez le dernier message WhatsApp reçu."
             : /rate limit|too many|429|security purposes/i.test(m) ? "Trop de demandes : réessayez dans quelques minutes."
             : /fetch|network|load failed/i.test(m) ? "Pas de connexion internet pour le moment."
@@ -3876,6 +3876,9 @@
                         cercles: () => api.cercles(), creerCercle: (n, o) => api.creerCercle(n, o), apercuCercle: (c) => api.apercuCercle(c),
                         rejoindreCercle: (c) => api.rejoindreCercle(c), quitterCercle: (id) => api.quitterCercle(id),
                         publierRegularite: (x) => api.publierRegularite(x),
+                        // drapeau dans les cercles : « Montrer mon pays » (profils.pays_cache, fichier 34)
+                        paysCache: () => !!S.profil?.pays_cache, monPays: () => S.profil?.pays || (DEMO ? "SN" : null),
+                        cacherPays: async (b) => { await api.saveProfil(S.user.id, { pays_cache: !!b }); if (S.profil) S.profil.pays_cache = !!b; },
                         cerclesPublics: (o, r, t) => api.cerclesPublics(o, r, t), demanderAdhesion: (i, m) => api.demanderAdhesion(i, m),
                         annulerDemande: (i) => api.annulerDemande(i), mesDemandes: () => api.mesDemandes(), demandesRecues: () => api.demandesRecues(),
                         repondreDemande: (i, ok) => api.repondreDemande(i, ok), signalerCercle: (i, m) => api.signalerCercle(i, m),
@@ -4068,7 +4071,7 @@
     };
     const versCode = (ou) => {
       $(".notice", fc).innerHTML = canal === "tel"
-        ? `<b>C'est envoyé sur WhatsApp au <span id="code-email"></span>.</b> Ouvrez WhatsApp, copiez le <b>code à 6 chiffres</b> reçu de BafiBourse, puis revenez <b>ici</b> pour le saisir.`
+        ? `<b>C'est envoyé sur WhatsApp au <span id="code-email"></span>.</b> Ouvrez WhatsApp, copiez le <b>code à 6 chiffres</b> reçu de Bafi Finance, puis revenez <b>ici</b> pour le saisir.`
         : notice0;
       $("#code-email").textContent = ou;
       $('label[for="code"]', fc).textContent = canal === "tel" ? "Code reçu sur WhatsApp" : "Code reçu par e-mail";
@@ -4188,7 +4191,7 @@
 
   // ---------------------------------------------------------------- un seul onglet après le lien de l'e-mail
   // Le lien de l'e-mail s'ouvre toujours dans un nouvel onglet. L'onglet resté sur l'écran de connexion se connecte
-  // alors tout seul ; le nouvel onglet propose de se fermer, pour ne pas garder deux pages BafiBourse ouvertes.
+  // alors tout seul ; le nouvel onglet propose de se fermer, pour ne pas garder deux pages Bafi Finance ouvertes.
   const canal = "BroadcastChannel" in window ? new BroadcastChannel("bafibourse-connexion") : null;
   function attendreConnexionAilleurs() {
     if (DEMO) return;
@@ -4205,10 +4208,10 @@
     if (!autre) return;                                   // pas d'autre onglet : on continue ici normalement
     document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-un-onglet" aria-labelledby="uo-t"><div class="portes">
       <h2 id="uo-t">Vous êtes connecté ✓</h2>
-      <p>Votre page BafiBourse précédente vient de se connecter, elle aussi. Vous pouvez fermer celle-ci et y revenir.</p>
+      <p>Votre page Bafi Finance précédente vient de se connecter, elle aussi. Vous pouvez fermer celle-ci et y revenir.</p>
       <button type="button" class="btn primary" data-uo="fermer">Fermer cette page</button>
       <button type="button" class="btn" data-uo="rester">Continuer ici</button>
-      <p class="small muted uo-aide" hidden>Votre navigateur ne permet pas de fermer la page automatiquement : fermez cet onglet, puis revenez à la page BafiBourse précédente.</p>
+      <p class="small muted uo-aide" hidden>Votre navigateur ne permet pas de fermer la page automatiquement : fermez cet onglet, puis revenez à la page Bafi Finance précédente.</p>
     </div></dialog>`);
     const d = $("#dlg-un-onglet");
     d.addEventListener("click", (ev) => {
@@ -4224,7 +4227,7 @@
   async function init() {
     $("#badge-demo").hidden = !DEMO;
     demoAccueil();
-    if (DEMO) document.title = "Démo – BafiBourse";
+    if (DEMO) document.title = "Démo – Bafi Finance";
     showAnnonce();
     chargerMode();
     try {

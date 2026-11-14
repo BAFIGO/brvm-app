@@ -1,4 +1,4 @@
-/* BafiBourse – import des documents de la SGI : avis d'exécution, relevés de compte, avis de dividende.
+/* Bafi Finance – import des documents de la SGI : avis d'exécution, relevés de compte, avis de dividende.
  * L'utilisateur choisit un fichier (PDF ou photo) ou photographie son avis ; la fonction « lire-document » le fait lire
  * par l'API Claude ; l'application rapproche les titres des codes BRVM, repère les doublons et les montants douteux,
  * puis affiche un écran de vérification. Rien n'est enregistré sans validation, et l'import s'annule d'une touche.
@@ -23,7 +23,7 @@
       <div class="imp">
         <h2 id="imp-titre">Importer un document de ma SGI</h2>
         <section class="imp-choix">
-          <p>Avis d'exécution, relevé de compte ou avis de dividende : BafiBourse lit le document et prépare les opérations.
+          <p>Avis d'exécution, relevé de compte ou avis de dividende : Bafi Finance lit le document et prépare les opérations.
             <b>Vous vérifiez tout avant l'enregistrement.</b></p>
           <div class="imp-boutons">
             <label class="btn primary imp-btn"><input type="file" accept="application/pdf,image/*" multiple data-imp="fichier">

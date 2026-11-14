@@ -1,4 +1,4 @@
-/* BafiBourse – avis des utilisateurs : note de 1 à 5 étoiles et commentaire.
+/* Bafi Finance – avis des utilisateurs : note de 1 à 5 étoiles et commentaire.
  * • La fenêtre de notation s'ouvre d'elle-même juste après un moment de réussite (jamais lié à un gain en bourse) :
  *   trophée d'épargne, épargne envoyée à la SGI, dividende enregistré, premier achat suivi d'une proposition
  *   (à la visite suivante), fidélité (5 jours de visite sur 14), premiers pas terminés depuis 7 jours.
@@ -14,7 +14,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const NOTES = ["", "Décevant", "Moyen", "Bien", "Très bien", "Excellent"];
-  const STATUTS = { en_attente: "En cours de relecture avant publication", publie: "Publié sur le site BafiBourse",
+  const STATUTS = { en_attente: "En cours de relecture avant publication", publie: "Publié sur le site Bafi Finance",
                     refuse: "Non publié sur le site", prive: "Gardé privé : lu seulement par l'équipe" };
   const ETOILE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1 6L12 17l-5.35 2.85 1-6L3.3 9.6l6-.9z"/></svg>`;
   let app = null, avis, charge = false;
@@ -23,7 +23,7 @@
   document.body.insertAdjacentHTML("beforeend", `
     <dialog id="dlg-avis" aria-labelledby="av-titre">
       <form method="dialog" novalidate>
-        <h2 id="av-titre">Votre avis sur BafiBourse</h2>
+        <h2 id="av-titre">Votre avis sur Bafi Finance</h2>
         <p class="av-intro" hidden></p>
         <fieldset class="av-etoiles">
           <legend>Votre note</legend>
@@ -33,7 +33,7 @@
           <p class="av-libelle" aria-live="polite"></p>
         </fieldset>
         <fieldset class="av-reco">
-          <legend>Recommanderiez-vous BafiBourse à un proche ? <span class="muted">(facultatif)</span></legend>
+          <legend>Recommanderiez-vous Bafi Finance à un proche ? <span class="muted">(facultatif)</span></legend>
           <div class="av-echelle">${Array.from({ length: 11 }, (_, n) => `<label><input type="radio" name="reco" value="${n}"><span>${n}</span></label>`).join("")}</div>
           <div class="av-bornes small muted" aria-hidden="true"><span>Pas du tout</span><span>Certainement</span></div>
         </fieldset>
@@ -42,7 +42,7 @@
         <p class="small muted av-compte" aria-live="polite"></p>
         <p class="small av-ameliorer" hidden>Dites-nous ce que nous pouvons améliorer : chaque avis est lu par l'équipe.</p>
         <label class="av-accord"><input type="checkbox" name="publication">
-          <span>J'accepte que ce commentaire soit publié sur le site BafiBourse sous le nom <b class="av-nom"></b>, après relecture.</span></label>
+          <span>J'accepte que ce commentaire soit publié sur le site Bafi Finance sous le nom <b class="av-nom"></b>, après relecture.</span></label>
         <div class="av-ville" hidden>
           <label for="av-ville">Votre ville <span class="muted">(facultatif, affichée avec votre nom)</span></label>
           <input id="av-ville" name="ville" maxlength="40" autocomplete="address-level2">
@@ -83,12 +83,12 @@
   dlg.addEventListener("close", () => { if (declencheur && !repondu) journal("fermee"); declencheur = null; });
 
   const INTROS = {
-    trophee: "Bravo pour ce trophée ! Vous avez un instant pour noter BafiBourse ?",
-    transfert: "Votre épargne est en route vers votre SGI. Que pensez-vous de BafiBourse ?",
-    dividende: "Un dividende de plus dans votre journal. Que pensez-vous de BafiBourse ?",
-    achat: "Vous avez suivi une proposition jusqu'à l'achat. Que pensez-vous de BafiBourse ?",
-    fidelite: "Vous suivez votre épargne régulièrement. Que pensez-vous de BafiBourse ?",
-    premiers_pas: "Vous utilisez BafiBourse depuis quelques jours. Qu'en pensez-vous ?",
+    trophee: "Bravo pour ce trophée ! Vous avez un instant pour noter Bafi Finance ?",
+    transfert: "Votre épargne est en route vers votre SGI. Que pensez-vous de Bafi Finance ?",
+    dividende: "Un dividende de plus dans votre journal. Que pensez-vous de Bafi Finance ?",
+    achat: "Vous avez suivi une proposition jusqu'à l'achat. Que pensez-vous de Bafi Finance ?",
+    fidelite: "Vous suivez votre épargne régulièrement. Que pensez-vous de Bafi Finance ?",
+    premiers_pas: "Vous utilisez Bafi Finance depuis quelques jours. Qu'en pensez-vous ?",
   };
   function ouvrir(note, decl = null) {
     const a = avis || {};
@@ -130,9 +130,9 @@
       if (declencheur && !repondu) { repondu = true; journal("donnee", note); }
       dlg.close();
       const fan = envoi.recommandation >= 9;
-      app.toast("Merci pour votre avis !", { detail: fan ? "Et merci de nous recommander : partagez BafiBourse avec un proche en une touche."
+      app.toast("Merci pour votre avis !", { detail: fan ? "Et merci de nous recommander : partagez Bafi Finance avec un proche en une touche."
         : avis.statut === "en_attente" ? "Il apparaîtra sur le site après relecture par l'équipe."
-        : envoi.publication ? "Pour être publié, un commentaire doit compter au moins 20 caractères." : "Il aide l'équipe à améliorer BafiBourse.",
+        : envoi.publication ? "Pour être publié, un commentaire doit compter au moins 20 caractères." : "Il aide l'équipe à améliorer Bafi Finance.",
         actions: fan ? [{ label: "Recommander à un proche", fn: recommander }] : [] });
       app.render();
     } catch (e) { msg.textContent = "Envoi impossible : " + e.message; }
@@ -142,7 +142,7 @@
   // Partage de l'application (sans montant) : menu de partage du téléphone, sinon WhatsApp
   async function recommander() {
     const url = location.origin + location.pathname.replace(/(app|admin)\/.*$/, "");
-    const texte = "J'utilise BafiBourse pour épargner chaque jour et suivre mes placements à la BRVM. Essaie, c'est gratuit : " + url;
+    const texte = "J'utilise Bafi Finance pour épargner chaque jour et suivre mes placements à la BRVM. Essaie, c'est gratuit : " + url;
     try { if (navigator.share) return await navigator.share({ text: texte }); } catch (e) { if (e.name === "AbortError") return; }
     window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener");
   }
@@ -211,7 +211,7 @@
     const html = `<div class="card av-profil"><h2>Votre avis</h2>
       ${avis ? `<p>${etoilesFixes(avis.note)} <span class="small muted">${esc(STATUTS[st] || "")}</span></p>
         ${avis.commentaire ? `<p class="small">« ${esc(avis.commentaire)} »</p>` : ""}`
-      : `<p class="small muted">Notez BafiBourse de 1 à 5 étoiles et dites-nous ce que vous en pensez.</p>`}
+      : `<p class="small muted">Notez Bafi Finance de 1 à 5 étoiles et dites-nous ce que vous en pensez.</p>`}
       <div class="actions"><button type="button" class="btn" data-av="ouvrir">${avis ? "Modifier mon avis" : "Donner mon avis"}</button></div></div>`;
     const aide = $(".tuto-aide", v);
     if (aide) aide.insertAdjacentHTML("beforebegin", html); else v.insertAdjacentHTML("beforeend", html);

@@ -1,4 +1,4 @@
-/* BafiBourse – « Mon abonnement » (rubrique du Profil).
+/* Bafi Finance – « Mon abonnement » (rubrique du Profil).
  * Formule en cours et jours restants, consommation du mois (Bim Bim, pages importées), les trois formules, les packs,
  * le parrainage. En attendant l'agrégateur, « Choisir » enregistre une demande ; la console l'active à réception du paiement. */
 (() => {
@@ -201,7 +201,7 @@
         <fieldset class="abo-moyens"><legend class="sr-only">Moyen de paiement</legend>${[...moyens, ["autre", "Autre", ""]].map(([k, n, num], i) =>
           `<label class="abo-m"><input type="radio" name="moyen" value="${k}"${i === 0 ? " checked" : ""}>
             <span class="abo-m-logo" style="--c:${MARQUES[k][0]}">${MARQUES[k][1]}</span><span class="abo-m-t"><b>${n}</b>${num ? `<span>${esc(num)}</span>` : "<span>autre moyen</span>"}</span></label>`).join("")}</fieldset>
-        <p class="small muted">Bénéficiaire : ${esc(cfg.beneficiaire || "BafiBourse")}.</p>
+        <p class="small muted">Bénéficiaire : ${esc(cfg.beneficiaire || "Bafi Finance")}.</p>
         <label>Référence de la transaction <input name="reference" maxlength="60" autocomplete="off" placeholder="Ex. TX2410…"></label>`
       : `<p class="abo-consigne">Le paiement en ligne arrive très bientôt. Envoyez votre demande : notre équipe vous contacte pour le règlement par Wave ou Orange Money.</p>`}
       <p class="small muted">Activée dès réception du paiement, en général sous 24 h. Montants toutes taxes comprises.</p>`;
@@ -245,7 +245,7 @@
     if (app.demo && (b.dataset.abo || b.dataset.aboObjet)) { location.href = `./?offre=${b.dataset.abo || "essentiel"}#inscription`; return; }
     if (b.dataset.abo) return ouvrir(b.dataset.abo);
     if (b.dataset.aboObjet) return ouvrir(null, b.dataset.aboObjet);
-    const lien = b.dataset.aboPartager, texte = `Je tiens mon budget, je garde un peu chaque jour et je suis mes placements à la BRVM avec BafiBourse. Découvre-le en 2 minutes (démo gratuite), puis inscris-toi avec mon invitation : ${lien}`;
+    const lien = b.dataset.aboPartager, texte = `Je tiens mon budget, je garde un peu chaque jour et je suis mes placements à la BRVM avec Bafi Finance. Découvre-le en 2 minutes (démo gratuite), puis inscris-toi avec mon invitation : ${lien}`;
     try { if (navigator.share) return await navigator.share({ text: texte }); } catch (e) { if (e.name === "AbortError") return; }
     try { await navigator.clipboard.writeText(lien); app.toast("Lien de parrainage copié."); } catch (e) { window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener"); }
   });

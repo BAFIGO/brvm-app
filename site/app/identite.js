@@ -1,4 +1,4 @@
-/* BafiBourse – qui navigue : photo (ou initiales) et prénom dans l'en-tête, en-tête du Profil avec la formule,
+/* Bafi Finance – qui navigue : photo (ou initiales) et prénom dans l'en-tête, en-tête du Profil avec la formule,
  * changement de photo (recadrée et réduite à 256 pixels dans le navigateur, jamais envoyée en grand). */
 (() => {
   "use strict";

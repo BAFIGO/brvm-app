@@ -1,4 +1,4 @@
-/* BafiBourse – navigation façon « menu latéral » (inspirée de l'application Claude).
+/* Bafi Finance – navigation façon « menu latéral » (inspirée de l'application Claude).
  *   ☰ en haut à gauche ouvre le menu, qui glisse depuis la gauche ; l'écran en cours se décale et s'assombrit.
  *   Rubrique active surlignée ; « Épinglés » (vos titres principaux, vos cercles) ; « Récents » (dernières opérations) ;
  *   en bas, votre avatar (Profil et réglages) et « + Nouvelle opération ».
@@ -54,8 +54,8 @@
     <div class="ecran-voile" hidden aria-hidden="true"></div>
     <nav id="tiroir" class="tiroir" aria-label="Menu principal" hidden>
       <div class="ti-tete">
-        <a class="ti-marque" href="#aujourdhui"><img src="../icon.svg?v=carapace1" alt="" width="30" height="30"><span><b class="m-bafi">Bafi</b>Bourse</span></a>
-        <button type="button" class="ti-cadeau" aria-label="Parrainage : offrez BafiBourse à vos proches" aria-haspopup="dialog" aria-controls="dlg-parrainage">
+        <a class="ti-marque" href="#aujourdhui"><img class="logo-bb bb-clair" src="../logo-bimbim.svg?v=bimbim1" alt="" width="34" height="34"><img class="logo-bb bb-sombre" src="../logo-bimbim-sombre.svg?v=bimbim1" alt="" width="34" height="34"><span><b class="m-bafi">Bafi</b> Finance</span></a>
+        <button type="button" class="ti-cadeau" aria-label="Parrainage : offrez Bafi Finance à vos proches" aria-haspopup="dialog" aria-controls="dlg-parrainage">
           ${ic('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>')}<span class="ti-cadeau-pt" hidden></span></button>
       </div>
       <div class="ti-defile">
@@ -73,7 +73,7 @@
     <dialog id="dlg-parrainage" class="parrainage" aria-labelledby="parr-t"><div class="parr">
       <button type="button" class="parr-fermer" aria-label="Fermer">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}</button>
       <div class="parr-ic bf-ic" aria-hidden="true">${ic('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>')}</div>
-      <h2 id="parr-t">Offrez BafiBourse, gagnez un mois</h2>
+      <h2 id="parr-t">Offrez Bafi Finance, gagnez un mois</h2>
       <p class="parr-lead">Invitez un proche à épargner avec vous. Dès qu'il prend une formule payante, vous recevez <b>un mois d'Essentiel offert</b>.</p>
       <ol class="parr-etapes">
         <li><span>1</span><div><b>Partagez votre lien</b><small>Par WhatsApp, SMS ou e-mail.</small></div></li>
@@ -89,7 +89,7 @@
       <p class="small muted parr-note">Un mois offert par proche abonné, sans limite. Votre code ne donne accès à aucune de vos données.</p>
     </div></dialog>
     <dialog id="dlg-infos" class="infos" aria-labelledby="infos-t">
-      <div class="inf-tete"><p id="infos-t" class="inf-marque"><b class="m-bafi">Bafi</b>Bourse</p><p class="small muted">Version ${VERSION}</p></div>
+      <div class="inf-tete"><p id="infos-t" class="inf-marque"><b class="m-bafi">Bafi</b> Finance</p><p class="small muted">Version ${VERSION}</p></div>
       <ul class="inf-liste"></ul>
     </dialog>`);
 
@@ -237,7 +237,7 @@
   $(".parr-fermer", parr).addEventListener("click", () => parr.close());
   parr.addEventListener("click", (ev) => { if (ev.target === parr) parr.close(); });
   $(".parr-partager", parr).addEventListener("click", async () => {
-    const lien = lienParrain(), texte = `Je tiens mon budget, je garde un peu chaque jour et je suis mes placements à la BRVM avec BafiBourse. Découvre-le en 2 minutes avec la démo, puis inscris-toi avec mon invitation : 14 jours d'Essentiel offerts. ${lien}`;
+    const lien = lienParrain(), texte = `Je tiens mon budget, je garde un peu chaque jour et je suis mes placements à la BRVM avec Bafi Finance. Découvre-le en 2 minutes avec la démo, puis inscris-toi avec mon invitation : 14 jours d'Essentiel offerts. ${lien}`;
     try { if (navigator.share) { await navigator.share({ text: texte }); return; } } catch (e) { if (e.name === "AbortError") return; }
     window.open("https://wa.me/?text=" + encodeURIComponent(texte), "_blank", "noopener");
   });
@@ -367,7 +367,7 @@
     if (Date.now() - quitter < 3000) { history.back(); return; }
     quitter = Date.now();
     history.pushState({ bafi: "app" }, "", location.href);
-    window.BRVM_APP?.toast?.("Touchez encore « retour » pour quitter BafiBourse.");
+    window.BRVM_APP?.toast?.("Touchez encore « retour » pour quitter Bafi Finance.");
   });
 })();
 

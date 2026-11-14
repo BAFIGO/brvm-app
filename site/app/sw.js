@@ -1,4 +1,4 @@
-/* BafiBourse – service worker : affiche le rappel du soir et le bilan du dimanche, pose la pastille sur l'icône,
+/* Bafi Finance – service worker : affiche le rappel du soir et le bilan du dimanche, pose la pastille sur l'icône,
  * et ouvre l'application quand on touche la notification.
  * Il ne met rien en cache : l'application reste toujours à jour. */
 self.addEventListener("install", () => self.skipWaiting());
@@ -13,9 +13,9 @@ self.addEventListener("push", (e) => {
   try { const h = new URL(m.url || url, self.registration.scope).hash; if (/^#[a-z-]{2,30}$/.test(h)) url = "./" + h; } catch (err) { /* adresse illisible */ }
   const badge = Math.max(0, Math.min(99, parseInt(m.badge, 10) || 0));
   e.waitUntil(Promise.all([
-    self.registration.showNotification(String(m.titre || "BafiBourse").slice(0, 80), {
+    self.registration.showNotification(String(m.titre || "Bafi Finance").slice(0, 80), {
       body: String(m.texte || "Votre récap du soir est prêt.").slice(0, 240),
-      icon: "../icon-192.png?v=carapace1", badge: "../icon-192.png?v=carapace1", lang: "fr",
+      icon: "../icon-192.png?v=bimbim1", badge: "../icon-192.png?v=bimbim1", lang: "fr",
       tag, renotify: true, data: { url },
     }),
     // pastille sur l'icône de l'application installée (quand le téléphone le permet)
