@@ -7,7 +7,7 @@
  * app.js fournit window.BRVM_APP et émet « brvm:pret », puis « brvm:maj ». */
 (() => {
   "use strict";
-  const VERSION = "2026.10.30e";
+  const VERSION = "2026.11.17a";
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const CALME = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -344,13 +344,55 @@
     precedent = t;
   }
 
+  // ---------------------------------------------------------------- barre du bas (2026.11) : les cinq gestes du parcours
+  // Aujourd'hui · Budget · Bim Bim (au centre) · Je garde · Grandir. Le menu ☰ garde tout le reste.
+  const BARRE = [
+    { id: "aujourdhui", nom: "Aujourd'hui", ic: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>') },
+    { id: "budget", nom: "Budget", ic: ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>') },
+    { id: "bimbim", nom: "Bim Bim" },
+    { id: "garde", nom: "Je garde", ic: ic('<rect x="3" y="4" width="18" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.2"/><path d="M6.5 19v1.6M17.5 19v1.6"/>') },
+    { id: "grandir", nom: "Grandir", ic: ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>') },
+  ];
+  const barre = document.createElement("nav");
+  barre.className = "barre-bas"; barre.setAttribute("aria-label", "Navigation principale"); barre.hidden = true;
+  barre.innerHTML = BARRE.map((r) => r.id === "bimbim"
+    ? `<button type="button" class="bb-item bb-bim" data-bb="bimbim" aria-haspopup="dialog"><span class="bb-rond"><img src="../logo-bimbim.svg?v=bimbim1" alt="" width="38" height="38"></span><span class="bb-nom">${r.nom}</span></button>`
+    : `<a href="#${r.id === "garde" || r.id === "grandir" ? "portefeuille" : r.id}" class="bb-item" data-bb="${r.id}"><span class="bb-ic">${r.ic}</span><span class="bb-nom">${r.nom}</span></a>`).join("");
+  document.body.appendChild(barre);
+  // l'onglet allumé : Je garde regroupe coffre, cercles, objectifs et avenir ; Grandir regroupe placements, simulation, marché, performance
+  const ongletBarre = () => {
+    const t = app?.tab?.() || "aujourdhui";
+    if (t === "portefeuille") return ["epargne", "cercles"].includes(app.ongletPf?.()) ? "garde" : "grandir";
+    if (t === "objectifs" || t === "avenir") return "garde";
+    if (t === "marche" || t === "performance") return "grandir";
+    return t === "budget" ? "budget" : t === "aujourdhui" ? "aujourdhui" : "";
+  };
+  function majBarre() {
+    if (!app) return;
+    barre.hidden = document.body.classList.contains("en-onboarding");
+    document.body.classList.toggle("avec-barre", !barre.hidden);
+    const t = ongletBarre();
+    barre.querySelectorAll("[data-bb]").forEach((a) => (a.dataset.bb === t ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+  }
+  barre.addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-bb]");
+    if (!a || !app) return;
+    const t = a.dataset.bb;
+    if (t === "bimbim") { window.dispatchEvent(new CustomEvent("brvm:ouvrir-assistant")); return; }
+    if (t === "garde") { ev.preventDefault(); app.allerPf?.("epargne"); setTimeout(majBarre, 0); return; }
+    // Grandir : vos placements si vous en avez, sinon la simulation d'un premier placement
+    if (t === "grandir") { ev.preventDefault(); app.allerPf?.(app.placements?.() ? "placements" : "simulateur"); setTimeout(majBarre, 0); return; }
+    if (app.tab?.() === t) ev.preventDefault();               // déjà sur cet écran
+  });
+
   window.addEventListener("brvm:pret", () => {
     app = window.BRVM_APP;
     ouvrirB.hidden = false;
     entete(); precedent = app.tab?.();
+    majBarre();
   });
-  window.addEventListener("hashchange", () => { if (!app) return; fermer(false); glisser(); entete(); });
-  window.addEventListener("brvm:maj", entete);
+  window.addEventListener("hashchange", () => { if (!app) return; fermer(false); glisser(); entete(); majBarre(); });
+  window.addEventListener("brvm:maj", () => { entete(); majBarre(); });
 })();
 
 // Retour arrière : depuis un écran, il ramène à Aujourd'hui ; depuis Aujourd'hui, un message demande de confirmer

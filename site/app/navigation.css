@@ -173,3 +173,33 @@ html:has(body.tiroir-visible), body.tiroir-visible { overflow: hidden; }
 body.fab-cache .fab-ia, body.fab-cache .fab { transform: translateY(150%); opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .fab-ia, .fab { transition: none; } }
 main .view:not([hidden]) { padding-bottom: 96px; }
+
+/* ---------------------------------------------------------------- barre du bas (2026.11) */
+.barre-bas { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: start; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: var(--surface);
+  border-top: 1px solid var(--border); box-shadow: 0 -6px 18px -14px hsl(232 40% 20% / .35); }
+.barre-bas[hidden] { display: none; }
+.bb-item { min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; padding: 0;
+  border: 0; background: none; color: var(--muted); text-decoration: none; font: inherit; font-size: .75rem; font-weight: 600; line-height: 1.1; cursor: pointer; }
+.bb-ic { width: 56px; height: 30px; border-radius: 15px; display: grid; place-items: center; }
+.bb-ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bb-item[aria-current="page"] { color: var(--accent); font-weight: 700; }
+.bb-item[aria-current="page"] .bb-ic { background: var(--accent-soft); }
+.bb-item:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+.bb-bim { margin-top: -26px; color: var(--ambre-texte, hsl(32 90% 32%)); font-weight: 700; }
+.bb-rond { width: 60px; height: 60px; border-radius: 30px; display: grid; place-items: center; background: hsl(38 100% 95%);
+  border: 2.5px solid var(--ambre, hsl(35 92% 55%)); box-shadow: 0 4px 12px hsl(232 60% 20% / .22); }
+.bb-rond img { width: 38px; height: 38px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bb-rond { background: var(--surface-2); } }
+:root[data-theme="dark"] .bb-rond { background: var(--surface-2); }
+.bb-bim:active .bb-rond { transform: scale(.95); }
+@media (min-width: 760px) {
+  .barre-bas { left: 50%; right: auto; width: min(560px, 100vw); transform: translateX(-50%); border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; }
+}
+/* place pour la barre : rien de caché dessous ; Bim Bim est dans la barre, le bouton flottant s'efface */
+body.avec-barre { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+body.avec-barre .fab-ia { display: none !important; }
+body.avec-barre #fab-coffre, body.avec-barre .fab { bottom: calc(84px + 14px + env(safe-area-inset-bottom)) !important; }
+body.avec-barre .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+body.tiroir-visible .barre-bas { opacity: 0; pointer-events: none; }
+body.en-onboarding .barre-bas { display: none; }

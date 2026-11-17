@@ -2584,6 +2584,7 @@
     v.innerHTML = `<p class="center muted">Chargement…</p>`;
     const lib = await chargerTel();
     const toutes = [
+      { n: 7, o: 1, titre: "Faisons connaissance", oblig: true },
       { n: 1, o: 1, titre: "Vous", oblig: true },
       { n: 6, o: 2, titre: "Votre profil d'épargnant", oblig: true },
       { n: 3, o: 3, titre: "Votre épargne" },
@@ -2592,9 +2593,14 @@
       { n: 5, o: 5, titre: "Vos préférences", oblig: true }];
     const etapes = completer
       ? toutes.filter((e) => (e.n === 1 && !p.prenom) || e.n === 6 || e.n === 2 || e.n === 4)
-      : toutes.filter((e) => [1, 6, 3, 2, 5].includes(e.n));
+      : toutes.filter((e) => e.n === 7);                  // un seul écran : prénom, façon de gagner, montant (2026.11)
     let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.o > (+p.onboarding_etape || 0)));
     const rep = { ...(p.questionnaire || {}) };
+    let porte = rep.porte === "investisseur" ? "investisseur" : "budget";
+    if (!completer && porte === "investisseur") {             // reprise d'une inscription commencée par la porte « investisseur »
+      etapes.push(...toutes.filter((x) => x.n === 2 || x.n === 4));
+      i = Math.max(0, etapes.findIndex((x) => x.o > (+p.onboarding_etape || 0)));
+    }
     return new Promise((fini) => {
       const finir = (msg) => {
         v.hidden = true;
@@ -2606,6 +2612,32 @@
         fini();
       };
       const corps = (e) => {
+        if (e.n === 7) {
+          const tc = TEL_ON ? telConfirme() : "";
+          let pays = p.pays || "";
+          if (!pays && tc) try { pays = lib?.parsePhoneNumberFromString(tc)?.country || ""; } catch (x) { /* pays par défaut */ }
+          pays = pays || paysParDefaut();
+          const r = rep.ep_revenu === "jour" ? "jour" : rep.ep_revenu === "mois" ? "mois" : "";
+          const ico = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+          const puces = (rr) => (rr === "jour" ? [3000, 5000, 10000, 20000] : [100000, 200000, 400000])
+            .map((x) => `<button type="button" class="bu-puce" data-ob-puce="${x}">${F(x).replace(/\s?F$/, "")}</button>`).join("");
+          return `<p class="small muted">Une minute pour commencer. Tout se change ensuite.</p>
+            <label>Votre prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}" placeholder="ex. Awa"></label>
+            <input type="hidden" name="pays" value="${esc(pays)}">
+            <details class="ob-pays"><summary class="small">Pays : ${drapeau(pays)} ${esc(nomPays(pays))}${tc ? " (d'après votre numéro)" : ""} · <span class="ob-lien">modifier</span></summary>
+              <label class="small">Pays<select name="pays_choix" aria-label="Pays">${optionsPays(lib, pays)}</select></label></details>
+            <fieldset class="fs"><legend>Comment gagnez-vous votre argent ?</legend>
+              <input type="hidden" name="rythme" value="${r}">
+              <div class="bu-choix2">
+                <button type="button" class="bu-gros" data-ob-rythme="jour" aria-pressed="${r === "jour"}"><span class="bu-tuile amb">${ico('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')}</span>Chaque jour<small>commerce, activité</small></button>
+                <button type="button" class="bu-gros" data-ob-rythme="mois" aria-pressed="${r === "mois"}"><span class="bu-tuile">${ico('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>')}</span>Chaque mois<small>un salaire</small></button>
+              </div></fieldset>
+            <label class="ob-gain"><span class="ob-gain-t">Combien, à peu près${r === "jour" ? " par jour" : r === "mois" ? " par mois" : ""} ? <span class="muted">(facultatif)</span></span>
+              <input name="ep_gain" inputmode="numeric" autocomplete="off" value="${rep.ep_gain ? esc(String(rep.ep_gain)) : ""}" placeholder="${r === "jour" ? "ex. 10 000" : "ex. 200 000"}"></label>
+            <div class="bu-puces ob-puces"${r ? "" : " hidden"}>${puces(r || "mois")}</div>
+            <button type="button" class="ob-invest" data-ob-invest><span class="bu-tuile amb">${ico('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}</span>
+              <span><b>J'investis déjà à la BRVM</b><small>Commencer par mon portefeuille</small></span><span aria-hidden="true">›</span></button>`;
+        }
         if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace.${S.user.email || p.email ? ` Votre adresse : <b>${esc(S.user.email || p.email)}</b>` : ""}</p>` + champsIdentite(p, lib);
         if (e.n === 6) return `<p class="small muted">Quatre questions pour vous proposer un rythme d'épargne à votre mesure. Vous pourrez tout changer.</p>`
           + QUESTIONS_EP.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
@@ -2641,6 +2673,21 @@
           <p class="small muted">Tout se modifie ensuite dans l'onglet Profil.</p>`;
       };
       const lire = async (e, f) => {
+        if (e.n === 7) {
+          const prenom = f.prenom.value.trim();
+          if (!prenom) return "Indiquez votre prénom.";
+          const rythme = f.rythme.value;
+          if (porte !== "investisseur" && !rythme) return "Choisissez comment vous gagnez votre argent.";
+          const gain = Math.min(1e10, +String(f.ep_gain.value || "").replace(/[^\d]/g, "") || 0);
+          if (rythme) { rep.ep_revenu = rythme; rep.ep_gain = gain || null; }
+          const upd = { prenom, pays: f.pays_choix?.value || f.pays.value || p.pays || null, questionnaire: { ...rep, porte } };
+          // le budget démarre aussitôt (même façon de gagner, même montant) : pas de seconde série de questions
+          if (porte !== "investisseur" && rythme) try {
+            const ex = await api.budgetProfil();
+            if (!ex) await api.budgetSauverProfil({ mode: "simple", rythme, revenu: gain, profil: "equilibre" });
+          } catch (x) { /* budget pas encore installé : il se créera depuis l'écran Budget */ }
+          return upd;
+        }
         if (e.n === 1) {
           const upd = await lireIdentite(f, lib);
           if (typeof upd === "string") return upd;
@@ -2680,19 +2727,44 @@
         return upd;
       };
       const afficher = () => {
-        const e = etapes[i], dernier = i === etapes.length - 1;
+        const e = etapes[i]; let dernier = i === etapes.length - 1;
         v.innerHTML = `<h1 id="h-ob">${completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
-          ${!completer && i === 0 ? `<p class="small">Cinq petites étapes, deux minutes : vous, votre façon d'épargner, votre plan, votre profil d'investisseur. Puis votre portrait.</p>` : ""}
-          <div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
+          ${etapes.length > 1 ? `<div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
             <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
-          <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
+          <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>` : ""}
           <form id="f-ob" class="card" novalidate><h2>${e.titre}</h2>${corps(e)}<p class="msg" role="status" aria-live="polite"></p>
             <div class="actions ob-actions">${i > 0 ? `<button class="btn" type="button" data-retour>Retour</button>` : ""}
               ${e.oblig ? "" : `<button class="btn" type="button" data-passer>Passer</button>`}
-              <button class="btn primary" type="submit">${dernier ? "Terminer" : "Continuer"}</button></div></form>
+              <button class="btn primary" type="submit">${e.n === 7 && porte === "budget" ? "C'est parti" : dernier ? "Terminer" : "Continuer"}</button></div></form>
           <p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard et entrer dans mon espace</button></p>`;
         const f = $("#f-ob", v), msg = $(".msg", f);
         if (e.n === 1) brancherIdentite(f, lib);
+        if (e.n === 7) {
+          f.addEventListener("click", async (ev) => {
+            const r = ev.target.closest("[data-ob-rythme]"), pu = ev.target.closest("[data-ob-puce]");
+            if (r) {
+              const v2 = r.dataset.obRythme; f.rythme.value = v2;
+              f.querySelectorAll("[data-ob-rythme]").forEach((b) => b.setAttribute("aria-pressed", String(b === r)));
+              $(".ob-gain-t", f).firstChild.textContent = `Combien, à peu près ${v2 === "jour" ? "par jour" : "par mois"} ? `;
+              f.ep_gain.placeholder = v2 === "jour" ? "ex. 10 000" : "ex. 200 000";
+              const z = $(".ob-puces", f); z.hidden = false;
+              z.innerHTML = (v2 === "jour" ? [3000, 5000, 10000, 20000] : [100000, 200000, 400000])
+                .map((x) => `<button type="button" class="bu-puce" data-ob-puce="${x}">${F(x).replace(/\s?F$/, "")}</button>`).join("");
+              r.closest("fieldset")?.classList.remove("ob-manque");
+            } else if (pu) {
+              f.ep_gain.value = new Intl.NumberFormat("fr-FR").format(+pu.dataset.obPuce);
+              f.querySelectorAll("[data-ob-puce]").forEach((b) => b.setAttribute("aria-pressed", String(b === pu)));
+            } else if (ev.target.closest("[data-ob-invest]")) {
+              // porte « investisseur » : profil d'investisseur puis comptes, le budget viendra plus tard
+              porte = "investisseur";
+              const suite = toutes.filter((x) => x.n === 2 || x.n === 4);
+              etapes.splice(i + 1, etapes.length, ...suite);
+              dernier = i === etapes.length - 1;
+              f.requestSubmit();
+            }
+          });
+          f.pays_choix?.addEventListener("change", () => { f.pays.value = f.pays_choix.value; });
+        }
         if (e.n === 3) f.querySelector("[data-ob-prop]")?.addEventListener("click", (ev) => {
           const [m, r] = ev.currentTarget.dataset.obProp.split("|"); f.montant.value = m; f.rythme.value = r; ev.currentTarget.remove();
         });
@@ -2734,11 +2806,17 @@
               return;
             }
             if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.o);
+            if (dernier && !completer && e.n !== 5) {               // dernière étape du parcours court : l'espace s'ouvre
+              if (!p.profil && !upd.profil) upd.profil = "equilibre";        // profil par défaut, affiné dans « Je fais grandir »
+              if (!p.budget_mode && S.coffre) upd.budget_mode = "auto";
+              if (!p.onboarding_fini_le) upd.onboarding_fini_le = new Date().toISOString();
+            }
             await api.saveProfil(S.user.id, upd);
             const avant = p.profil;
             Object.assign(p, upd);
             if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
             if (dernier && completer) return finir("Profil complété.");
+            if (dernier && porte === "budget") return finir("");          // la visite de bienvenue prend le relais
             if (dernier) {                                       // premier « waouh » : le portrait, avant d'entrer dans l'espace
               v.innerHTML = `<div class="portrait">${portraitHtml(true)}
                 <div class="actions ob-actions"><button class="btn primary" type="button" data-entrer>Découvrir mon espace</button></div></div>`;

@@ -159,8 +159,9 @@
   // Visite guidée : le parcours du menu, dans l'ordre — 1. mon argent au quotidien, 2. je garde, 3. je fais grandir, puis Bim Bim.
   // Chaque étape sait se rendre seule à son écran (onglets du portefeuille compris) : la visite ne se coupe plus.
   const ETAPES_VISITE = () => [
-    { tab: "aujourdhui", cible: [".nav-ouvrir"], titre: "Le menu : trois étapes",
-      texte: "Touchez ici (ou glissez depuis la gauche) : 1. mon argent au quotidien, 2. je garde, 3. je fais grandir. La visite suit cet ordre." },
+    { tab: "aujourdhui", cible: [".barre-bas:not([hidden])", ".nav-ouvrir"], titre: "Vos cinq gestes",
+      texte: (c) => c?.matches(".barre-bas") ? "En bas : Aujourd'hui, Budget, Bim Bim au centre, Je garde et Grandir. Le menu ☰, en haut, garde tout le reste (profil, lexique, réglages)."
+        : "Touchez ici (ou glissez depuis la gauche) : 1. mon argent au quotidien, 2. je garde, 3. je fais grandir. La visite suit cet ordre." },
     { tab: "aujourdhui", cible: ["#v-aujourdhui .bu-phrase", "#v-aujourdhui .synthese", "#v-aujourdhui h1"], titre: "1 · Aujourd'hui",
       texte: (c) => c?.matches(".bu-phrase") ? "Ce que vous pouvez dépenser aujourd'hui, sans toucher à votre épargne. La bascule Simple / Détaillé, au-dessus, change l'affichage."
         : "Chaque soir après la séance : le point sur votre argent et ce qu'il y a à faire." },
@@ -184,7 +185,7 @@
       texte: "Vos titres au dernier cours, ce qu'il faut regarder, et le chemin de votre argent. En haut à droite de chaque titre : le crayon (noter une vente, un achat, un dividende) et l'épingle." },
     { tab: "performance", cible: ["#v-performance .card", "#v-performance h1"], titre: "3 · Performance",
       texte: "Votre résultat comparé au marché de la BRVM, dividendes compris." },
-    { cible: "#fab-ia", optionnel: true, titre: "Bim Bim, votre assistant",
+    { cible: [".barre-bas:not([hidden]) .bb-bim", "#fab-ia"], optionnel: true, titre: "Bim Bim, votre assistant",
       texte: "Une question sur votre budget, votre coffre ou un titre ? Bim Bim répond avec vos propres chiffres. Il connaît aussi chaque écran." },
   ];
 
@@ -266,7 +267,7 @@
                     ? "Ce bloc « À faire » réunit après chaque séance les titres qui demandent votre attention, avec l'explication. Une alerte est un signal à examiner, jamais une vente automatique."
                     : "Dès que vous détiendrez des titres, leurs alertes apparaîtront dans un bloc « À faire » sur cet écran. Une alerte est un signal à examiner, jamais une vente automatique." }] },
       ...(robot ? [{ id: "robot", t: "Poser une question à Bim Bim", duree: "30 s", fait: !!e.pas.robot,
-        guide: [{ cible: "#fab-ia", titre: "Bim Bim, votre assistant", texte: "Il répond avec vos propres chiffres. Essayez avec une question toute prête : vous pourrez ensuite poser les vôtres.",
+        guide: [{ cible: [".barre-bas:not([hidden]) .bb-bim", "#fab-ia"], titre: "Bim Bim, votre assistant", texte: "Il répond avec vos propres chiffres. Essayez avec une question toute prête : vous pourrez ensuite poser les vôtres.",
                   action: { label: "Essayer : « Combien puis-je dépenser aujourd'hui ? »", fn: () => ouvrirAssistant("Combien puis-je dépenser aujourd'hui ?") } }] }] : []),
     ];
   }
