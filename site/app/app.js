@@ -409,6 +409,16 @@
       budgetSauverProfil: async (x) => r(await sb.from("budget_profils").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }, { onConflict: "user_id" })),
       budgetMouvements: async (depuis) => r(await sb.from("budget_mouvements").select("*").gte("date", depuis).order("date", { ascending: false }).order("id", { ascending: false }).limit(2000)),
       budgetAjouter: async (m) => r(await sb.from("budget_mouvements").insert({ ...m, user_id: S.user.id }).select().single()),
+      // captures Wave, Orange Money, relevés, cahier de dépenses photographié : lues par la fonction « lire-depenses »
+      lireDepenses: async (type, donnees) => {
+        const { data, error } = await sb.functions.invoke("lire-depenses", { body: { type, donnees } });
+        if (error) {
+          let m = error.message;
+          try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ }
+          const err = new Error(m); err.quota = [402, 429].includes(error.context?.status); throw err;
+        }
+        return data;
+      },
       budgetSupprimer: async (id) => r(await sb.from("budget_mouvements").delete().eq("id", id)),
       budgetProjets: async () => r(await sb.from("budget_projets").select("*").order("ordre").order("id")),
       budgetAjouterProjet: async (x) => r(await sb.from("budget_projets").insert({ ...x, user_id: S.user.id }).select().single()),
@@ -639,6 +649,14 @@
       budgetSauverProfil: async (x) => { budgetDemo.profil = { ...(budgetDemo.profil || {}), ...x }; },
       budgetMouvements: async (depuis) => budgetDemo.mv.filter((m) => m.date >= depuis),
       budgetAjouter: async (m) => { const x = { ...m, id: ++budgetDemo.id }; budgetDemo.mv.unshift(x); return x; },
+      lireDepenses: async () => { await new Promise((ok) => setTimeout(ok, 900)); const j = new Date().toISOString().slice(0, 10);
+        return { source: "wave", lignes: [
+          { date: j, libelle: "Paiement Auchan Sacré-Cœur", montant: 7350, type: "depense", categorie: "nourriture", confiance: 0.92 },
+          { date: j, libelle: "Paiement Woyofal", montant: 5000, type: "depense", categorie: "factures", confiance: 0.95 },
+          { date: j, libelle: "Transfert reçu de Fatou", montant: 25000, type: "revenu", categorie: "transfert", confiance: 0.9 },
+          { date: j, libelle: "Yango course", montant: 2500, type: "depense", categorie: "transport", confiance: 0.88 },
+          { date: j, libelle: "Retrait chez un agent", montant: 20000, type: "transfert", categorie: "autres", confiance: 0.8 },
+          { date: j, libelle: "Pharmacie (écriture peu lisible)", montant: 3200, type: "depense", categorie: "sante", confiance: 0.45 } ] }; },
       budgetSupprimer: async (id) => { budgetDemo.mv = budgetDemo.mv.filter((m) => m.id !== id); },
       budgetProjets: async () => [...budgetDemo.projets],
       budgetAjouterProjet: async (x) => { const y = { ...x, id: ++budgetDemo.id }; budgetDemo.projets.push(y); return y; },
@@ -4014,7 +4032,7 @@
                         demanderAbonnement: (d) => api.demanderAbonnement(d), payer: (o) => api.payer(o), verifierPaiement: (t) => api.verifierPaiement(t),
                         profil: () => S.profil, email: () => S.user?.email || "",
                         budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
-                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id),
+                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id), lireDepenses: (t, d) => api.lireDepenses(t, d),
                                   projets: () => api.budgetProjets(), ajouterProjet: (x) => api.budgetAjouterProjet(x), supprimerProjet: (id) => api.budgetSupprimerProjet(id),
                                   majProjet: (id, x) => api.budgetMajProjet(id, x) },
                         encouragerCercle: (id) => api.encouragerCercle(id), telephoneBudget: () => S.profil?.telephone || "",

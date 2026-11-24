@@ -631,7 +631,7 @@
       <section class="bu-phrase large"><span class="small">${S.decal ? (simple ? "Il me restait" : "Reste à vivre") : simple ? "Il me reste" : "Reste à vivre"} · ${esc(c.moisLib)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
         <div class="bu-trio"><span><small>Gagné</small><b class="num">${F(c.revMois)}</b></span><span><small>Dépensé</small><b class="num">${F(c.depMois)}</b></span><span><small>Gardé</small><b class="num">${F(c.garde)}</b></span></div>
         ${S.decal ? `<span class="small">Mois terminé</span>` : `<span class="small">Aujourd'hui : ${F(c.duJour)} ${c.jour ? "(selon vos recettes du mois)" : `· ${c.joursRest} jour${c.joursRest > 1 ? "s" : ""} restant${c.joursRest > 1 ? "s" : ""}`}</span>`}</section>
-      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
+      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c) + blocImport()}
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">${simple ? "Mon argent du mois" : "Mes enveloppes"}</h2>
           ${simple ? "" : `<label class="small">Profil <select data-bu="profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}"${(c.p.profil || "equilibre") === k ? " selected" : ""}>${v[0]} ${v[1]}/${v[2]}/${v[3]}</option>`).join("")}</select></label>`}</div>
         ${env(simple ? "Pour vivre" : "Besoins", "besoins", 1, "")}${env(simple ? "Pour se faire plaisir" : "Envies", "envies", 2, "env2")}${env(simple ? "Je garde" : "Épargne et avenir", "epargne", 3, "amb")}
@@ -788,6 +788,7 @@
       <div class="bu-puces" id="bu-mp"></div>
       <div class="bu-grille" id="bu-cats"></div>
       <div class="bu-plus-opt" id="bu-opt"></div>
+      <button type="button" class="btn link small bu-imp-l">${ic('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>')} Importer une capture (Wave, Orange Money, cahier…)</button>
       <p class="bu-voix-r small muted" aria-live="polite"></p>
       <div class="bu-actions"><button type="button" class="bu-micro" aria-label="Dicter (ex. : j'ai payé 2 500 de taxi)">${ic(P.micro)}</button>
         <button type="button" class="btn bu-annuler" value="annuler">Annuler</button>
@@ -803,6 +804,7 @@
       const h = ev.target.closest("[data-rep]");
       if (h) { const [c, mt] = h.dataset.rep.split("|"); saisie.cat = c; $("#bu-m", dlg).value = nf.format(+mt); dlg.querySelector("form").requestSubmit(); return; }
       if (ev.target.closest(".bu-micro")) dicter();
+      if (ev.target.closest(".bu-imp-l")) { dlg.close(); importerReleve(); }
     });
     $("#bu-m", dlg).addEventListener("input", (ev) => { const n = lireNombre(ev.target.value); ev.target.value = n ? nf.format(n) : ""; });
     dlg.querySelector("form").addEventListener("submit", async (ev) => {
@@ -1060,6 +1062,181 @@
       <span class="bu-op-l"><b>Créer mon budget du mois</b><small>3 écrans · ou notez d'abord, on vous le proposera</small></span><span aria-hidden="true">›</span></button>`;
   }
 
+  // ------------------------------------------------------------ Importer une capture (2026.11) : Wave, Orange Money, relevé, cahier
+  // La capture (ou la photo d'un cahier de dépenses) est lue par la fonction « lire-depenses » ; chaque opération arrive avec
+  // une catégorie proposée d'après son libellé. On valide ligne par ligne ; sans réponse, la ligne en cours est enregistrée
+  // au bout de 10 secondes, puis la suivante démarre. Les lignes douteuses, les doublons et les retraits attendent un choix.
+  // Le libellé n'est jamais enregistré (seuls date, montant, type et catégorie le sont) ; l'import s'annule d'une touche.
+  const DELAI = 10;
+  let dlgR = null, RL = null;
+  const versB64 = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = ko; r.readAsDataURL(blob); });
+  async function reduireImage(f) {
+    try {
+      const img = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85));
+      return { type: "image/jpeg", donnees: await versB64(b) };
+    } catch (e) { return { type: f.type || "image/jpeg", donnees: await versB64(f) }; }
+  }
+  function blocImport() {
+    return `<button type="button" class="card bu-pl bu-imp-c" data-bu="importer-releve"><span class="bu-tuile petit">${ic('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>', "#fff")}</span>
+      <span class="bu-op-l"><b>Importer une capture</b><small>Wave, Orange Money, relevé ou photo de mon cahier : les opérations se remplissent toutes seules</small></span><span aria-hidden="true">›</span></button>`;
+  }
+  function importerReleve() {
+    if (!essentiel()) { app().voirFormules?.(); return; }
+    if (!app().budget?.lireDepenses) return;
+    const i = document.createElement("input");
+    i.type = "file"; i.accept = "image/*,application/pdf"; i.multiple = true;
+    i.addEventListener("change", () => lireReleves([...i.files].slice(0, 5)));
+    i.click();
+  }
+  function dialogueR() {
+    if (dlgR) return dlgR;
+    document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-releve" class="bu-dlg bu-flux" aria-labelledby="rl-t"><div class="bu-form rl-c"></div></dialog>`);
+    dlgR = $("#dlg-releve");
+    dlgR.addEventListener("click", clicR);
+    dlgR.addEventListener("change", (ev) => {
+      const s = ev.target.closest("[data-rl-cat]"); if (!s) return;
+      const i = +s.dataset.rlCat, l = RL.lignes[i]; l.categorie = s.value; l.doute = false; l.touchee = false;
+      const tu = s.closest(".rl-l")?.querySelector(".bu-tuile"); if (tu) tu.innerHTML = ic(P[l.categorie] || P.autres, l.type === "revenu" ? "#fff" : "currentColor");
+      s.closest(".rl-l")?.querySelector(".rl-note")?.remove();
+      if (l.etat === "attente") demarrer(i);                         // la catégorie changée : ses 10 secondes repartent
+    });
+    dlgR.addEventListener("close", () => { arreterMinuteur(); if (RL?.ids.length) finImport(); });
+    return dlgR;
+  }
+  async function lireReleves(fichiers) {
+    if (!fichiers.length) return;
+    dialogueR();
+    RL = { lignes: [], ids: [], erreurs: [], source: null, timer: null, enCours: -1, reste: DELAI };
+    $(".rl-c", dlgR).innerHTML = `<div class="fx-centre rl-lecture"><div class="imp-roue" aria-hidden="true"></div><p class="rl-etat" aria-live="polite">Lecture… quelques secondes.</p></div>`;
+    dlgR.showModal();
+    for (let n = 0; n < fichiers.length; n++) {
+      const f = fichiers[n];
+      $(".rl-etat", dlgR).textContent = `Lecture de « ${f.name || "photo"} »${fichiers.length > 1 ? ` (${n + 1} sur ${fichiers.length})` : ""}… quelques secondes.`;
+      try {
+        const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name || "");
+        if (pdf && f.size > 6.5e6) throw new Error("PDF trop lourd (6 Mo au plus)");
+        const { type, donnees } = pdf ? { type: "application/pdf", donnees: await versB64(f) } : await reduireImage(f);
+        const r = await app().budget.lireDepenses(type, donnees);
+        RL.source = RL.source || r?.source || null;
+        for (const x of (r?.lignes || []).slice(0, 80)) RL.lignes.push(normaliser(x));
+      } catch (e) { RL.erreurs.push(`${f.name || "Photo"} : ${e.message || e}`); if (e.quota) break; }
+    }
+    peindreR(); demarrer();
+  }
+  const CATS_DEP = new Set(DEP.map((c) => c[0])), CATS_REV = new Set(REV.map((c) => c[0]));
+  function normaliser(x) {
+    const type = ["depense", "revenu", "transfert"].includes(x?.type) ? x.type : "depense";
+    let date = /^\d{4}-\d{2}-\d{2}$/.test(x?.date || "") ? x.date : auj();
+    if (date > auj()) date = auj();
+    const montant = Math.min(1e10, Math.round(Math.abs(+x?.montant || 0)));
+    const cats = type === "revenu" ? CATS_REV : CATS_DEP;
+    const categorie = cats.has(x?.categorie) ? x.categorie : type === "revenu" ? "autres" : "autres";
+    const doublon = S.mv.some((m) => m.date === date && m.type === type && +m.montant === montant);
+    const doute = (+x?.confiance || 0) < 0.6 || !montant;
+    // un retrait ou un transfert entre ses comptes n'est ni gagné ni dépensé : proposé, jamais enregistré seul
+    return { date, montant, type, categorie, libelle: String(x?.libelle || "").slice(0, 80), doublon, doute, etat: type === "transfert" ? "ignoree" : "attente", touchee: false };
+  }
+  const attendChoix = (l) => l.doublon || l.doute;
+  function demarrer(prio) {
+    arreterMinuteur();
+    const libre = (l) => l && l.etat === "attente" && !attendChoix(l) && !l.touchee;
+    const i = libre(RL.lignes[prio]) ? prio : RL.lignes.findIndex(libre);
+    RL.enCours = i; RL.reste = DELAI;
+    if (i < 0) { majR(); return; }
+    RL.timer = setInterval(() => {
+      if (!dlgR.open) return arreterMinuteur();
+      RL.reste -= 1;
+      if (RL.reste <= 0) { arreterMinuteur(); valider(i, true); return; }
+      majR();
+    }, 1000);
+    majR();
+  }
+  function arreterMinuteur() { if (RL?.timer) clearInterval(RL.timer); if (RL) RL.timer = null; }
+  async function valider(i, auto) {
+    const l = RL.lignes[i]; if (!l || l.etat !== "attente") return;
+    if (!l.montant) { l.etat = "ignoree"; peindreR(); demarrer(); return; }
+    l.etat = "envoi"; majR();
+    const m = { date: l.date, type: l.type === "revenu" ? "revenu" : "depense", montant: l.montant, categorie: l.categorie,
+                enveloppe: l.type === "revenu" ? null : catDep(l.categorie)[2], recurrent: false, credit: false };
+    try {
+      const x = await app().budget.ajouter(m);
+      S.mv.unshift(x || { ...m, id: Date.now() + i }); if (x?.id) RL.ids.push(x.id); else RL.ids.push(null);
+      l.etat = "ok"; l.auto = !!auto;
+    } catch (e) { l.etat = "attente"; l.touchee = true; app().toast("Enregistrement impossible : " + (e.message || e)); }
+    peindreR(); demarrer();
+  }
+  function peindreR() {
+    const c = $(".rl-c", dlgR), L = RL.lignes, src = { wave: "Wave", orange_money: "Orange Money", free_money: "Free Money", banque: "un relevé bancaire", cahier: "votre cahier" }[RL.source];
+    const restant = L.filter((l) => l.etat === "attente" && !l.doublon).length;
+    if (!L.length) {
+      c.innerHTML = `<h2 id="rl-t" class="bu-q">Aucune opération trouvée</h2>
+        <p class="small">${RL.erreurs.length ? esc(RL.erreurs.join(" · ")) : "La capture n'a pas pu être lue. Essayez une photo nette, bien éclairée, avec les montants visibles."}</p>
+        <div class="bu-actions"><button type="button" class="btn" data-rl="fermer">Fermer</button><button type="button" class="btn primary" data-rl="autre">Choisir une autre capture</button></div>`;
+      return;
+    }
+    c.innerHTML = `<div class="fx-haut"><span class="fx-rond vide"></span><p class="fx-titre">Importer une capture</p><button type="button" class="fx-rond" data-rl="fermer" aria-label="Fermer">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}</button></div>
+      <h2 id="rl-t" class="bu-q">${L.length} opération${L.length > 1 ? "s" : ""} trouvée${L.length > 1 ? "s" : ""}${src ? ` dans ${esc(src)}` : ""}</h2>
+      <p class="small muted">Vérifiez la catégorie proposée. Sans réponse, chaque ligne est enregistrée au bout de ${DELAI} secondes. Les lignes marquées « à vérifier » attendent votre choix.</p>
+      ${RL.erreurs.length ? `<p class="small bad">${esc(RL.erreurs.join(" · "))}</p>` : ""}
+      <ul class="rl-liste">${L.map((l, i) => ligneR(l, i)).join("")}</ul>
+      <div class="bu-actions"><button type="button" class="btn" data-rl="fermer">${restant ? "Arrêter" : "Fermer"}</button>
+        <button type="button" class="btn primary" data-rl="tout"${restant ? "" : " disabled"}>${restant ? `Tout valider (${restant})` : "Terminé ✓"}</button></div>`;
+    majR();
+  }
+  function ligneR(l, i) {
+    const rev = l.type === "revenu", cats = rev ? REV : DEP.filter((c) => c[0] !== "abonnements");
+    const etat = l.etat === "ok" ? `<span class="rl-ok">✓ ${l.auto ? "Enregistrée" : "Validée"}</span>` : l.etat === "ignoree" ? `<span class="muted small">Ignorée</span>`
+      : l.etat === "envoi" ? `<span class="muted small">…</span>`
+      : `<button type="button" class="btn small" data-rl="ignorer" data-i="${i}" aria-label="Ignorer cette ligne">Ignorer</button>
+         <button type="button" class="btn small primary" data-rl="valider" data-i="${i}">Valider</button>`;
+    const note = l.type === "transfert" ? "Retrait ou transfert entre vos comptes : ni gagné ni dépensé" : l.doublon ? "Déjà noté ? Une opération identique existe ce jour-là" : l.doute ? "À vérifier : lecture incertaine" : "";
+    return `<li class="rl-l ${l.etat}${note ? " a-verifier" : ""}" data-rl-i="${i}">
+      <span class="bu-tuile ${rev ? "" : "clair"} petit">${ic(P[l.categorie] || P.autres, rev ? "#fff" : "currentColor")}</span>
+      <div class="rl-m"><div class="bu-ligne"><b class="rl-lib">${esc(l.libelle || (rev ? "Rentrée" : "Dépense"))}</b><b class="num${rev ? " good" : ""}">${rev ? "+" : l.type === "transfert" ? "" : "−"}${F(l.montant)}</b></div>
+        <div class="rl-d"><span class="small muted">${new Date(l.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+          ${l.etat === "attente" || l.etat === "ignoree" && l.type !== "transfert" ? `<label class="rl-sel"><span class="sr-only">Catégorie</span><select data-rl-cat="${i}">${cats.map(([k, lib]) => `<option value="${k}"${k === l.categorie ? " selected" : ""}>${esc(lib)}</option>`).join("")}</select></label>` : `<span class="small">${esc(libCat({ type: rev ? "revenu" : "depense", categorie: l.categorie }))}</span>`}</div>
+        ${note && l.etat !== "ok" ? `<p class="small rl-note">${note}</p>` : ""}
+        ${l.type === "transfert" && l.etat === "ignoree" ? `<div class="rl-tr"><button type="button" class="btn link small" data-rl="en-depense" data-i="${i}">C'est une dépense</button></div>` : ""}
+        <div class="rl-minuteur" aria-hidden="true"><i></i></div></div>
+      <div class="rl-act">${etat}</div></li>`;
+  }
+  function majR() {
+    if (!dlgR) return;
+    dlgR.querySelectorAll(".rl-l").forEach((li) => {
+      const i = +li.dataset.rlI, on = i === RL.enCours && RL.timer;
+      li.classList.toggle("en-cours", !!on);
+      const bar = $(".rl-minuteur i", li); if (bar) bar.style.width = on ? `${(100 * (DELAI - RL.reste)) / DELAI}%` : "0";
+      const v = $("[data-rl='valider']", li); if (v) v.textContent = on ? `Valider (${RL.reste} s)` : "Valider";
+    });
+  }
+  async function clicR(ev) {
+    if (ev.target === dlgR) return;
+    const b = ev.target.closest("[data-rl]"); if (!b) return;
+    const a = b.dataset.rl, i = +b.dataset.i;
+    if (a === "fermer") dlgR.close();
+    else if (a === "autre") { dlgR.close(); importerReleve(); }
+    else if (a === "valider") { RL.lignes[i].touchee = false; arreterMinuteur(); await valider(i, false); }
+    else if (a === "ignorer") { RL.lignes[i].etat = "ignoree"; arreterMinuteur(); peindreR(); demarrer(); }
+    else if (a === "en-depense") { const l = RL.lignes[i]; l.type = "depense"; l.etat = "attente"; l.touchee = true; peindreR(); demarrer(); }
+    else if (a === "tout") {
+      arreterMinuteur(); b.disabled = true;
+      // les doublons possibles restent à confirmer un par un
+      for (let k = 0; k < RL.lignes.length; k++) if (RL.lignes[k].etat === "attente" && !RL.lignes[k].doublon) await valider(k, false);
+    }
+  }
+  function finImport() {
+    const ids = RL.ids.filter(Boolean), n = RL.ids.length;
+    RL.ids = [];
+    rendre();
+    app().toast(`${n} opération${n > 1 ? "s" : ""} importée${n > 1 ? "s" : ""}.`, { detail: "Votre budget est à jour.",
+      actions: ids.length ? [{ label: "Annuler l'import", fn: async () => {
+        for (const id of ids) { try { await app().budget.supprimer(id); } catch (e) { /* déjà supprimée */ } }
+        S.mv = S.mv.filter((m) => !ids.includes(m.id)); rendre(); app().toast("Import annulé."); } }] : [] });
+  }
+
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-bu]");
     if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs, #v-avenir, #v-portefeuille")) return;
@@ -1102,6 +1279,7 @@
     else if (a === "simuler") { ev.preventDefault(); app().allerPf?.("simulateur"); }
     else if (a === "creer-budget" || a === "prevu-edit") ouvrirFlux("creer");
     else if (a === "proposition") ouvrirFlux("proposition");
+    else if (a === "importer-releve") importerReleve();
     else if (a === "prevu-edit-ancien") { S.prevuEdit = true; rendre(); document.querySelector(".bu-prevu")?.scrollIntoView({ block: "start", behavior: "smooth" }); }
     else if (a === "prevu-ry") {
       const garde = {}; document.querySelectorAll("[data-prevu]").forEach((i) => (garde[i.dataset.prevu] = i.value));

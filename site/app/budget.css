@@ -315,3 +315,27 @@ dialog.bu-flux { min-height: min(calc(100dvh - 16px), 780px); }
 .bu-e3 li.ok { color: var(--good, hsl(160 60% 28%)); }
 .bu-e3 li.on { background: var(--accent); color: #fff; }
 .bu-e3-b { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+
+/* ---------------------------------------------------------------- Importer une capture (2026.11) */
+.bu-imp-l { align-self: center; display: inline-flex; align-items: center; gap: 6px; }
+.bu-imp-l svg { width: 18px; height: 18px; }
+.bu-imp-c { border: 1.5px dashed var(--accent); }
+.rl-lecture { padding: 40px 0; }
+.rl-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rl-l { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.rl-l.en-cours { border: 2px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.rl-l.a-verifier:not(.ok):not(.ignoree) { border-color: var(--ambre, hsl(35 92% 55%)); }
+.rl-l.ok { opacity: .75; }
+.rl-l.ignoree { opacity: .6; }
+.rl-m { min-width: 0; }
+.rl-lib { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: .92rem; }
+.rl-d { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.rl-sel select { min-height: 36px; max-width: 170px; border-radius: 10px; font: inherit; font-size: .85rem; }
+.rl-note { margin: 4px 0 0; color: var(--ambre-texte, hsl(32 90% 32%)); }
+.rl-act { grid-column: 1 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.rl-act .btn { min-height: 40px; }
+.rl-ok { color: var(--good, hsl(160 60% 28%)); font-weight: 700; font-size: .85rem; }
+.rl-minuteur { height: 4px; border-radius: 2px; background: transparent; margin-top: 6px; overflow: hidden; }
+.rl-l.en-cours .rl-minuteur { background: var(--surface-2); }
+.rl-minuteur i { display: block; height: 4px; width: 0; background: var(--accent); transition: width 1s linear; }
+@media (prefers-reduced-motion: reduce) { .rl-minuteur i { transition: none; } }
