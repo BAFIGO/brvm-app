@@ -100,7 +100,7 @@ dialog.bu-dlg::backdrop { background: hsl(232 40% 10% / .45); }
 .bu-pastilles span { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: #fff;
   background: hsl(232 30% 55%); border: 3px solid var(--border); }
 .bu-pastilles span.ok { border-color: hsl(35 92% 55%); background: hsl(232 45% 30%); }
-a.bu-pl { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+a.bu-pl, button.bu-pl { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
 .bu-soir-b { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; } .bu-soir-b .btn { min-height: 48px; border-radius: 14px; }
 .bu-intro { margin: 0; color: var(--muted); }
 .bu-etage .bu-etage-t { display: flex; gap: 12px; align-items: center; } .bu-etage .bu-etage-t small { display: block; color: var(--muted); font-size: .82rem; }
@@ -300,3 +300,18 @@ dialog.bu-flux { min-height: min(calc(100dvh - 16px), 780px); }
 .bu-flux .bu-actions { position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 4px; padding: 10px 0 calc(6px + env(safe-area-inset-bottom));
   background: var(--surface); box-shadow: 0 -10px 12px -10px hsl(232 40% 20% / .25); }
 .bu-flux .bu-actions .btn { min-height: 52px; width: 100%; }
+
+/* ---------------------------------------------------------------- Je garde, Mon avenir, étape 3 (2026.11) */
+.bu-garde-t { margin: 18px 0 8px; }
+.bu-garde-pr .bu-ligne .btn.link { min-height: 36px; }
+.bu-fetes { justify-content: flex-start; margin-top: 10px; }
+.bu-fetes .bu-puce { display: inline-flex; align-items: center; gap: 6px; }
+.bu-fetes .bu-puce svg { width: 18px; height: 18px; }
+.bu-av-carte { border: 1.5px solid var(--ambre, hsl(35 92% 55%)); }
+.bu-etape3 { display: flex; gap: 12px; align-items: flex-start; border: 2px solid var(--accent); }
+.bu-etape3 > img { width: 48px; height: 48px; flex: none; }
+.bu-e3 { list-style: none; margin: 8px 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.bu-e3 li { padding: 4px 10px; border-radius: 12px; font-size: .8rem; font-weight: 700; background: var(--surface-2); }
+.bu-e3 li.ok { color: var(--good, hsl(160 60% 28%)); }
+.bu-e3 li.on { background: var(--accent); color: #fff; }
+.bu-e3-b { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }

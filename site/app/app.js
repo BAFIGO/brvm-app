@@ -2591,7 +2591,8 @@
       { n: 2, o: 4, titre: "Votre profil d'investisseur", oblig: true },
       ...(S.univ ? [{ n: 4, o: 6, titre: "Vos comptes" }] : []),
       { n: 5, o: 5, titre: "Vos préférences", oblig: true }];
-    const etapes = completer
+    const etapes = completer === "investisseur" ? toutes.filter((e) => e.n === 2)   // « Je fais grandir » : le profil, au bon moment
+      : completer
       ? toutes.filter((e) => (e.n === 1 && !p.prenom) || e.n === 6 || e.n === 2 || e.n === 4)
       : toutes.filter((e) => e.n === 7);                  // un seul écran : prénom, façon de gagner, montant (2026.11)
     let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.o > (+p.onboarding_etape || 0)));
@@ -2601,6 +2602,7 @@
       etapes.push(...toutes.filter((x) => x.n === 2 || x.n === 4));
       i = Math.max(0, etapes.findIndex((x) => x.o > (+p.onboarding_etape || 0)));
     }
+    if (completer === "investisseur") document.body.classList.add("en-onboarding");   // la barre du bas s'efface le temps des 3 questions
     return new Promise((fini) => {
       const finir = (msg) => {
         v.hidden = true;
@@ -2728,7 +2730,7 @@
       };
       const afficher = () => {
         const e = etapes[i]; let dernier = i === etapes.length - 1;
-        v.innerHTML = `<h1 id="h-ob">${completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
+        v.innerHTML = `<h1 id="h-ob">${completer === "investisseur" ? "Je fais grandir" : completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
           ${etapes.length > 1 ? `<div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
             <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
           <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>` : ""}
@@ -2815,6 +2817,7 @@
             const avant = p.profil;
             Object.assign(p, upd);
             if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
+            if (dernier && completer === "investisseur") return finir(`Votre profil d'investisseur : ${PROFILS[upd.profil || p.profil]?.t || "Équilibré"}.`);
             if (dernier && completer) return finir("Profil complété.");
             if (dernier && porte === "budget") return finir("");          // la visite de bienvenue prend le relais
             if (dernier) {                                       // premier « waouh » : le portrait, avant d'entrer dans l'espace
@@ -3948,6 +3951,10 @@
                         // menu latéral (navigation.js) : épinglés, récents, documents légaux
                         epingles: () => epingles().map((c) => ({ code: c, nom: S.names?.get(c) || c })),
                         ongletPf: () => S.ui.pfOnglet || "placements", allerPf,
+                        // « Je fais grandir » : le profil d'investisseur est demandé au premier passage, pas à l'inscription
+                        profilInvestisseurFait: () => DEMO || !!S.profil?.questionnaire?.horizon,
+                        profilInvestisseur: () => S.profil?.profil || "equilibre",
+                        faireProfilInvestisseur: (suite) => onboarding("investisseur", suite),
                         recents: () => S.ops.slice().sort((x, y) => String(y.date).localeCompare(String(x.date))).slice(0, 3)
                           .map((o) => ({ type: TYPES_OP[o.type] || o.type, nom: o.ticker ? (S.names?.get(o.ticker) || o.ticker) : "", date: o.date })),
                         documents: () => S.docs || {}, voirDocument: (d) => showCgu(d, false),

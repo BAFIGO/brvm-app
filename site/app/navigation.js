@@ -381,7 +381,13 @@
     if (t === "bimbim") { window.dispatchEvent(new CustomEvent("brvm:ouvrir-assistant")); return; }
     if (t === "garde") { ev.preventDefault(); app.allerPf?.("epargne"); setTimeout(majBarre, 0); return; }
     // Grandir : vos placements si vous en avez, sinon la simulation d'un premier placement
-    if (t === "grandir") { ev.preventDefault(); app.allerPf?.(app.placements?.() ? "placements" : "simulateur"); setTimeout(majBarre, 0); return; }
+    if (t === "grandir") {
+      ev.preventDefault();
+      if (app.placements?.()) { app.allerPf?.("placements"); setTimeout(majBarre, 0); return; }
+      // premier passage : trois questions de profil d'investisseur, puis la simulation d'un premier placement
+      if (app.profilInvestisseurFait && !app.profilInvestisseurFait()) { app.faireProfilInvestisseur(() => { app.allerPf?.("simulateur"); setTimeout(majBarre, 0); }); return; }
+      app.allerPf?.("simulateur"); setTimeout(majBarre, 0); return;
+    }
     if (app.tab?.() === t) ev.preventDefault();               // déjà sur cet écran
   });
 
