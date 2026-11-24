@@ -651,7 +651,8 @@
     v.innerHTML = t("Mon budget") + bascule() + vueBudget(calculs(), S.profil.mode !== "complet");
   }
   // Accueil du mode simple (onglet Aujourd'hui)
-  const accueilSimple = () => S.charge && !S.erreur && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
+  // l'investisseur (porte « J'investis déjà ») garde l'accueil de ses placements ; le budget reste dans l'onglet Budget
+  const accueilSimple = () => S.charge && !S.erreur && !app()?.porteInvestisseur?.() && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
   function renderAccueil(v) {
     S.vue = v;
     S.decal = 0;
@@ -830,7 +831,7 @@
     const tu = $(".bu-tuile", t); tu.className = `bu-tuile petit${rev ? "" : " clair"}`; tu.innerHTML = ic(rev ? P.plus : P.moins, rev ? "#fff" : "currentColor");
     const prevus = Object.keys(prevu(S.profil).depenses);
     const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l])
-      : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[3]))].map(([k, l]) => [k, l]);
+      : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[0] !== "abonnements"))].map(([k, l]) => [k, l]);
     $("#bu-cats", dlg).innerHTML = cats.map(([k, l]) => `<button type="button" class="bu-cat" data-cat="${k}" aria-pressed="${saisie.cat === k}">
       <span class="bu-tuile ${saisie.cat === k ? "" : "clair"}">${ic(P[k] || P.autres, saisie.cat === k ? "#fff" : "currentColor")}</span>${l}</button>`).join("");
     const puces = saisie.type === "revenu" ? (S.profil?.rythme === "jour" ? [2000, 5000, 10000, 20000] : [50000, 100000, 200000, 400000]) : [500, 1000, 2500, 5000];
@@ -1172,7 +1173,7 @@
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); }
   }
 
-  const accueilDetaille = () => S.charge && !S.erreur && S.profil?.mode === "complet";
+  const accueilDetaille = () => S.charge && !S.erreur && !app()?.porteInvestisseur?.() && S.profil?.mode === "complet";
   function enrichirDetaille(v) {
     const h1 = v.querySelector("h1");
     const bourse = document.createElement("details");

@@ -1169,3 +1169,18 @@ li[data-pos] { position: relative; padding-top: 52px !important; }
 .ob-invest .bu-tuile { width: 40px; height: 40px; border-radius: 12px; }
 .ob-invest .bu-tuile svg { width: 22px; height: 22px; }
 .ob-invest:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- investisseur : point de départ (2026.11) */
+.inv-depart h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.inv-choix { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; margin-top: 10px; padding: 10px 14px;
+  border: 1.5px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.inv-choix > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.inv-choix small { color: var(--muted); }
+.inv-choix.reco { border: 2.5px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.inv-ic { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.inv-choix.amb .inv-ic { background: hsl(38 100% 92%); color: var(--ambre-texte, hsl(32 90% 32%)); }
+.inv-ic svg { width: 22px; height: 22px; }
+.inv-choix:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.inv-sgi { margin: 10px 0 0; }
+.inv-budget { border: 1.5px dashed var(--border); }
+.inv-budget p { margin: 6px 0 10px; }

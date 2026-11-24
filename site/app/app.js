@@ -1170,7 +1170,10 @@
   }
   function vAujourdhuiClassique() {
     const v = $("#v-aujourdhui");
-    v.onclick = (ev) => { if (ev.target.closest("[data-completer]")) onboarding(true); };
+    v.onclick = (ev) => {
+      if (ev.target.closest("[data-completer]")) onboarding(true);
+      else if (ev.target.closest("[data-simuler-pf]")) allerPf("simulateur");
+    };
     const L = replay(S.ops);
     const c = S.prop?.contenu;
     const fresh = S.prop && S.seance && S.prop.date === S.seance.date;
@@ -1185,6 +1188,21 @@
     // sans portefeuille, pas de synthèse : le récap garde son bandeau
     if (!recapVu && !(L.positions.length > 0 || L.cash > 0)) h += `<button type="button" class="recap-inv" data-recap><span class="recap-lune" aria-hidden="true">🌙</span>
       <span><b>Votre récap du soir est prêt</b><span class="small">Séance du ${D(S.seance.date).slice(0, 5)} · 30 secondes</span></span><span class="recap-voir" aria-hidden="true">Voir ›</span></button>`;
+    // porte « J'investis déjà » : le point de départ (relevé photographié ou titres saisis), puis le budget pour savoir combien investir
+    if (porteInvestisseur()) {
+      if (!S.ops.length) h += `<section class="card inv-depart" aria-labelledby="inv-dep-t"><h2 id="inv-dep-t">Votre point de départ</h2>
+        <p class="small muted">Pas besoin de tout ressaisir : on part de ce que vous avez aujourd'hui chez votre SGI.</p>
+        <button type="button" class="inv-choix reco" data-import><span class="inv-ic">${icone("photo")}</span><span><b>Photographier mon dernier relevé</b>
+          <small>Recommandé · titres et argent disponible se remplissent tout seuls</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="inv-choix" data-depart><span class="inv-ic">${icone("crayon")}</span><span><b>Saisir mes titres moi-même</b>
+          <small>Code du titre, quantité, prix de revient, argent disponible</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="inv-choix amb" data-simuler-pf><span class="inv-ic">${icone("calc")}</span><span><b>Pas encore de compte SGI</b>
+          <small>Simuler avec de l'argent fictif en attendant</small></span><span aria-hidden="true">›</span></button>
+        <p class="small muted inv-sgi">SGI ${S.profil?.pays ? `du pays : ${esc(nomPays(S.profil.pays))}` : "de votre pays"}, retenues d'office. Rien à choisir.</p></section>`;
+      if (!window.BafiBudget?.pret?.()) h += `<section class="card inv-budget"><b>Combien pouvez-vous investir chaque mois ?</b>
+        <p class="small">Notez ce que vous gagnez et ce que vous dépensez : votre budget montre le montant que vous pouvez envoyer à votre SGI.</p>
+        <a class="btn small" href="#budget">Faire mon budget</a></section>`;
+    }
     if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
       h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
         <button class="btn small" type="button" data-completer>Compléter mon profil</button></div>`;
@@ -2576,6 +2594,10 @@
     pts += r.ep_but === "avenir" ? 1 : 0;
     return pts <= 1 ? "debutant" : pts <= 3 ? "regulier" : "batisseur";
   }
+  const porteInvestisseur = () => S.profil?.questionnaire?.porte === "investisseur";
+  const icone = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${({
+    photo: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', crayon: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M8 15h2M12 15h4"/>' })[k] || ""}</svg>`;
   async function onboarding(completer = false, quandFini = null) {
     const v = $("#v-onboarding"), p = S.profil;
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = true));
@@ -2682,7 +2704,8 @@
           if (porte !== "investisseur" && !rythme) return "Choisissez comment vous gagnez votre argent.";
           const gain = Math.min(1e10, +String(f.ep_gain.value || "").replace(/[^\d]/g, "") || 0);
           if (rythme) { rep.ep_revenu = rythme; rep.ep_gain = gain || null; }
-          const upd = { prenom, pays: f.pays_choix?.value || f.pays.value || p.pays || null, questionnaire: { ...rep, porte } };
+          rep.porte = porte;                                          // gardé à chaque enregistrement du questionnaire
+          const upd = { prenom, pays: f.pays_choix?.value || f.pays.value || p.pays || null, questionnaire: { ...rep } };
           // le budget démarre aussitôt (même façon de gagner, même montant) : pas de seconde série de questions
           if (porte !== "investisseur" && rythme) try {
             const ex = await api.budgetProfil();
@@ -3953,6 +3976,7 @@
                         ongletPf: () => S.ui.pfOnglet || "placements", allerPf,
                         // « Je fais grandir » : le profil d'investisseur est demandé au premier passage, pas à l'inscription
                         profilInvestisseurFait: () => DEMO || !!S.profil?.questionnaire?.horizon,
+                        porteInvestisseur,
                         profilInvestisseur: () => S.profil?.profil || "equilibre",
                         faireProfilInvestisseur: (suite) => onboarding("investisseur", suite),
                         recents: () => S.ops.slice().sort((x, y) => String(y.date).localeCompare(String(x.date))).slice(0, 3)
