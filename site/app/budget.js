@@ -372,7 +372,7 @@
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         <a href="#budget" class="bu-phrase-l" data-bu="voir-budget">Mon budget ›</a>
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      ${troisBoutons()}${blocSoir(c)}${blocPaie(c)}${blocRecette(c)}
+      ${troisBoutons()}${blocSoir(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}
       ${blocRecurrents()}</div>
       <div class="bu-col"><h2 class="bu-resume-t">Mon résumé</h2>
         <section class="card bu-resume">${ligneCoffre(c)}${blocPlacements()}${blocAvenir(c)}</section>
@@ -386,7 +386,7 @@
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
         ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.epargneCible, "amb")}</section>
-      ${troisBoutons()}${blocSoir(c)}${blocPaie(c)}${blocRecette(c)}${blocRecurrents()}</div>
+      ${troisBoutons()}${blocSoir(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}${blocRecurrents()}</div>
       <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocSemaine(c)}
       <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}<div class="bu-place-bourse"></div></div></div>`;
   }
@@ -495,7 +495,11 @@
   // Mon budget prévu : chaque ligne avec son pictogramme (les mêmes qu'à la saisie) ; prévu et dépensé côte à côte.
   // 4 lignes principales d'abord ; « Ajouter une ligne » propose les autres catégories (on n'ajoute que ce qui sert).
   function blocPrevu(c) {
-    const dep = c.pv.depenses, rev = c.pv.revenus, edit = S.prevuEdit || !Object.keys(dep).length;
+    const dep = c.pv.depenses, rev = c.pv.revenus, edit = S.prevuEdit;
+    if (!edit && !Object.keys(dep).length) return S.decal ? "" : `<section class="card bu-prevu"><h2 class="bu-h2">Mon budget prévu</h2>
+      <p class="small">Ce qui rentre, ce que je garde d'abord, ce que je prévois de dépenser : trois écrans à grandes images.</p>
+      <button type="button" class="btn primary" data-bu="creer-budget">Créer mon budget</button>
+      <p class="small muted">Vous pouvez aussi noter d'abord : au début du mois prochain, Bafi Finance vous proposera un budget d'après vos dépenses.</p></section>`;
     const lignes = [...new Set([...PRINCIPALES, ...Object.keys(dep), ...(S.prevuAjout || [])])];
     const totP = Object.values(dep).reduce((a, x) => a + (+x || 0), 0), totR = Object.values(rev).reduce((a, x) => a + (+x || 0), 0);
     if (!edit) return `<section class="card bu-prevu"><div class="bu-ligne"><h2 class="bu-h2">Mon budget prévu</h2>
@@ -860,6 +864,163 @@
     if (pat !== undefined) S.avenirPat = pat;
   }
   // ------------------------------------------------------------------ actions
+  // ------------------------------------------------------------------ Créer mon budget en 3 écrans à grandes images (2026.11)
+  // 1. ce qui rentre → 2. je garde d'abord → 3. mes dépenses. Au début du mois, le budget du mois est proposé
+  // d'après ce qui a été noté le mois écoulé : on valide ou on ajuste, sans rien rechercher.
+  const GARDE = ["serre", "equilibre", "batisseur", "fourmi"];          // 15, 20, 30 ou 40 % gardés d'abord
+  const moisCle = (dec = 0) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + dec); return iso(d).slice(0, 7); };
+  const moisNom = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("fr-FR", { month: "long" });
+  const arrondir = (n) => Math.ceil((+n || 0) / 500) * 500;
+  const somme = (o) => Object.values(o || {}).reduce((a, x) => a + (+x || 0), 0);
+  function reelDuMois(k) {                                            // dépenses et revenus notés un mois donné, par catégorie
+    const dep = {}, rev = {}, jours = new Set(); let n = 0;
+    for (const m of S.mv) {
+      if (!m.date || m.date.slice(0, 7) !== k) continue;
+      jours.add(m.date);
+      if (m.type !== "depense" && m.type !== "revenu") continue;
+      const t = m.type === "depense" ? dep : rev, c = m.categorie || "autres";
+      t[c] = (t[c] || 0) + (+m.montant || 0); if (m.type === "depense") n++;
+    }
+    return { dep, rev, n, jours: jours.size };
+  }
+  // le budget du mois est proposé les 10 premiers jours, si le mois écoulé a été noté (8 jours au moins)
+  // et si le budget de ce mois n'a pas déjà été validé ni la proposition écartée
+  function propositionDue() {
+    if (!S.profil || new Date().getDate() > 10) return false;
+    const ch = S.profil.charges || {}, k = moisCle(0);
+    if (ch.mois === k) return false;
+    try { if (localStorage.getItem("bafi-prop-" + k)) return false; } catch (e) { /* stockage indisponible */ }
+    const r = reelDuMois(moisCle(-1));
+    return r.jours >= 8 && r.n >= 5;
+  }
+  let dlgF = null, FX = null;
+  function revenusDepart() {
+    const pv = prevu(S.profil), jour = S.profil?.rythme === "jour";
+    if (somme(pv.revenus)) return { ...pv.revenus };
+    const r = reelDuMois(moisCle(-1)).rev;
+    if (somme(r)) return Object.fromEntries(Object.entries(r).map(([k, x]) => [k, arrondir(x)]));
+    const base = +S.profil?.revenu || 0;
+    return base ? { [jour ? "recette" : "salaire"]: jour ? base * 26 : base } : {};
+  }
+  function ouvrirFlux(mode) {                                         // mode : "creer" (3 écrans) ou "proposition"
+    const p = S.profil || {}, pv = prevu(p);
+    FX = { etape: mode === "proposition" ? "prop" : 1, jour: p.rythme === "jour", rev: revenusDepart(), garde: GARDE.includes(p.profil) ? p.profil : "equilibre",
+           dep: { ...pv.depenses }, sel: null, mode };
+    const r = reelDuMois(moisCle(-1));
+    FX.avant = r.dep; FX.prevuAvant = pv.depenses;                   // ce qui a été dépensé le mois écoulé, en repère
+    if ((mode === "proposition" || !somme(FX.dep)) && somme(r.dep)) FX.dep = Object.fromEntries(Object.entries(r.dep).map(([k, x]) => [k, arrondir(x)]));
+    if (!dlgF) {
+      document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-flux" class="bu-dlg bu-flux" aria-labelledby="fx-t"><div class="bu-form fx-c"></div></dialog>`);
+      dlgF = $("#dlg-flux");
+      dlgF.addEventListener("click", clicFlux);
+      dlgF.addEventListener("input", (ev) => {
+        const i = ev.target.closest("[data-fx-m]"); if (!i) return;
+        const n = Math.min(1e10, lireNombre(i.value)); i.value = n ? nf.format(n) : "";
+        const [t, k] = i.dataset.fxM.split(":");
+        const val = t === "rev" && k === "recette" && FX.jour ? n * 26 : n;
+        if (t === "rev") FX.rev[k] = val; else FX.dep[k] = val;
+        majTotaux();
+      });
+    }
+    peindreF(); dlgF.showModal();
+  }
+  const totalRev = () => somme(FX.rev);
+  const gardeMois = () => Math.round(totalRev() * (PROFILS[FX.garde] || PROFILS.equilibre)[3] / 100);
+  const resteRep = () => totalRev() - gardeMois() - somme(FX.dep);
+  function majTotaux() {
+    const t = $(".fx-tot b", dlgF); if (t) t.textContent = F(totalRev());
+    const r = $(".fx-reste", dlgF);
+    if (r) { const x = resteRep(), base = Math.max(1, totalRev() - gardeMois());
+      r.innerHTML = x >= 0 ? `<span>Reste à répartir</span><b>${F(x)}</b>` : `<span class="bad">Vous dépassez de</span><b class="bad">${F(-x)}</b>`;
+      const j = $(".fx-jauge i", dlgF); if (j) j.style.width = Math.min(100, Math.round(100 * somme(FX.dep) / base)) + "%"; }
+    const sel = FX.sel && $(`[data-fx="dep"][data-v="${FX.sel}"] small`, dlgF); if (sel) sel.textContent = FX.dep[FX.sel] ? F(FX.dep[FX.sel]) : "+ montant";
+    $$("[data-fx='rev']", dlgF).forEach((b) => { const s = $("small", b); if (s) s.textContent = FX.rev[b.dataset.v] ? F(FX.rev[b.dataset.v]) : ""; });
+  }
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const enteteF = (n) => `<div class="fx-haut"><button type="button" class="fx-rond" data-fx="${n > 1 ? "retour" : "fermer"}" aria-label="${n > 1 ? "Retour" : "Fermer"}">${ic(n > 1 ? '<path d="M19 12H5M11 6l-6 6 6 6"/>' : '<path d="M6 6l12 12M18 6L6 18"/>')}</button>
+      <p class="fx-titre">Créer mon budget</p><span class="fx-rond vide"></span></div>
+    <div class="fx-prog" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="3" aria-valuenow="${n}">${[1, 2, 3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}<span class="small muted">${n} sur 3</span></div>`;
+  function peindreF() {
+    const c = $(".fx-c", dlgF), e = FX.etape;
+    if (e === 1) c.innerHTML = `${enteteF(1)}<h2 id="fx-t" class="bu-q">Ce qui rentre chaque mois</h2>
+      <p class="small muted">Touchez vos sources d'argent, puis indiquez le montant.</p>
+      <div class="bu-grille fx-deux">${REV.map(([k, l]) => `<button type="button" class="bu-cat fx-t" data-fx="rev" data-v="${k}" aria-pressed="${k in FX.rev}">
+        <span class="bu-tuile ${k in FX.rev ? "" : "clair"}">${ic(P[k] || P.autre_rev, k in FX.rev ? "#fff" : "currentColor")}</span>${l}<small>${FX.rev[k] ? F(FX.rev[k]) : ""}</small></button>`).join("")}</div>
+      ${Object.keys(FX.rev).map((k) => { const parJour = k === "recette" && FX.jour, v = parJour ? Math.round((FX.rev[k] || 0) / 26) : FX.rev[k];
+        return `<label class="bu-champ">${esc((REV.find((r) => r[0] === k) || REV[3])[1])} : combien ${parJour ? "par jour" : "par mois"} ?
+          <span class="bu-montant fx-m"><input data-fx-m="rev:${k}" inputmode="numeric" autocomplete="off" placeholder="0" value="${v ? nf.format(v) : ""}"><span>F</span></span></label>`; }).join("")}
+      ${somme(reelDuMois(moisCle(-1)).rev) ? `<p class="small muted">Repris de ce que vous avez noté en ${esc(moisNom(moisCle(-1)))} : il suffit de vérifier.</p>` : ""}
+      <p class="fx-tot"><span>Ce mois-ci, j'attends</span><b>${F(totalRev())}</b></p>
+      <div class="bu-actions"><button type="button" class="btn" data-fx="fermer">Annuler</button><button type="button" class="btn primary" data-fx="suite">Suivant</button></div>`;
+    else if (e === 2) c.innerHTML = `${enteteF(2)}<div class="fx-centre"><span class="bu-tuile amb fx-grand">${ic(P.coffre)}</span>
+        <h2 id="fx-t" class="bu-q">Je garde d'abord</h2><p class="small muted">Dès que l'argent rentre, une part va de côté. On dépense ensuite le reste.</p></div>
+      <fieldset class="fs fx-choix"><legend>Combien garder chaque mois ?</legend>${GARDE.map((k) => { const [nom, , , pct] = PROFILS[k];
+        return `<button type="button" class="fx-opt" data-fx="garde" data-v="${k}" aria-pressed="${FX.garde === k}"><span><b>${pct} % de ce qui rentre</b>
+          <small>${F(Math.round(totalRev() * pct / 100))} par mois · profil ${esc(nom)}</small></span>${k === "equilibre" ? `<span class="fx-conseil">Conseillé</span>` : ""}</button>`; }).join("")}</fieldset>
+      <div class="fx-etages"><span><span class="bu-tuile petit">${ic(P.securite, "#fff")}</span><b>1 · Ma sécurité</b><small>pour les imprévus</small></span>
+        <span><span class="bu-tuile amb petit">${ic(P.tabaski)}</span><b>2 · Mes projets</b><small>Tabaski, rentrée…</small></span></div>
+      <div class="bu-actions"><button type="button" class="btn" data-fx="retour">Retour</button><button type="button" class="btn primary" data-fx="suite">Suivant</button></div>`;
+    else if (e === 3) {
+      const sel = FX.sel ? catDep(FX.sel) : null;
+      c.innerHTML = `${enteteF(3)}<h2 id="fx-t" class="bu-q">Mes dépenses du mois</h2>
+      <p class="small muted">Touchez une image, puis indiquez un montant. Bleu : l'essentiel. Ambre : les plaisirs.</p>
+      <div class="fx-repart"><p class="fx-reste"></p><div class="bu-jauge fx-jauge"><i style="width:0"></i></div></div>
+      <div class="bu-grille fx-dep">${DEP.map(([k, l, env]) => `<button type="button" class="bu-cat fx-t${env === "envies" ? " plaisir" : ""}" data-fx="dep" data-v="${k}" aria-pressed="${FX.sel === k}">
+        <span class="bu-tuile ${env === "envies" ? "amb" : "clair"}">${ic(P[k] || P.autres)}</span>${l}<small>${FX.dep[k] ? F(FX.dep[k]) : "+ montant"}</small></button>`).join("")}</div>
+      ${sel ? `<label class="bu-champ fx-edit">${esc(sel[1])} : combien par mois ?<span class="bu-montant fx-m"><input data-fx-m="dep:${sel[0]}" inputmode="numeric" autocomplete="off" placeholder="0" value="${FX.dep[sel[0]] ? nf.format(FX.dep[sel[0]]) : ""}"><span>F</span></span></label>
+        ${FX.avant?.[sel[0]] ? `<p class="small muted">En ${esc(moisNom(moisCle(-1)))}, vous avez dépensé ${F(FX.avant[sel[0]])}.</p>` : ""}` : ""}
+      <div class="bu-actions"><button type="button" class="btn" data-fx="retour">Retour</button><button type="button" class="btn primary" data-fx="valider">Valider mon budget</button></div>`;
+      majTotaux();
+      if (sel) setTimeout(() => $(".fx-edit input", dlgF)?.focus(), 30);
+    }
+    else if (e === "prop") {
+      const k0 = moisCle(0), k1 = moisCle(-1), lignes = Object.entries(FX.dep).filter(([, x]) => +x > 0).sort((a, b) => b[1] - a[1]);
+      c.innerHTML = `<div class="fx-haut"><button type="button" class="fx-rond" data-fx="plus-tard" aria-label="Fermer">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}</button>
+          <img src="../logo-bimbim.svg?v=bimbim1" alt="" width="40" height="40"><span class="fx-rond vide"></span></div>
+        <div class="fx-centre"><h2 id="fx-t" class="bu-q">Votre budget de ${esc(moisNom(k0))} est prêt</h2>
+          <p class="small muted">Préparé à partir de ce que vous avez noté en ${esc(moisNom(k1))}. Vous n'avez rien à rechercher.</p></div>
+        <div class="fx-trois"><span class="rev"><small>Rentrées</small><b>${F(totalRev())}</b></span><span class="amb"><small>Je garde</small><b>${F(gardeMois())}</b></span>
+          <span class="dep"><small>Dépenses</small><b>${F(somme(FX.dep))}</b></span></div>
+        <ul class="bu-pv-l fx-prop">${lignes.map(([k, x]) => { const avant = FX.avant?.[k] || 0, pv = +FX.prevuAvant?.[k] || 0, trop = pv && avant > pv * 1.1;
+          return `<li><span class="bu-tuile ${catDep(k)[2] === "envies" ? "amb" : "clair"} petit">${ic(P[k] || P.autres)}</span><span class="bu-op-l"><b>${esc(catDep(k)[1])}</b>
+            <small>${esc(moisNom(k1))} : ${F(avant)}${trop ? ` · <span class="bad">dépassé</span>` : ""}</small></span><b class="num">${F(x)}</b></li>`; }).join("")}</ul>
+        ${resteRep() < 0 ? `<p class="small bad">Ces dépenses dépassent ce qui rentre, après ce que vous gardez, de ${F(-resteRep())}. Ajustez une ligne ou deux.</p>` : ""}
+        <div class="bu-actions"><button type="button" class="btn" data-fx="ajuster">Ajuster</button><button type="button" class="btn primary" data-fx="valider">Valider ce budget</button></div>`;
+    }
+  }
+  async function clicFlux(ev) {
+    if (ev.target === dlgF) return;                              // pas de fermeture par le fond : on ne perd pas sa saisie
+    const b = ev.target.closest("[data-fx]"); if (!b) return;
+    const a = b.dataset.fx, v = b.dataset.v;
+    if (a === "fermer") dlgF.close();
+    else if (a === "plus-tard") { try { localStorage.setItem("bafi-prop-" + moisCle(0), "1"); } catch (e) { /* rien */ } dlgF.close(); rendre(); }
+    else if (a === "retour") { FX.etape = Math.max(1, FX.etape - 1); peindreF(); }
+    else if (a === "ajuster") { FX.etape = 1; peindreF(); }
+    else if (a === "rev") { if (v in FX.rev) delete FX.rev[v]; else FX.rev[v] = 0; peindreF(); $(`[data-fx-m="rev:${v}"]`, dlgF)?.focus(); }
+    else if (a === "garde") { FX.garde = v; peindreF(); }
+    else if (a === "dep") { FX.sel = FX.sel === v ? null : v; peindreF(); }
+    else if (a === "suite") {
+      if (FX.etape === 1 && !totalRev()) { app().toast("Indiquez au moins une rentrée d'argent."); $("[data-fx-m]", dlgF)?.focus(); return; }
+      FX.etape += 1; FX.sel = FX.etape === 3 ? null : FX.sel; peindreF();
+    }
+    else if (a === "valider") {
+      const dep = Object.fromEntries(Object.entries(FX.dep).filter(([, x]) => +x > 0)), rev = Object.fromEntries(Object.entries(FX.rev).filter(([, x]) => +x > 0));
+      const tot = somme(rev), ry = FX.jour ? "jour" : "mois";
+      b.disabled = true;
+      await sauver({ charges: { depenses: dep, revenus: rev, mois: moisCle(0) }, profil: FX.garde, rythme: ry, ...(tot ? { revenu: ry === "jour" ? Math.round(tot / 26) : tot } : {}) });
+      dlgF.close();
+      app().toast("Votre budget est enregistré.", { detail: `Vous gardez ${F(gardeMois())} par mois, et vous verrez le dépensé face au prévu.` });
+    }
+  }
+  // la carte du jour : budget proposé (début de mois) ou invitation à le créer
+  function blocCreerBudget(c) {
+    if (propositionDue()) return `<button type="button" class="card bu-pl fx-carte prop" data-bu="proposition"><img src="../logo-bimbim.svg?v=bimbim1" alt="" width="40" height="40">
+      <span class="bu-op-l"><b>Votre budget de ${esc(moisNom(moisCle(0)))} est prêt</b><small>Préparé d'après ${esc(moisNom(moisCle(-1)))} : à valider en une touche</small></span><span aria-hidden="true">›</span></button>`;
+    if (somme(c.pv.depenses)) return "";
+    return `<button type="button" class="card bu-pl fx-carte" data-bu="creer-budget"><span class="bu-tuile petit">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>', "#fff")}</span>
+      <span class="bu-op-l"><b>Créer mon budget du mois</b><small>3 écrans · ou notez d'abord, on vous le proposera</small></span><span aria-hidden="true">›</span></button>`;
+  }
+
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-bu]");
     if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs, #v-avenir, #v-portefeuille")) return;
@@ -893,7 +1054,9 @@
       await sauver({ age: S.avenirAge });
     }
     else if (a === "simuler") { ev.preventDefault(); app().allerPf?.("simulateur"); }
-    else if (a === "prevu-edit") { S.prevuEdit = true; rendre(); document.querySelector(".bu-prevu")?.scrollIntoView({ block: "start", behavior: "smooth" }); }
+    else if (a === "creer-budget" || a === "prevu-edit") ouvrirFlux("creer");
+    else if (a === "proposition") ouvrirFlux("proposition");
+    else if (a === "prevu-edit-ancien") { S.prevuEdit = true; rendre(); document.querySelector(".bu-prevu")?.scrollIntoView({ block: "start", behavior: "smooth" }); }
     else if (a === "prevu-ry") {
       const garde = {}; document.querySelectorAll("[data-prevu]").forEach((i) => (garde[i.dataset.prevu] = i.value));
       S.prevuRythme = v; rendre();
