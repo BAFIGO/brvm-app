@@ -15,6 +15,7 @@
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
   const auj = () => iso(new Date());
   const ilya = (j) => { const d = new Date(); d.setDate(d.getDate() - j); return iso(d); };
+  const ecoute = (k) => `<span class="ec-place" data-ecoute="${k}"></span>`;      // « Écouter · 1 min » si l'audio existe (ecoute.js)
   const ic = (d, c = "currentColor") => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 
   // ------------------------------------------------------------------ catégories (pictogrammes) et enveloppes
@@ -57,7 +58,7 @@
     ["habillement", "Habits", "envies", 0], ["abonnements", "Abonnements", "envies", 0], ["credit", "Crédit", "besoins", 0], ["autres", "Autres", "envies", 1],
   ];
   const REV = [["salaire", "Salaire"], ["recette", "Recette du jour"], ["transfert", "Argent reçu"], ["autres", "Autres"]];
-  const OBJ = [["ecole", "École"], ["tabaski", "Tabaski"], ["logement", "Maison"], ["commerce", "Commerce"], ["sante", "Santé"], ["securite", "Imprévus"]];
+  const OBJ = [["ecole", "École"], ["tabaski", "Tabaski"], ["logement", "Maison"], ["commerce", "Commerce"], ["sante", "Santé"], ["securite", "Imprévus"], ["ceremonie", "Fête"]];
   const PROFILS = { equilibre: ["Équilibré", 50, 30, 20], batisseur: ["Bâtisseur", 50, 20, 30], fourmi: ["Fourmi", 40, 20, 40], serre: ["Serré", 60, 25, 15] };
   // Budget prévu : { depenses: {catégorie: montant}, revenus: {catégorie: montant} } ; l'ancien format plat est converti
   function prevu(p) {
@@ -145,6 +146,8 @@
   // Hypothèses affichées et modifiables : rendement annuel par profil, inflation UEMOA ; on vit de son patrimoine quand
   // 4 % de celui-ci par an couvrent les dépenses. Simulation, pas une promesse.
   const HYP = { prudent: ["Prudent", 0.05], equilibre: ["Équilibré", 0.07], dynamique: ["Dynamique", 0.09] }, INFLATION = 0.025, RETRAIT = 0.04;
+  const hypProfil = () => { const k = app()?.profilInvestisseur?.(); return HYP[k] ? k : "equilibre"; };
+  const hypAvenir = () => S.avenirHyp || hypProfil();                 // choisi ici, sinon le profil d'investisseur
   function trajectoire(age, patrimoine, parMois, depensesMois, rendement, departDans = 0) {
     const reel = (1 + rendement) / (1 + INFLATION) - 1, rm = Math.pow(1 + reel, 1 / 12) - 1, besoin = depensesMois * 12 / RETRAIT;
     let k = patrimoine, ageLib = null; const points = [];
@@ -161,7 +164,7 @@
     const pl = app().placements?.(), patrimoine = (x.patrimoine ?? S.avenirPat ?? (c.solde + (pl?.valeur || 0))) || 0;
     const parMois = x.parMois ?? S.avenirPm ?? Math.round(c.epargneCible);
     const dep = x.depenses ?? S.avenirDep ?? Math.max(1, Math.round(c.revRef - c.epargneCible) || (c.fixes || 1));
-    const h = HYP[x.hyp || S.avenirHyp || "equilibre"][1];
+    const h = HYP[x.hyp || hypAvenir()][1];
     const place = trajectoire(age, patrimoine, parMois, dep, h), dort = trajectoire(age, patrimoine, parMois, dep, 0);
     const retard = trajectoire(age, patrimoine, parMois, dep, h, 10);
     const sansMois = trajectoire(age, Math.max(0, patrimoine - c.garde), parMois, dep, h);
@@ -188,7 +191,7 @@
     S.vue = v; S.decal = 0;
     if (!S.charge) { v.innerHTML = `<h1 id="h-av">Mon avenir</h1><p class="muted">Chargement…</p>`; charger(); return; }
     if (!S.profil) { v.innerHTML = `<h1 id="h-av">Mon avenir</h1><div class="notice">Commencez par votre budget : votre avenir se calcule à partir de lui.<p><a class="btn primary" href="#budget">Commencer mon budget</a></p></div>`; return; }
-    const c = calculs(), pl = app().placements?.(), hyp = S.avenirHyp || "equilibre";
+    const c = calculs(), pl = app().placements?.(), hyp = hypAvenir();
     const pmF = S.avenirPmF || "mois", depF = S.avenirDepF || "mois";
     const pm0 = S.avenirPmBrut ?? Math.round(c.epargneCible), dep0 = S.avenirDepBrut ?? Math.max(0, Math.round(c.revRef - c.epargneCible));
     const freq = (nom, cur) => `<div class="bu-freq" role="radiogroup" aria-label="Rythme">${Object.entries(FREQ).map(([k, [l]]) =>
@@ -212,10 +215,10 @@
         <p class="small muted">Repris de votre budget, de votre coffre et de vos placements : changez-les librement, le résultat suit.</p>
         <button type="button" class="btn small bu-av-fini" data-bu="av-fini"${age0 ? "" : " hidden"}>Terminé</button>
       </section>
-      <div class="bu-av-hyp"><span class="small muted" id="av-hyp-t">Rendement supposé</span>
+      <div class="bu-av-hyp"><span class="small muted" id="av-hyp-t">Rendement supposé${S.avenirHyp ? "" : ` · selon mon profil d'investisseur${app()?.profilInvestisseurFait?.() ? "" : " (par défaut)"}`}</span>
         <div class="bu-seg" role="radiogroup" aria-labelledby="av-hyp-t">${Object.entries(HYP).map(([k, [l, r]]) => `<button type="button" role="radio" aria-checked="${hyp === k}" data-bu="hyp" data-v="${k}">${l}<small>${Math.round(r * 100)} %</small></button>`).join("")}</div></div>
       <div id="av-res"></div>
-      <a class="btn bu-av-sim" href="#portefeuille" data-bu="simuler">Simuler un placement à la BRVM ›</a>
+      <a class="btn primary bu-av-sim" href="#portefeuille" data-bu="investir">Je veux investir ›</a>${ecoute("sgi")}
       <p class="small muted">Simulation, pas une promesse : rendement annuel supposé ${Math.round(HYP[hyp][1] * 100)} % (${HYP[hyp][0]}), inflation de ${(INFLATION * 100).toLocaleString("fr-FR")} % par an déduite ;
         on considère qu'on peut vivre de son patrimoine quand 4 % par an couvrent les dépenses. Les performances passées ne préjugent pas des performances futures.</p>`;
     const maj = () => {
@@ -372,7 +375,7 @@
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         <a href="#budget" class="bu-phrase-l" data-bu="voir-budget">Mon budget ›</a>
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      ${troisBoutons()}${blocSoir(c)}${blocPaie(c)}${blocRecette(c)}
+      ${ecoute("jour")}${troisBoutons()}${blocSoir(c)}${blocEtape3(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}
       ${blocRecurrents()}</div>
       <div class="bu-col"><h2 class="bu-resume-t">Mon résumé</h2>
         <section class="card bu-resume">${ligneCoffre(c)}${blocPlacements()}${blocAvenir(c)}</section>
@@ -386,7 +389,7 @@
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
         ${env("Besoins", c.env.besoins, c.revRef * c.part(1), "")}${env("Envies", c.env.envies, c.revRef * c.part(2), "env2")}${env("Épargne et avenir", c.garde, c.epargneCible, "amb")}</section>
-      ${troisBoutons()}${blocSoir(c)}${blocPaie(c)}${blocRecette(c)}${blocRecurrents()}</div>
+      ${troisBoutons()}${blocSoir(c)}${blocEtape3(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}${blocRecurrents()}</div>
       <div class="bu-col">${blocCoffre(c)}${blocAvenir(c)}${blocCercle()}${blocSemaine(c)}
       <h2 class="bu-h2 bu-titre-bourse">Je fais grandir</h2>${blocPlacements()}<div class="bu-place-bourse"></div></div></div>`;
   }
@@ -495,7 +498,11 @@
   // Mon budget prévu : chaque ligne avec son pictogramme (les mêmes qu'à la saisie) ; prévu et dépensé côte à côte.
   // 4 lignes principales d'abord ; « Ajouter une ligne » propose les autres catégories (on n'ajoute que ce qui sert).
   function blocPrevu(c) {
-    const dep = c.pv.depenses, rev = c.pv.revenus, edit = S.prevuEdit || !Object.keys(dep).length;
+    const dep = c.pv.depenses, rev = c.pv.revenus, edit = S.prevuEdit;
+    if (!edit && !Object.keys(dep).length) return S.decal ? "" : `<section class="card bu-prevu"><h2 class="bu-h2">Mon budget prévu</h2>
+      <p class="small">Ce qui rentre, ce que je garde d'abord, ce que je prévois de dépenser : trois écrans à grandes images.</p>
+      <button type="button" class="btn primary" data-bu="creer-budget">Créer mon budget</button>
+      <p class="small muted">Vous pouvez aussi noter d'abord : au début du mois prochain, Bafi Finance vous proposera un budget d'après vos dépenses.</p></section>`;
     const lignes = [...new Set([...PRINCIPALES, ...Object.keys(dep), ...(S.prevuAjout || [])])];
     const totP = Object.values(dep).reduce((a, x) => a + (+x || 0), 0), totR = Object.values(rev).reduce((a, x) => a + (+x || 0), 0);
     if (!edit) return `<section class="card bu-prevu"><div class="bu-ligne"><h2 class="bu-h2">Mon budget prévu</h2>
@@ -624,7 +631,7 @@
       <section class="bu-phrase large"><span class="small">${S.decal ? (simple ? "Il me restait" : "Reste à vivre") : simple ? "Il me reste" : "Reste à vivre"} · ${esc(c.moisLib)}</span><b data-count>${F(Math.max(0, c.reste))}</b>
         <div class="bu-trio"><span><small>Gagné</small><b class="num">${F(c.revMois)}</b></span><span><small>Dépensé</small><b class="num">${F(c.depMois)}</b></span><span><small>Gardé</small><b class="num">${F(c.garde)}</b></span></div>
         ${S.decal ? `<span class="small">Mois terminé</span>` : `<span class="small">Aujourd'hui : ${F(c.duJour)} ${c.jour ? "(selon vos recettes du mois)" : `· ${c.joursRest} jour${c.joursRest > 1 ? "s" : ""} restant${c.joursRest > 1 ? "s" : ""}`}</span>`}</section>
-      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c)}
+      ${S.decal ? "" : troisBoutons() + blocRecette(c) + blocRecurrents() + blocSoir(c) + blocImport()}
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">${simple ? "Mon argent du mois" : "Mes enveloppes"}</h2>
           ${simple ? "" : `<label class="small">Profil <select data-bu="profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}"${(c.p.profil || "equilibre") === k ? " selected" : ""}>${v[0]} ${v[1]}/${v[2]}/${v[3]}</option>`).join("")}</select></label>`}</div>
         ${env(simple ? "Pour vivre" : "Besoins", "besoins", 1, "")}${env(simple ? "Pour se faire plaisir" : "Envies", "envies", 2, "env2")}${env(simple ? "Je garde" : "Épargne et avenir", "epargne", 3, "amb")}
@@ -645,7 +652,8 @@
     v.innerHTML = t("Mon budget") + bascule() + vueBudget(calculs(), S.profil.mode !== "complet");
   }
   // Accueil du mode simple (onglet Aujourd'hui)
-  const accueilSimple = () => S.charge && !S.erreur && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
+  // l'investisseur (porte « J'investis déjà ») garde l'accueil de ses placements ; le budget reste dans l'onglet Budget
+  const accueilSimple = () => S.charge && !S.erreur && !app()?.porteInvestisseur?.() && (S.profil ? S.profil.mode !== "complet" : !app()?.nbOps?.());
   function renderAccueil(v) {
     S.vue = v;
     S.decal = 0;
@@ -659,8 +667,26 @@
     if (!S.charge) { charger(); return ""; }
     if (!S.profil) return "";
     const c = calculs(), pr = c.projets.reduce((x, y) => x + y.garde, 0);
+    if (!S.cerclesCharges) { S.cerclesCharges = true; app().cercles?.().then((l) => { S.cercles = l || []; if (location.hash.slice(1) === "portefeuille") rendre(); }).catch(() => {}); }
     return `<a class="card bu-ouva" href="#objectifs"><span class="bu-tuile petit">${ic(P.securite, "#fff")}</span>
-      <span class="bu-op-l"><b>Où va cet argent</b><small>Sécurité ${F(c.securite)} · projets ${F(pr)} · bourse ${F(c.bourse)}</small></span><span class="small">Mes objectifs ›</span></a>`;
+      <span class="bu-op-l"><b>Où va cet argent</b><small>Sécurité ${F(c.securite)} · projets ${F(pr)} · bourse ${F(c.bourse)}</small></span><span class="small">Mes objectifs ›</span></a>
+      ${blocProjetsGarde(c)}<h2 class="bu-h2 bu-garde-t">Mes cercles d'épargne</h2>${blocCercle()}
+      <a class="card bu-pl bu-av-carte" href="#avenir"><span class="bu-tuile amb petit">${ic(P.sablier)}</span>
+        <span class="bu-op-l"><b>Si je plaçais cette épargne…</b><small>${(() => { const a = avenir(c); return a?.agePlace ? `Âge de liberté estimé : ${a.agePlace} ans, au lieu de ${a.ageDort ? a.ageDort + " ans" : "jamais"} si elle dort` : "Voir ce qu'elle deviendrait : Mon avenir"; })()}</small></span><span aria-hidden="true">›</span></a>`;
+  }
+  // Mes projets (page Je garde) : chaque projet avec sa jauge et ce qu'il faut garder par jour pour être prêt à temps ;
+  // sans projet, les fêtes et la rentrée sont proposées en une touche
+  const FETES = [["tabaski", "Tabaski"], ["ceremonie", "Korité"], ["ceremonie", "Magal"], ["ecole", "Rentrée scolaire"]];
+  function blocProjetsGarde(c) {
+    const parJour = (x) => { if (!x.montant || !x.date_cible) return ""; const reste = Math.max(0, +x.montant - x.garde);
+      const j = Math.max(1, Math.round((new Date(x.date_cible) - new Date()) / 864e5)); return reste ? `${F(reste / j)} par jour pour être prêt à temps` : "Prêt ✓"; };
+    const ajout = S.projetsOk === false ? "" : !essentiel() && c.projets.length >= 2 ? "" : `<button type="button" class="btn link small" data-bu="ajout-projet">+ Ajouter</button>`;
+    return `<section class="card bu-garde-pr"><div class="bu-ligne"><h2 class="bu-h2">Mes projets</h2>${ajout}</div>${ecoute("projet")}
+      ${c.projets.length ? `<ul class="bu-ops">${c.projets.map((x) => `<li class="bu-proj"><span class="bu-tuile amb petit">${ic(P[x.icone] || P.coffre)}</span><div class="bu-op-l">
+        <div class="bu-ligne"><b>${esc(x.nom)}</b><span class="small muted num bu-nw">${x.montant ? nf.format(x.garde) + " / " + F(x.montant) : F(x.garde)}</span></div>
+        ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}<small>${esc(parJour(x))}</small></div></li>`).join("")}</ul>`
+        : `<p class="small muted">Une fête, la rentrée, un achat : donnez une raison à votre épargne.</p>`}
+      ${S.projetsOk === false || c.projets.length >= 2 ? "" : `<div class="bu-puces bu-fetes">${FETES.map(([i, n]) => `<button type="button" class="bu-puce" data-bu="projet-fete" data-v="${i}|${esc(n)}">${ic(P[i])} ${esc(n)}</button>`).join("")}</div>`}</section>`;
   }
   function renderObjectifs(v) {
     S.vue = v;
@@ -704,7 +730,7 @@
   }
   // ajouter un projet (pictogramme, nom, montant, date)
   let dlgP = null, projIcone = "ecole";
-  function ajouterProjet() {
+  function ajouterProjet(icone, nom) {
     if (!dlgP) {
       document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-projet" class="bu-dlg" aria-labelledby="dp-t"><form method="dialog" class="bu-form" novalidate>
         <h2 id="dp-t" class="bu-q">Nouveau projet</h2><div class="bu-grille" id="dp-ic"></div>
@@ -725,7 +751,8 @@
         } catch (e) { app().toast("Impossible : " + (e.message || e)); }
       });
     }
-    $("#dp-n", dlgP).value = ""; $("#dp-m", dlgP).value = ""; $("#dp-d", dlgP).value = "";
+    if (icone && OBJ.some((o) => o[0] === icone)) projIcone = icone;
+    $("#dp-n", dlgP).value = nom || ""; $("#dp-m", dlgP).value = ""; $("#dp-d", dlgP).value = "";
     peindreP(); dlgP.showModal();
   }
   function peindreP() {
@@ -755,11 +782,13 @@
     if (dlg) return dlg;
     document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-budget" class="bu-dlg" aria-labelledby="bu-dlg-t"><form method="dialog" class="bu-form" novalidate>
       <h2 id="bu-dlg-t" class="bu-dlg-t"><span class="bu-tuile petit" aria-hidden="true"></span><span class="bu-dlg-tt">J'ai dépensé</span></h2>
+      <div id="bu-ec"></div>
       <label class="bu-montant"><span class="sr-only">Montant</span><input id="bu-m" inputmode="numeric" autocomplete="off" placeholder="0"><span>F</span></label>
       <div class="bu-habitude" id="bu-hab"></div>
       <div class="bu-puces" id="bu-mp"></div>
       <div class="bu-grille" id="bu-cats"></div>
       <div class="bu-plus-opt" id="bu-opt"></div>
+      <button type="button" class="btn link small bu-imp-l">${ic('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>')} Importer une capture (Wave, Orange Money, cahier…)</button>
       <p class="bu-voix-r small muted" aria-live="polite"></p>
       <div class="bu-actions"><button type="button" class="bu-micro" aria-label="Dicter (ex. : j'ai payé 2 500 de taxi)">${ic(P.micro)}</button>
         <button type="button" class="btn bu-annuler" value="annuler">Annuler</button>
@@ -775,6 +804,7 @@
       const h = ev.target.closest("[data-rep]");
       if (h) { const [c, mt] = h.dataset.rep.split("|"); saisie.cat = c; $("#bu-m", dlg).value = nf.format(+mt); dlg.querySelector("form").requestSubmit(); return; }
       if (ev.target.closest(".bu-micro")) dicter();
+      if (ev.target.closest(".bu-imp-l")) { dlg.close(); importerReleve(); }
     });
     $("#bu-m", dlg).addEventListener("input", (ev) => { const n = lireNombre(ev.target.value); ev.target.value = n ? nf.format(n) : ""; });
     dlg.querySelector("form").addEventListener("submit", async (ev) => {
@@ -802,10 +832,11 @@
     const complet = S.profil?.mode === "complet";
     const rev = saisie.type === "revenu", t = $(".bu-dlg-t", dlg);
     $(".bu-dlg-tt", t).textContent = rev ? "J'ai gagné" : "J'ai dépensé";
+    const ec = $("#bu-ec", dlg), k = rev ? "gagne" : "depense"; if (ec.dataset.k !== k) { ec.dataset.k = k; ec.innerHTML = ecoute(k); }
     const tu = $(".bu-tuile", t); tu.className = `bu-tuile petit${rev ? "" : " clair"}`; tu.innerHTML = ic(rev ? P.plus : P.moins, rev ? "#fff" : "currentColor");
     const prevus = Object.keys(prevu(S.profil).depenses);
     const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l])
-      : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[3]))].map(([k, l]) => [k, l]);
+      : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[0] !== "abonnements"))].map(([k, l]) => [k, l]);
     $("#bu-cats", dlg).innerHTML = cats.map(([k, l]) => `<button type="button" class="bu-cat" data-cat="${k}" aria-pressed="${saisie.cat === k}">
       <span class="bu-tuile ${saisie.cat === k ? "" : "clair"}">${ic(P[k] || P.autres, saisie.cat === k ? "#fff" : "currentColor")}</span>${l}</button>`).join("");
     const puces = saisie.type === "revenu" ? (S.profil?.rythme === "jour" ? [2000, 5000, 10000, 20000] : [50000, 100000, 200000, 400000]) : [500, 1000, 2500, 5000];
@@ -860,6 +891,352 @@
     if (pat !== undefined) S.avenirPat = pat;
   }
   // ------------------------------------------------------------------ actions
+  // ------------------------------------------------------------------ Créer mon budget en 3 écrans à grandes images (2026.11)
+  // 1. ce qui rentre → 2. je garde d'abord → 3. mes dépenses. Au début du mois, le budget du mois est proposé
+  // d'après ce qui a été noté le mois écoulé : on valide ou on ajuste, sans rien rechercher.
+  const GARDE = ["serre", "equilibre", "batisseur", "fourmi"];          // 15, 20, 30 ou 40 % gardés d'abord
+  const moisCle = (dec = 0) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + dec); return iso(d).slice(0, 7); };
+  const moisNom = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("fr-FR", { month: "long" });
+  const arrondir = (n) => Math.ceil((+n || 0) / 500) * 500;
+  const somme = (o) => Object.values(o || {}).reduce((a, x) => a + (+x || 0), 0);
+  function reelDuMois(k) {                                            // dépenses et revenus notés un mois donné, par catégorie
+    const dep = {}, rev = {}, jours = new Set(); let n = 0;
+    for (const m of S.mv) {
+      if (!m.date || m.date.slice(0, 7) !== k) continue;
+      jours.add(m.date);
+      if (m.type !== "depense" && m.type !== "revenu") continue;
+      const t = m.type === "depense" ? dep : rev, c = m.categorie || "autres";
+      t[c] = (t[c] || 0) + (+m.montant || 0); if (m.type === "depense") n++;
+    }
+    return { dep, rev, n, jours: jours.size };
+  }
+  // le budget du mois est proposé les 10 premiers jours, si le mois écoulé a été noté (8 jours au moins)
+  // et si le budget de ce mois n'a pas déjà été validé ni la proposition écartée
+  function propositionDue() {
+    if (!S.profil || new Date().getDate() > 10) return false;
+    const ch = S.profil.charges || {}, k = moisCle(0);
+    if (ch.mois === k) return false;
+    try { if (localStorage.getItem("bafi-prop-" + k)) return false; } catch (e) { /* stockage indisponible */ }
+    const r = reelDuMois(moisCle(-1));
+    return r.jours >= 8 && r.n >= 5;
+  }
+  let dlgF = null, FX = null;
+  function revenusDepart() {
+    const pv = prevu(S.profil), jour = S.profil?.rythme === "jour";
+    if (somme(pv.revenus)) return { ...pv.revenus };
+    const r = reelDuMois(moisCle(-1)).rev;
+    if (somme(r)) return Object.fromEntries(Object.entries(r).map(([k, x]) => [k, arrondir(x)]));
+    const base = +S.profil?.revenu || 0;
+    return base ? { [jour ? "recette" : "salaire"]: jour ? base * 26 : base } : {};
+  }
+  function ouvrirFlux(mode) {                                         // mode : "creer" (3 écrans) ou "proposition"
+    const p = S.profil || {}, pv = prevu(p);
+    FX = { etape: mode === "proposition" ? "prop" : 1, jour: p.rythme === "jour", rev: revenusDepart(), garde: GARDE.includes(p.profil) ? p.profil : "equilibre",
+           dep: { ...pv.depenses }, sel: null, mode };
+    const r = reelDuMois(moisCle(-1));
+    FX.avant = r.dep; FX.prevuAvant = pv.depenses;                   // ce qui a été dépensé le mois écoulé, en repère
+    if ((mode === "proposition" || !somme(FX.dep)) && somme(r.dep)) FX.dep = Object.fromEntries(Object.entries(r.dep).map(([k, x]) => [k, arrondir(x)]));
+    if (!dlgF) {
+      document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-flux" class="bu-dlg bu-flux" aria-labelledby="fx-t"><div class="bu-form fx-c"></div></dialog>`);
+      dlgF = $("#dlg-flux");
+      dlgF.addEventListener("click", clicFlux);
+      dlgF.addEventListener("input", (ev) => {
+        const i = ev.target.closest("[data-fx-m]"); if (!i) return;
+        const n = Math.min(1e10, lireNombre(i.value)); i.value = n ? nf.format(n) : "";
+        const [t, k] = i.dataset.fxM.split(":");
+        const val = t === "rev" && k === "recette" && FX.jour ? n * 26 : n;
+        if (t === "rev") FX.rev[k] = val; else FX.dep[k] = val;
+        majTotaux();
+      });
+    }
+    peindreF(); dlgF.showModal();
+  }
+  const totalRev = () => somme(FX.rev);
+  const gardeMois = () => Math.round(totalRev() * (PROFILS[FX.garde] || PROFILS.equilibre)[3] / 100);
+  const resteRep = () => totalRev() - gardeMois() - somme(FX.dep);
+  function majTotaux() {
+    const t = $(".fx-tot b", dlgF); if (t) t.textContent = F(totalRev());
+    const r = $(".fx-reste", dlgF);
+    if (r) { const x = resteRep(), base = Math.max(1, totalRev() - gardeMois());
+      r.innerHTML = x >= 0 ? `<span>Reste à répartir</span><b>${F(x)}</b>` : `<span class="bad">Vous dépassez de</span><b class="bad">${F(-x)}</b>`;
+      const j = $(".fx-jauge i", dlgF); if (j) j.style.width = Math.min(100, Math.round(100 * somme(FX.dep) / base)) + "%"; }
+    const sel = FX.sel && $(`[data-fx="dep"][data-v="${FX.sel}"] small`, dlgF); if (sel) sel.textContent = FX.dep[FX.sel] ? F(FX.dep[FX.sel]) : "+ montant";
+    $$("[data-fx='rev']", dlgF).forEach((b) => { const s = $("small", b); if (s) s.textContent = FX.rev[b.dataset.v] ? F(FX.rev[b.dataset.v]) : ""; });
+  }
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const enteteF = (n) => `<div class="fx-haut"><button type="button" class="fx-rond" data-fx="${n > 1 ? "retour" : "fermer"}" aria-label="${n > 1 ? "Retour" : "Fermer"}">${ic(n > 1 ? '<path d="M19 12H5M11 6l-6 6 6 6"/>' : '<path d="M6 6l12 12M18 6L6 18"/>')}</button>
+      <p class="fx-titre">Créer mon budget</p><span class="fx-rond vide"></span></div>
+    <div class="fx-prog" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="3" aria-valuenow="${n}">${[1, 2, 3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}<span class="small muted">${n} sur 3</span></div>`;
+  function peindreF() {
+    const c = $(".fx-c", dlgF), e = FX.etape;
+    if (e === 1) c.innerHTML = `${enteteF(1)}<h2 id="fx-t" class="bu-q">Ce qui rentre chaque mois</h2>
+      <p class="small muted">Touchez vos sources d'argent, puis indiquez le montant.</p>
+      <div class="bu-grille fx-deux">${REV.map(([k, l]) => `<button type="button" class="bu-cat fx-t" data-fx="rev" data-v="${k}" aria-pressed="${k in FX.rev}">
+        <span class="bu-tuile ${k in FX.rev ? "" : "clair"}">${ic(P[k] || P.autre_rev, k in FX.rev ? "#fff" : "currentColor")}</span>${l}<small>${FX.rev[k] ? F(FX.rev[k]) : ""}</small></button>`).join("")}</div>
+      ${Object.keys(FX.rev).map((k) => { const parJour = k === "recette" && FX.jour, v = parJour ? Math.round((FX.rev[k] || 0) / 26) : FX.rev[k];
+        return `<label class="bu-champ">${esc((REV.find((r) => r[0] === k) || REV[3])[1])} : combien ${parJour ? "par jour" : "par mois"} ?
+          <span class="bu-montant fx-m"><input data-fx-m="rev:${k}" inputmode="numeric" autocomplete="off" placeholder="0" value="${v ? nf.format(v) : ""}"><span>F</span></span></label>`; }).join("")}
+      ${somme(reelDuMois(moisCle(-1)).rev) ? `<p class="small muted">Repris de ce que vous avez noté en ${esc(moisNom(moisCle(-1)))} : il suffit de vérifier.</p>` : ""}
+      <p class="fx-tot"><span>Ce mois-ci, j'attends</span><b>${F(totalRev())}</b></p>
+      <div class="bu-actions"><button type="button" class="btn" data-fx="fermer">Annuler</button><button type="button" class="btn primary" data-fx="suite">Suivant</button></div>`;
+    else if (e === 2) c.innerHTML = `${enteteF(2)}<div class="fx-centre"><span class="bu-tuile amb fx-grand">${ic(P.coffre)}</span>
+        <h2 id="fx-t" class="bu-q">Je garde d'abord</h2><p class="small muted">Dès que l'argent rentre, une part va de côté. On dépense ensuite le reste.</p>${ecoute("garde")}</div>
+      <fieldset class="fs fx-choix"><legend>Combien garder chaque mois ?</legend>${GARDE.map((k) => { const [nom, , , pct] = PROFILS[k];
+        return `<button type="button" class="fx-opt" data-fx="garde" data-v="${k}" aria-pressed="${FX.garde === k}"><span><b>${pct} % de ce qui rentre</b>
+          <small>${F(Math.round(totalRev() * pct / 100))} par mois · profil ${esc(nom)}</small></span>${k === "equilibre" ? `<span class="fx-conseil">Conseillé</span>` : ""}</button>`; }).join("")}</fieldset>
+      <div class="fx-etages"><span><span class="bu-tuile petit">${ic(P.securite, "#fff")}</span><b>1 · Ma sécurité</b><small>pour les imprévus</small></span>
+        <span><span class="bu-tuile amb petit">${ic(P.tabaski)}</span><b>2 · Mes projets</b><small>Tabaski, rentrée…</small></span></div>
+      <div class="bu-actions"><button type="button" class="btn" data-fx="retour">Retour</button><button type="button" class="btn primary" data-fx="suite">Suivant</button></div>`;
+    else if (e === 3) {
+      const sel = FX.sel ? catDep(FX.sel) : null;
+      c.innerHTML = `${enteteF(3)}<h2 id="fx-t" class="bu-q">Mes dépenses du mois</h2>
+      <p class="small muted">Touchez une image, puis indiquez un montant. Bleu : l'essentiel. Ambre : les plaisirs.</p>
+      <div class="fx-repart"><p class="fx-reste"></p><div class="bu-jauge fx-jauge"><i style="width:0"></i></div></div>
+      <div class="bu-grille fx-dep">${DEP.map(([k, l, env]) => `<button type="button" class="bu-cat fx-t${env === "envies" ? " plaisir" : ""}" data-fx="dep" data-v="${k}" aria-pressed="${FX.sel === k}">
+        <span class="bu-tuile ${env === "envies" ? "amb" : "clair"}">${ic(P[k] || P.autres)}</span>${l}<small>${FX.dep[k] ? F(FX.dep[k]) : "+ montant"}</small></button>`).join("")}</div>
+      ${sel ? `<label class="bu-champ fx-edit">${esc(sel[1])} : combien par mois ?<span class="bu-montant fx-m"><input data-fx-m="dep:${sel[0]}" inputmode="numeric" autocomplete="off" placeholder="0" value="${FX.dep[sel[0]] ? nf.format(FX.dep[sel[0]]) : ""}"><span>F</span></span></label>
+        ${FX.avant?.[sel[0]] ? `<p class="small muted">En ${esc(moisNom(moisCle(-1)))}, vous avez dépensé ${F(FX.avant[sel[0]])}.</p>` : ""}` : ""}
+      <div class="bu-actions"><button type="button" class="btn" data-fx="retour">Retour</button><button type="button" class="btn primary" data-fx="valider">Valider mon budget</button></div>`;
+      majTotaux();
+      if (sel) setTimeout(() => $(".fx-edit input", dlgF)?.focus(), 30);
+    }
+    else if (e === "prop") {
+      const k0 = moisCle(0), k1 = moisCle(-1), lignes = Object.entries(FX.dep).filter(([, x]) => +x > 0).sort((a, b) => b[1] - a[1]);
+      c.innerHTML = `<div class="fx-haut"><button type="button" class="fx-rond" data-fx="plus-tard" aria-label="Fermer">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}</button>
+          <img src="../logo-bimbim.svg?v=bimbim1" alt="" width="40" height="40"><span class="fx-rond vide"></span></div>
+        <div class="fx-centre"><h2 id="fx-t" class="bu-q">Votre budget de ${esc(moisNom(k0))} est prêt</h2>
+          <p class="small muted">Préparé à partir de ce que vous avez noté en ${esc(moisNom(k1))}. Vous n'avez rien à rechercher.</p></div>
+        <div class="fx-trois"><span class="rev"><small>Rentrées</small><b>${F(totalRev())}</b></span><span class="amb"><small>Je garde</small><b>${F(gardeMois())}</b></span>
+          <span class="dep"><small>Dépenses</small><b>${F(somme(FX.dep))}</b></span></div>
+        <ul class="bu-pv-l fx-prop">${lignes.map(([k, x]) => { const avant = FX.avant?.[k] || 0, pv = +FX.prevuAvant?.[k] || 0, trop = pv && avant > pv * 1.1;
+          return `<li><span class="bu-tuile ${catDep(k)[2] === "envies" ? "amb" : "clair"} petit">${ic(P[k] || P.autres)}</span><span class="bu-op-l"><b>${esc(catDep(k)[1])}</b>
+            <small>${esc(moisNom(k1))} : ${F(avant)}${trop ? ` · <span class="bad">dépassé</span>` : ""}</small></span><b class="num">${F(x)}</b></li>`; }).join("")}</ul>
+        ${resteRep() < 0 ? `<p class="small bad">Ces dépenses dépassent ce qui rentre, après ce que vous gardez, de ${F(-resteRep())}. Ajustez une ligne ou deux.</p>` : ""}
+        <div class="bu-actions"><button type="button" class="btn" data-fx="ajuster">Ajuster</button><button type="button" class="btn primary" data-fx="valider">Valider ce budget</button></div>`;
+    }
+  }
+  async function clicFlux(ev) {
+    if (ev.target === dlgF) return;                              // pas de fermeture par le fond : on ne perd pas sa saisie
+    const b = ev.target.closest("[data-fx]"); if (!b) return;
+    const a = b.dataset.fx, v = b.dataset.v;
+    if (a === "fermer") dlgF.close();
+    else if (a === "plus-tard") { try { localStorage.setItem("bafi-prop-" + moisCle(0), "1"); } catch (e) { /* rien */ } dlgF.close(); rendre(); }
+    else if (a === "retour") { FX.etape = Math.max(1, FX.etape - 1); peindreF(); }
+    else if (a === "ajuster") { FX.etape = 1; peindreF(); }
+    else if (a === "rev") { if (v in FX.rev) delete FX.rev[v]; else FX.rev[v] = 0; peindreF(); $(`[data-fx-m="rev:${v}"]`, dlgF)?.focus(); }
+    else if (a === "garde") { FX.garde = v; peindreF(); }
+    else if (a === "dep") { FX.sel = FX.sel === v ? null : v; peindreF(); }
+    else if (a === "suite") {
+      if (FX.etape === 1 && !totalRev()) { app().toast("Indiquez au moins une rentrée d'argent."); $("[data-fx-m]", dlgF)?.focus(); return; }
+      FX.etape += 1; FX.sel = FX.etape === 3 ? null : FX.sel; peindreF();
+    }
+    else if (a === "valider") {
+      const dep = Object.fromEntries(Object.entries(FX.dep).filter(([, x]) => +x > 0)), rev = Object.fromEntries(Object.entries(FX.rev).filter(([, x]) => +x > 0));
+      const tot = somme(rev), ry = FX.jour ? "jour" : "mois";
+      b.disabled = true;
+      await sauver({ charges: { depenses: dep, revenus: rev, mois: moisCle(0) }, profil: FX.garde, rythme: ry, ...(tot ? { revenu: ry === "jour" ? Math.round(tot / 26) : tot } : {}) });
+      dlgF.close();
+      app().toast("Votre budget est enregistré.", { detail: `Vous gardez ${F(gardeMois())} par mois, et vous verrez le dépensé face au prévu.` });
+    }
+  }
+  // passage à l'étape 3 : la sécurité est pleine et le coffre a atteint 100 000 F (le seuil pour aller vers une SGI) ;
+  // proposé une fois, puis de nouveau 30 jours après « Plus tard »
+  function blocEtape3(c) {
+    if (app().placements?.() || !(c.securiteObj > 0 && c.securite >= c.securiteObj && c.solde >= 100000)) return "";
+    try { const t = +localStorage.getItem("bafi-etape3"); if (t && Date.now() - t < 30 * 864e5) return ""; } catch (e) { /* rien */ }
+    const prenom = app().profil?.()?.prenom;
+    return `<section class="card bu-etape3"><img src="../logo-bimbim.svg?v=bimbim1" alt="" width="48" height="48">
+      <div class="bu-op-l"><b>Bravo${prenom ? " " + esc(prenom) : ""}, vous êtes prêt pour l'étape 3</b>
+        <ol class="bu-e3"><li class="ok">Je note ✓</li><li class="ok">Je garde ✓</li><li class="on">Je fais grandir</li></ol>
+        <p class="small">Votre sécurité est remplie et ${F(c.solde)} sont gardés. Votre épargne peut maintenant travailler pour vous.</p>
+        ${ecoute("sgi")}<div class="bu-e3-b"><button type="button" class="btn primary small" data-bu="investir">Commencer l'étape 3</button>
+          <button type="button" class="btn link small" data-bu="etape3-plus-tard">Plus tard</button></div>
+        <p class="small muted">Bafi Finance ne garde pas votre argent : c'est vous qui l'envoyez à votre SGI. Investir comporte un risque de perte.</p></div></section>`;
+  }
+  // la carte du jour : budget proposé (début de mois) ou invitation à le créer
+  function blocCreerBudget(c) {
+    if (propositionDue()) return `<button type="button" class="card bu-pl fx-carte prop" data-bu="proposition"><img src="../logo-bimbim.svg?v=bimbim1" alt="" width="40" height="40">
+      <span class="bu-op-l"><b>Votre budget de ${esc(moisNom(moisCle(0)))} est prêt</b><small>Préparé d'après ${esc(moisNom(moisCle(-1)))} : à valider en une touche</small></span><span aria-hidden="true">›</span></button>`;
+    if (somme(c.pv.depenses)) return "";
+    return `<button type="button" class="card bu-pl fx-carte" data-bu="creer-budget"><span class="bu-tuile petit">${ic('<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M20 11h-4a2 2 0 0 0 0 4h4"/>', "#fff")}</span>
+      <span class="bu-op-l"><b>Créer mon budget du mois</b><small>3 écrans · ou notez d'abord, on vous le proposera</small></span><span aria-hidden="true">›</span></button>`;
+  }
+
+  // ------------------------------------------------------------ Importer une capture (2026.11) : Wave, Orange Money, relevé, cahier
+  // La capture (ou la photo d'un cahier de dépenses) est lue par la fonction « lire-depenses » ; chaque opération arrive avec
+  // une catégorie proposée d'après son libellé. On valide ligne par ligne ; sans réponse, la ligne en cours est enregistrée
+  // au bout de 10 secondes, puis la suivante démarre. Les lignes douteuses, les doublons et les retraits attendent un choix.
+  // Le libellé n'est jamais enregistré (seuls date, montant, type et catégorie le sont) ; l'import s'annule d'une touche.
+  const DELAI = 10;
+  let dlgR = null, RL = null;
+  const versB64 = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = ko; r.readAsDataURL(blob); });
+  async function reduireImage(f) {
+    try {
+      const img = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85));
+      return { type: "image/jpeg", donnees: await versB64(b) };
+    } catch (e) { return { type: f.type || "image/jpeg", donnees: await versB64(f) }; }
+  }
+  function blocImport() {
+    return `<button type="button" class="card bu-pl bu-imp-c" data-bu="importer-releve"><span class="bu-tuile petit">${ic('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>', "#fff")}</span>
+      <span class="bu-op-l"><b>Importer une capture</b><small>Wave, Orange Money, relevé ou photo de mon cahier : les opérations se remplissent toutes seules</small></span><span aria-hidden="true">›</span></button>`;
+  }
+  function importerReleve() {
+    if (!essentiel()) { app().voirFormules?.(); return; }
+    if (!app().budget?.lireDepenses) return;
+    const i = document.createElement("input");
+    i.type = "file"; i.accept = "image/*,application/pdf"; i.multiple = true;
+    i.addEventListener("change", () => lireReleves([...i.files].slice(0, 5)));
+    i.click();
+  }
+  function dialogueR() {
+    if (dlgR) return dlgR;
+    document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-releve" class="bu-dlg bu-flux" aria-labelledby="rl-t"><div class="bu-form rl-c"></div></dialog>`);
+    dlgR = $("#dlg-releve");
+    dlgR.addEventListener("click", clicR);
+    dlgR.addEventListener("change", (ev) => {
+      const s = ev.target.closest("[data-rl-cat]"); if (!s) return;
+      const i = +s.dataset.rlCat, l = RL.lignes[i]; l.categorie = s.value; l.doute = false; l.touchee = false;
+      const tu = s.closest(".rl-l")?.querySelector(".bu-tuile"); if (tu) tu.innerHTML = ic(P[l.categorie] || P.autres, l.type === "revenu" ? "#fff" : "currentColor");
+      s.closest(".rl-l")?.querySelector(".rl-note")?.remove();
+      if (l.etat === "attente") demarrer(i);                         // la catégorie changée : ses 10 secondes repartent
+    });
+    dlgR.addEventListener("close", () => { arreterMinuteur(); if (RL?.ids.length) finImport(); });
+    return dlgR;
+  }
+  async function lireReleves(fichiers) {
+    if (!fichiers.length) return;
+    dialogueR();
+    RL = { lignes: [], ids: [], erreurs: [], source: null, timer: null, enCours: -1, reste: DELAI };
+    $(".rl-c", dlgR).innerHTML = `<div class="fx-centre rl-lecture"><div class="imp-roue" aria-hidden="true"></div><p class="rl-etat" aria-live="polite">Lecture… quelques secondes.</p></div>`;
+    dlgR.showModal();
+    for (let n = 0; n < fichiers.length; n++) {
+      const f = fichiers[n];
+      $(".rl-etat", dlgR).textContent = `Lecture de « ${f.name || "photo"} »${fichiers.length > 1 ? ` (${n + 1} sur ${fichiers.length})` : ""}… quelques secondes.`;
+      try {
+        const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name || "");
+        if (pdf && f.size > 6.5e6) throw new Error("PDF trop lourd (6 Mo au plus)");
+        const { type, donnees } = pdf ? { type: "application/pdf", donnees: await versB64(f) } : await reduireImage(f);
+        const r = await app().budget.lireDepenses(type, donnees);
+        RL.source = RL.source || r?.source || null;
+        for (const x of (r?.lignes || []).slice(0, 80)) RL.lignes.push(normaliser(x));
+      } catch (e) { RL.erreurs.push(`${f.name || "Photo"} : ${e.message || e}`); if (e.quota) break; }
+    }
+    peindreR(); demarrer();
+  }
+  const CATS_DEP = new Set(DEP.map((c) => c[0])), CATS_REV = new Set(REV.map((c) => c[0]));
+  function normaliser(x) {
+    const type = ["depense", "revenu", "transfert"].includes(x?.type) ? x.type : "depense";
+    let date = /^\d{4}-\d{2}-\d{2}$/.test(x?.date || "") ? x.date : auj();
+    if (date > auj()) date = auj();
+    const montant = Math.min(1e10, Math.round(Math.abs(+x?.montant || 0)));
+    const cats = type === "revenu" ? CATS_REV : CATS_DEP;
+    const categorie = cats.has(x?.categorie) ? x.categorie : type === "revenu" ? "autres" : "autres";
+    const doublon = S.mv.some((m) => m.date === date && m.type === type && +m.montant === montant);
+    const doute = (+x?.confiance || 0) < 0.6 || !montant;
+    // un retrait ou un transfert entre ses comptes n'est ni gagné ni dépensé : proposé, jamais enregistré seul
+    return { date, montant, type, categorie, libelle: String(x?.libelle || "").slice(0, 80), doublon, doute, etat: type === "transfert" ? "ignoree" : "attente", touchee: false };
+  }
+  const attendChoix = (l) => l.doublon || l.doute;
+  function demarrer(prio) {
+    arreterMinuteur();
+    const libre = (l) => l && l.etat === "attente" && !attendChoix(l) && !l.touchee;
+    const i = libre(RL.lignes[prio]) ? prio : RL.lignes.findIndex(libre);
+    RL.enCours = i; RL.reste = DELAI;
+    if (i < 0) { majR(); return; }
+    RL.timer = setInterval(() => {
+      if (!dlgR.open) return arreterMinuteur();
+      RL.reste -= 1;
+      if (RL.reste <= 0) { arreterMinuteur(); valider(i, true); return; }
+      majR();
+    }, 1000);
+    majR();
+  }
+  function arreterMinuteur() { if (RL?.timer) clearInterval(RL.timer); if (RL) RL.timer = null; }
+  async function valider(i, auto) {
+    const l = RL.lignes[i]; if (!l || l.etat !== "attente") return;
+    if (!l.montant) { l.etat = "ignoree"; peindreR(); demarrer(); return; }
+    l.etat = "envoi"; majR();
+    const m = { date: l.date, type: l.type === "revenu" ? "revenu" : "depense", montant: l.montant, categorie: l.categorie,
+                enveloppe: l.type === "revenu" ? null : catDep(l.categorie)[2], recurrent: false, credit: false };
+    try {
+      const x = await app().budget.ajouter(m);
+      S.mv.unshift(x || { ...m, id: Date.now() + i }); if (x?.id) RL.ids.push(x.id); else RL.ids.push(null);
+      l.etat = "ok"; l.auto = !!auto;
+    } catch (e) { l.etat = "attente"; l.touchee = true; app().toast("Enregistrement impossible : " + (e.message || e)); }
+    peindreR(); demarrer();
+  }
+  function peindreR() {
+    const c = $(".rl-c", dlgR), L = RL.lignes, src = { wave: "Wave", orange_money: "Orange Money", free_money: "Free Money", banque: "un relevé bancaire", cahier: "votre cahier" }[RL.source];
+    const restant = L.filter((l) => l.etat === "attente" && !l.doublon).length;
+    if (!L.length) {
+      c.innerHTML = `<h2 id="rl-t" class="bu-q">Aucune opération trouvée</h2>
+        <p class="small">${RL.erreurs.length ? esc(RL.erreurs.join(" · ")) : "La capture n'a pas pu être lue. Essayez une photo nette, bien éclairée, avec les montants visibles."}</p>
+        <div class="bu-actions"><button type="button" class="btn" data-rl="fermer">Fermer</button><button type="button" class="btn primary" data-rl="autre">Choisir une autre capture</button></div>`;
+      return;
+    }
+    c.innerHTML = `<div class="fx-haut"><span class="fx-rond vide"></span><p class="fx-titre">Importer une capture</p><button type="button" class="fx-rond" data-rl="fermer" aria-label="Fermer">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}</button></div>
+      <h2 id="rl-t" class="bu-q">${L.length} opération${L.length > 1 ? "s" : ""} trouvée${L.length > 1 ? "s" : ""}${src ? ` dans ${esc(src)}` : ""}</h2>
+      <p class="small muted">Vérifiez la catégorie proposée. Sans réponse, chaque ligne est enregistrée au bout de ${DELAI} secondes. Les lignes marquées « à vérifier » attendent votre choix.</p>
+      ${RL.erreurs.length ? `<p class="small bad">${esc(RL.erreurs.join(" · "))}</p>` : ""}
+      <ul class="rl-liste">${L.map((l, i) => ligneR(l, i)).join("")}</ul>
+      <div class="bu-actions"><button type="button" class="btn" data-rl="fermer">${restant ? "Arrêter" : "Fermer"}</button>
+        <button type="button" class="btn primary" data-rl="tout"${restant ? "" : " disabled"}>${restant ? `Tout valider (${restant})` : "Terminé ✓"}</button></div>`;
+    majR();
+  }
+  function ligneR(l, i) {
+    const rev = l.type === "revenu", cats = rev ? REV : DEP.filter((c) => c[0] !== "abonnements");
+    const etat = l.etat === "ok" ? `<span class="rl-ok">✓ ${l.auto ? "Enregistrée" : "Validée"}</span>` : l.etat === "ignoree" ? `<span class="muted small">Ignorée</span>`
+      : l.etat === "envoi" ? `<span class="muted small">…</span>`
+      : `<button type="button" class="btn small" data-rl="ignorer" data-i="${i}" aria-label="Ignorer cette ligne">Ignorer</button>
+         <button type="button" class="btn small primary" data-rl="valider" data-i="${i}">Valider</button>`;
+    const note = l.type === "transfert" ? "Retrait ou transfert entre vos comptes : ni gagné ni dépensé" : l.doublon ? "Déjà noté ? Une opération identique existe ce jour-là" : l.doute ? "À vérifier : lecture incertaine" : "";
+    return `<li class="rl-l ${l.etat}${note ? " a-verifier" : ""}" data-rl-i="${i}">
+      <span class="bu-tuile ${rev ? "" : "clair"} petit">${ic(P[l.categorie] || P.autres, rev ? "#fff" : "currentColor")}</span>
+      <div class="rl-m"><div class="bu-ligne"><b class="rl-lib">${esc(l.libelle || (rev ? "Rentrée" : "Dépense"))}</b><b class="num${rev ? " good" : ""}">${rev ? "+" : l.type === "transfert" ? "" : "−"}${F(l.montant)}</b></div>
+        <div class="rl-d"><span class="small muted">${new Date(l.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+          ${l.etat === "attente" || l.etat === "ignoree" && l.type !== "transfert" ? `<label class="rl-sel"><span class="sr-only">Catégorie</span><select data-rl-cat="${i}">${cats.map(([k, lib]) => `<option value="${k}"${k === l.categorie ? " selected" : ""}>${esc(lib)}</option>`).join("")}</select></label>` : `<span class="small">${esc(libCat({ type: rev ? "revenu" : "depense", categorie: l.categorie }))}</span>`}</div>
+        ${note && l.etat !== "ok" ? `<p class="small rl-note">${note}</p>` : ""}
+        ${l.type === "transfert" && l.etat === "ignoree" ? `<div class="rl-tr"><button type="button" class="btn link small" data-rl="en-depense" data-i="${i}">C'est une dépense</button></div>` : ""}
+        <div class="rl-minuteur" aria-hidden="true"><i></i></div></div>
+      <div class="rl-act">${etat}</div></li>`;
+  }
+  function majR() {
+    if (!dlgR) return;
+    dlgR.querySelectorAll(".rl-l").forEach((li) => {
+      const i = +li.dataset.rlI, on = i === RL.enCours && RL.timer;
+      li.classList.toggle("en-cours", !!on);
+      const bar = $(".rl-minuteur i", li); if (bar) bar.style.width = on ? `${(100 * (DELAI - RL.reste)) / DELAI}%` : "0";
+      const v = $("[data-rl='valider']", li); if (v) v.textContent = on ? `Valider (${RL.reste} s)` : "Valider";
+    });
+  }
+  async function clicR(ev) {
+    if (ev.target === dlgR) return;
+    const b = ev.target.closest("[data-rl]"); if (!b) return;
+    const a = b.dataset.rl, i = +b.dataset.i;
+    if (a === "fermer") dlgR.close();
+    else if (a === "autre") { dlgR.close(); importerReleve(); }
+    else if (a === "valider") { RL.lignes[i].touchee = false; arreterMinuteur(); await valider(i, false); }
+    else if (a === "ignorer") { RL.lignes[i].etat = "ignoree"; arreterMinuteur(); peindreR(); demarrer(); }
+    else if (a === "en-depense") { const l = RL.lignes[i]; l.type = "depense"; l.etat = "attente"; l.touchee = true; peindreR(); demarrer(); }
+    else if (a === "tout") {
+      arreterMinuteur(); b.disabled = true;
+      // les doublons possibles restent à confirmer un par un
+      for (let k = 0; k < RL.lignes.length; k++) if (RL.lignes[k].etat === "attente" && !RL.lignes[k].doublon) await valider(k, false);
+    }
+  }
+  function finImport() {
+    const ids = RL.ids.filter(Boolean), n = RL.ids.length;
+    RL.ids = [];
+    rendre();
+    app().toast(`${n} opération${n > 1 ? "s" : ""} importée${n > 1 ? "s" : ""}.`, { detail: "Votre budget est à jour.",
+      actions: ids.length ? [{ label: "Annuler l'import", fn: async () => {
+        for (const id of ids) { try { await app().budget.supprimer(id); } catch (e) { /* déjà supprimée */ } }
+        S.mv = S.mv.filter((m) => !ids.includes(m.id)); rendre(); app().toast("Import annulé."); } }] : [] });
+  }
+
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-bu]");
     if (!b || !b.closest("#v-budget, #v-aujourdhui, #v-objectifs, #v-avenir, #v-portefeuille")) return;
@@ -873,6 +1250,13 @@
     else if (a === "heure") { S.brouillon.heure = v; rendre(); }
     else if (a === "saisir") ouvrir(v);
     else if (a === "garder") garder(+v);
+    else if (a === "projet-fete") { const [i, n] = v.split("|"); if (!essentiel() && calculs().projets.length >= 2) app().voirFormules?.(); else ajouterProjet(i, n); }
+    else if (a === "investir") {
+      ev.preventDefault();
+      const suite = () => app().allerPf?.("simulateur");
+      if (app().profilInvestisseurFait && !app().profilInvestisseurFait()) app().faireProfilInvestisseur(suite); else suite();
+    }
+    else if (a === "etape3-plus-tard") { try { localStorage.setItem("bafi-etape3", String(Date.now())); } catch (e) { /* rien */ } rendre(); }
     else if (a === "ajout-projet") { if (!essentiel() && calculs().projets.length >= 2) app().voirFormules?.(); else ajouterProjet(); }
     else if (a === "suppr-projet") { try { await app().budget.supprimerProjet(+v); S.projets = (S.projets || []).filter((x) => String(x.id) !== String(v)); app().toast("Projet retiré."); rendre(); } catch (e) { app().toast("Impossible : " + (e.message || e)); } }
     else if (a === "encourager") { b.disabled = true; try { await app().encouragerCercle(v); const c = (S.cercles || []).find((x) => String(x.id) === String(v)); if (c) c.jai_encourage = true; app().toast("👏 Votre cercle est encouragé."); rendre(); } catch (e) { b.disabled = false; app().toast("Impossible : " + (e.message || e)); } }
@@ -893,7 +1277,10 @@
       await sauver({ age: S.avenirAge });
     }
     else if (a === "simuler") { ev.preventDefault(); app().allerPf?.("simulateur"); }
-    else if (a === "prevu-edit") { S.prevuEdit = true; rendre(); document.querySelector(".bu-prevu")?.scrollIntoView({ block: "start", behavior: "smooth" }); }
+    else if (a === "creer-budget" || a === "prevu-edit") ouvrirFlux("creer");
+    else if (a === "proposition") ouvrirFlux("proposition");
+    else if (a === "importer-releve") importerReleve();
+    else if (a === "prevu-edit-ancien") { S.prevuEdit = true; rendre(); document.querySelector(".bu-prevu")?.scrollIntoView({ block: "start", behavior: "smooth" }); }
     else if (a === "prevu-ry") {
       const garde = {}; document.querySelectorAll("[data-prevu]").forEach((i) => (garde[i.dataset.prevu] = i.value));
       S.prevuRythme = v; rendre();
@@ -967,7 +1354,7 @@
     catch (e) { app().toast("Enregistrement impossible : " + (e.message || e)); }
   }
 
-  const accueilDetaille = () => S.charge && !S.erreur && S.profil?.mode === "complet";
+  const accueilDetaille = () => S.charge && !S.erreur && !app()?.porteInvestisseur?.() && S.profil?.mode === "complet";
   function enrichirDetaille(v) {
     const h1 = v.querySelector("h1");
     const bourse = document.createElement("details");
@@ -1016,7 +1403,7 @@
       coffre: { total_garde: r(c.solde), securite: { garde: r(c.securite), objectif: r(c.securiteObj), pleine: c.securite >= c.securiteObj && c.securiteObj > 0 },
         projets: c.projets.map((x) => ({ nom: x.nom, objectif: r(x.montant), garde: r(x.garde), pour: x.date_cible || null })) },
       serie_jours_notes: c.serie,
-      mon_avenir: a ? { age: a.age, age_de_liberte_estime_si_place: a.agePlace, age_si_l_argent_dort: a.ageDort, hypothese: HYP[S.avenirHyp || "equilibre"][0] } : null,
+      mon_avenir: a ? { age: a.age, age_de_liberte_estime_si_place: a.agePlace, age_si_l_argent_dort: a.ageDort, hypothese: HYP[hypAvenir()][0] } : null,
     };
   }
   // projets en cours (pour la reprise d'épargne) ; un projet réalisé quitte les objectifs, il reste dans l'historique

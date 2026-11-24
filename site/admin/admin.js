@@ -65,6 +65,16 @@
       enroll: async () => { const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "BRVM admin " + new Date().toISOString().slice(0, 16) }); if (error) throw error; return data; },
       verify: async (factorId, code) => { const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code }); if (error) throw error; },
       refresh: async () => sb.auth.refreshSession(),
+      // messages audio « Écouter · 1 min » : stockage public « audios », écriture réservée à comms.manage + MFA (supabase/audios.sql)
+      audios: {
+        lister: async (l) => { const { data, error } = await sb.storage.from("audios").list(l, { limit: 200 }); if (error) throw error; return data || []; },
+        deposer: async (l, cle, file) => {
+          const { error } = await sb.storage.from("audios").upload(`${l}/${cle}`, file, { upsert: true, contentType: file.type || "audio/mpeg", cacheControl: "604800" });
+          if (error) throw error;
+        },
+        supprimer: async (l, cle) => { const { error } = await sb.storage.from("audios").remove([`${l}/${cle}`]); if (error) throw error; },
+        url: (l, cle) => sb.storage.from("audios").getPublicUrl(`${l}/${cle}`).data.publicUrl + "?t=" + Date.now(),
+      },
       moi: () => rpc("admin_moi"),
       tableau: () => rpc("admin_tableau_de_bord"),
       priseEnMain: (j) => rpc("admin_prise_en_main", { p_jours: j }),
@@ -420,6 +430,11 @@
   }
 
   const api = DEMO ? demoApi() : supaApi();
+  if (DEMO) {                                                    // démo : dépôts gardés en mémoire, rien n'est envoyé
+    const m = { fr: new Map(), wo: new Map() };
+    api.audios = { lister: async (l) => [...m[l].entries()].map(([name, f]) => ({ name, metadata: { size: f.size }, updated_at: new Date().toISOString() })),
+      deposer: async (l, cle, f) => { m[l].set(cle, f); }, supprimer: async (l, cle) => { m[l].delete(cle); }, url: (l, cle) => (m[l].get(cle) ? URL.createObjectURL(m[l].get(cle)) : "") };
+  }
   const S = { moi: null, can: () => false, users: [], q: "" };
 
   // ------------------------------------------------------------ dialogue de confirmation (motif)
@@ -1195,9 +1210,11 @@
         <div class="grid2"><label>Niveau<select name="niveau">${Object.entries(NIVEAUX).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
           <label>Fin d'affichage (facultatif)<input name="fin" type="datetime-local"></label></div>
         <div class="actions"><button class="btn primary" type="submit">Publier…</button></div></form>
+      <div class="card" id="audios-adm"><h2>Messages audio « Écouter · 1 min »</h2><p class="muted">Chargement…</p></div>
       <div class="card"><h2>Historique</h2><div class="scroll-x"><table class="dtable"><thead><tr><th>Publiée le</th><th>Niveau</th><th>Message</th><th>Par</th><th>État</th></tr></thead>
         <tbody>${as.map((a) => `<tr><td>${DT(a.cree_le || a.debut)}</td><td>${esc(NIVEAUX[a.niveau] || a.niveau)}</td><td>${esc(a.message)}</td><td>${esc(a.cree_par || "–")}</td>
           <td>${a.en_cours ? `<span class="status ok">Affichée</span>` : `<span class="muted">Terminée</span>`}</td></tr>`).join("") || `<tr><td colspan="5" class="muted">Aucune annonce.</td></tr>`}</tbody></table></div></div>`;
+    vAudios($("#audios-adm", v));
     $("[data-retirer]", v)?.addEventListener("click", async (e) => {
       const r = await ask({ title: "Retirer la bannière", ok: "Retirer", danger: true });
       if (!r) return;
@@ -1212,6 +1229,46 @@
       if (!r) return;
       try { await api.publierAnnonce(m, f.niveau.value, fin, r.motif); toast("Bannière publiée."); vCommunication(); } catch (e) { toast("Action refusée : " + msgErr(e)); }
     });
+  }
+
+  // Messages audio : un fichier par message et par langue (français, wolof), déposé ici, écouté dans l'application.
+  // Le bouton « Écouter » n'apparaît dans l'application que pour les messages déposés.
+  const AUDIO_MAX = 2 * 1024 * 1024, AUDIO_TYPES = /^audio\/(mpeg|mp3|mp4|x-m4a|aac|ogg|webm|opus)$/;
+  async function vAudios(box) {
+    const CAT = window.BAFI_AUDIOS || { langues: {}, cles: {} }, L = Object.keys(CAT.langues);
+    let liste = {};
+    try { for (const l of L) liste[l] = new Map((await api.audios.lister(l)).map((o) => [o.name, o])); }
+    catch (e) { box.innerHTML = `<h2>Messages audio « Écouter · 1 min »</h2><div class="notice bad">Stockage « audios » indisponible : ${esc(msgErr(e))}. Exécutez une fois supabase/audios.sql dans Supabase.</div>`; return; }
+    box.innerHTML = `<h2>Messages audio « Écouter · 1 min »</h2>
+      <p class="small muted">Un fichier par message et par langue : MP3 ou M4A, 2 Mo au plus (une minute de voix pèse environ 300 Ko).
+        Enregistrez au calme, téléphone à 20 cm de la bouche. Le bouton « Écouter » n'apparaît dans l'application que pour les messages déposés.</p>
+      <div class="scroll-x"><table class="dtable"><thead><tr><th>Message</th>${L.map((l) => `<th>${esc(CAT.langues[l])}</th>`).join("")}</tr></thead><tbody>
+      ${Object.entries(CAT.cles).map(([k, c]) => `<tr><td><b>${esc(c.titre)}</b><br><span class="small muted">${esc(c.ou)}</span>
+          <details class="small"><summary>Script</summary><p>${esc(c.texte)}</p></details></td>
+        ${L.map((l) => { const o = liste[l].get(k);
+          return `<td>${o ? `<span class="status ok">Déposé</span> <span class="small muted">${o.metadata?.size ? Math.round(o.metadata.size / 1024) + " Ko" : ""}</span>
+            <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-au-ecouter="${l}|${k}">Écouter</button>
+            <button type="button" class="btn small danger" data-au-suppr="${l}|${k}">Retirer</button></div>` : `<span class="muted">Absent</span>`}
+            <label class="btn small">${o ? "Remplacer" : "Déposer"}<input type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/webm" data-au-dep="${l}|${k}" style="position:absolute;opacity:0;width:1px;height:1px"></label></td>`; }).join("")}</tr>`).join("")}
+      </tbody></table></div><audio id="au-lecteur" preload="none"></audio>`;
+    box.querySelectorAll("[data-au-dep]").forEach((i) => i.addEventListener("change", async () => {
+      const f = i.files?.[0], [l, k] = i.dataset.auDep.split("|");
+      if (!f) return;
+      if (f.size > AUDIO_MAX) { toast("Fichier trop lourd : 2 Mo au plus. Exportez en MP3 ou M4A, voix seule."); return; }
+      if (f.type && !AUDIO_TYPES.test(f.type)) { toast("Format non accepté : MP3 ou M4A."); return; }
+      try { await api.audios.deposer(l, k, f); toast(`« ${CAT.cles[k].titre} » (${CAT.langues[l]}) déposé.`); vAudios(box); }
+      catch (e) { toast("Dépôt refusé : " + msgErr(e)); }
+    }));
+    box.querySelectorAll("[data-au-ecouter]").forEach((b) => b.addEventListener("click", () => {
+      const [l, k] = b.dataset.auEcouter.split("|"), a = $("#au-lecteur", box);
+      a.src = api.audios.url(l, k); a.play().catch((e) => toast("Lecture impossible : " + (e.message || e)));
+    }));
+    box.querySelectorAll("[data-au-suppr]").forEach((b) => b.addEventListener("click", async () => {
+      const [l, k] = b.dataset.auSuppr.split("|");
+      const r = await ask({ title: `Retirer « ${CAT.cles[k].titre} » (${CAT.langues[l]})`, ok: "Retirer", danger: true });
+      if (!r) return;
+      try { await api.audios.supprimer(l, k); toast("Message retiré."); vAudios(box); } catch (e) { toast("Action refusée : " + msgErr(e)); }
+    }));
   }
 
   // ------------------------------------------------------------ conformité (compliance.manage)

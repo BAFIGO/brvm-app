@@ -409,6 +409,16 @@
       budgetSauverProfil: async (x) => r(await sb.from("budget_profils").upsert({ ...x, user_id: S.user.id, maj_le: new Date().toISOString() }, { onConflict: "user_id" })),
       budgetMouvements: async (depuis) => r(await sb.from("budget_mouvements").select("*").gte("date", depuis).order("date", { ascending: false }).order("id", { ascending: false }).limit(2000)),
       budgetAjouter: async (m) => r(await sb.from("budget_mouvements").insert({ ...m, user_id: S.user.id }).select().single()),
+      // captures Wave, Orange Money, relevés, cahier de dépenses photographié : lues par la fonction « lire-depenses »
+      lireDepenses: async (type, donnees) => {
+        const { data, error } = await sb.functions.invoke("lire-depenses", { body: { type, donnees } });
+        if (error) {
+          let m = error.message;
+          try { m = (await error.context?.json())?.erreur || m; } catch (e) { /* message d'origine */ }
+          const err = new Error(m); err.quota = [402, 429].includes(error.context?.status); throw err;
+        }
+        return data;
+      },
       budgetSupprimer: async (id) => r(await sb.from("budget_mouvements").delete().eq("id", id)),
       budgetProjets: async () => r(await sb.from("budget_projets").select("*").order("ordre").order("id")),
       budgetAjouterProjet: async (x) => r(await sb.from("budget_projets").insert({ ...x, user_id: S.user.id }).select().single()),
@@ -639,6 +649,14 @@
       budgetSauverProfil: async (x) => { budgetDemo.profil = { ...(budgetDemo.profil || {}), ...x }; },
       budgetMouvements: async (depuis) => budgetDemo.mv.filter((m) => m.date >= depuis),
       budgetAjouter: async (m) => { const x = { ...m, id: ++budgetDemo.id }; budgetDemo.mv.unshift(x); return x; },
+      lireDepenses: async () => { await new Promise((ok) => setTimeout(ok, 900)); const j = new Date().toISOString().slice(0, 10);
+        return { source: "wave", lignes: [
+          { date: j, libelle: "Paiement Auchan Sacré-Cœur", montant: 7350, type: "depense", categorie: "nourriture", confiance: 0.92 },
+          { date: j, libelle: "Paiement Woyofal", montant: 5000, type: "depense", categorie: "factures", confiance: 0.95 },
+          { date: j, libelle: "Transfert reçu de Fatou", montant: 25000, type: "revenu", categorie: "transfert", confiance: 0.9 },
+          { date: j, libelle: "Yango course", montant: 2500, type: "depense", categorie: "transport", confiance: 0.88 },
+          { date: j, libelle: "Retrait chez un agent", montant: 20000, type: "transfert", categorie: "autres", confiance: 0.8 },
+          { date: j, libelle: "Pharmacie (écriture peu lisible)", montant: 3200, type: "depense", categorie: "sante", confiance: 0.45 } ] }; },
       budgetSupprimer: async (id) => { budgetDemo.mv = budgetDemo.mv.filter((m) => m.id !== id); },
       budgetProjets: async () => [...budgetDemo.projets],
       budgetAjouterProjet: async (x) => { const y = { ...x, id: ++budgetDemo.id }; budgetDemo.projets.push(y); return y; },
@@ -1170,7 +1188,10 @@
   }
   function vAujourdhuiClassique() {
     const v = $("#v-aujourdhui");
-    v.onclick = (ev) => { if (ev.target.closest("[data-completer]")) onboarding(true); };
+    v.onclick = (ev) => {
+      if (ev.target.closest("[data-completer]")) onboarding(true);
+      else if (ev.target.closest("[data-simuler-pf]")) allerPf("simulateur");
+    };
     const L = replay(S.ops);
     const c = S.prop?.contenu;
     const fresh = S.prop && S.seance && S.prop.date === S.seance.date;
@@ -1185,6 +1206,21 @@
     // sans portefeuille, pas de synthèse : le récap garde son bandeau
     if (!recapVu && !(L.positions.length > 0 || L.cash > 0)) h += `<button type="button" class="recap-inv" data-recap><span class="recap-lune" aria-hidden="true">🌙</span>
       <span><b>Votre récap du soir est prêt</b><span class="small">Séance du ${D(S.seance.date).slice(0, 5)} · 30 secondes</span></span><span class="recap-voir" aria-hidden="true">Voir ›</span></button>`;
+    // porte « J'investis déjà » : le point de départ (relevé photographié ou titres saisis), puis le budget pour savoir combien investir
+    if (porteInvestisseur()) {
+      if (!S.ops.length) h += `<section class="card inv-depart" aria-labelledby="inv-dep-t"><h2 id="inv-dep-t">Votre point de départ</h2>
+        <p class="small muted">Pas besoin de tout ressaisir : on part de ce que vous avez aujourd'hui chez votre SGI.</p>
+        <button type="button" class="inv-choix reco" data-import><span class="inv-ic">${icone("photo")}</span><span><b>Photographier mon dernier relevé</b>
+          <small>Recommandé · titres et argent disponible se remplissent tout seuls</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="inv-choix" data-depart><span class="inv-ic">${icone("crayon")}</span><span><b>Saisir mes titres moi-même</b>
+          <small>Code du titre, quantité, prix de revient, argent disponible</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="inv-choix amb" data-simuler-pf><span class="inv-ic">${icone("calc")}</span><span><b>Pas encore de compte SGI</b>
+          <small>Simuler avec de l'argent fictif en attendant</small></span><span aria-hidden="true">›</span></button>
+        <p class="small muted inv-sgi">SGI ${S.profil?.pays ? `du pays : ${esc(nomPays(S.profil.pays))}` : "de votre pays"}, retenues d'office. Rien à choisir.</p></section>`;
+      if (!window.BafiBudget?.pret?.()) h += `<section class="card inv-budget"><b>Combien pouvez-vous investir chaque mois ?</b>
+        <p class="small">Notez ce que vous gagnez et ce que vous dépensez : votre budget montre le montant que vous pouvez envoyer à votre SGI.</p>
+        <a class="btn small" href="#budget">Faire mon budget</a></section>`;
+    }
     if (!DEMO && "prenom" in (S.profil || {}) && !S.profil.prenom)
       h += `<div class="notice info small">Complétez votre profil (prénom, pays, objectif) : 2 minutes pour des propositions plus justes.
         <button class="btn small" type="button" data-completer>Compléter mon profil</button></div>`;
@@ -2576,6 +2612,10 @@
     pts += r.ep_but === "avenir" ? 1 : 0;
     return pts <= 1 ? "debutant" : pts <= 3 ? "regulier" : "batisseur";
   }
+  const porteInvestisseur = () => S.profil?.questionnaire?.porte === "investisseur";
+  const icone = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${({
+    photo: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', crayon: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M8 15h2M12 15h4"/>' })[k] || ""}</svg>`;
   async function onboarding(completer = false, quandFini = null) {
     const v = $("#v-onboarding"), p = S.profil;
     document.querySelectorAll(".tabs-top, .tabs-bottom").forEach((n) => (n.hidden = true));
@@ -2584,17 +2624,25 @@
     v.innerHTML = `<p class="center muted">Chargement…</p>`;
     const lib = await chargerTel();
     const toutes = [
+      { n: 7, o: 1, titre: "Faisons connaissance", oblig: true },
       { n: 1, o: 1, titre: "Vous", oblig: true },
       { n: 6, o: 2, titre: "Votre profil d'épargnant", oblig: true },
       { n: 3, o: 3, titre: "Votre épargne" },
       { n: 2, o: 4, titre: "Votre profil d'investisseur", oblig: true },
       ...(S.univ ? [{ n: 4, o: 6, titre: "Vos comptes" }] : []),
       { n: 5, o: 5, titre: "Vos préférences", oblig: true }];
-    const etapes = completer
+    const etapes = completer === "investisseur" ? toutes.filter((e) => e.n === 2)   // « Je fais grandir » : le profil, au bon moment
+      : completer
       ? toutes.filter((e) => (e.n === 1 && !p.prenom) || e.n === 6 || e.n === 2 || e.n === 4)
-      : toutes.filter((e) => [1, 6, 3, 2, 5].includes(e.n));
+      : toutes.filter((e) => e.n === 7);                  // un seul écran : prénom, façon de gagner, montant (2026.11)
     let i = completer ? 0 : Math.max(0, etapes.findIndex((e) => e.o > (+p.onboarding_etape || 0)));
     const rep = { ...(p.questionnaire || {}) };
+    let porte = rep.porte === "investisseur" ? "investisseur" : "budget";
+    if (!completer && porte === "investisseur") {             // reprise d'une inscription commencée par la porte « investisseur »
+      etapes.push(...toutes.filter((x) => x.n === 2 || x.n === 4));
+      i = Math.max(0, etapes.findIndex((x) => x.o > (+p.onboarding_etape || 0)));
+    }
+    if (completer === "investisseur") document.body.classList.add("en-onboarding");   // la barre du bas s'efface le temps des 3 questions
     return new Promise((fini) => {
       const finir = (msg) => {
         v.hidden = true;
@@ -2606,6 +2654,32 @@
         fini();
       };
       const corps = (e) => {
+        if (e.n === 7) {
+          const tc = TEL_ON ? telConfirme() : "";
+          let pays = p.pays || "";
+          if (!pays && tc) try { pays = lib?.parsePhoneNumberFromString(tc)?.country || ""; } catch (x) { /* pays par défaut */ }
+          pays = pays || paysParDefaut();
+          const r = rep.ep_revenu === "jour" ? "jour" : rep.ep_revenu === "mois" ? "mois" : "";
+          const ico = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+          const puces = (rr) => (rr === "jour" ? [3000, 5000, 10000, 20000] : [100000, 200000, 400000])
+            .map((x) => `<button type="button" class="bu-puce" data-ob-puce="${x}">${F(x).replace(/\s?F$/, "")}</button>`).join("");
+          return `<p class="small muted">Une minute pour commencer. Tout se change ensuite.</p>
+            <label>Votre prénom<input name="prenom" autocomplete="given-name" maxlength="60" value="${esc(p.prenom || "")}" placeholder="ex. Awa"></label>
+            <input type="hidden" name="pays" value="${esc(pays)}">
+            <details class="ob-pays"><summary class="small">Pays : ${drapeau(pays)} ${esc(nomPays(pays))}${tc ? " (d'après votre numéro)" : ""} · <span class="ob-lien">modifier</span></summary>
+              <label class="small">Pays<select name="pays_choix" aria-label="Pays">${optionsPays(lib, pays)}</select></label></details>
+            <fieldset class="fs"><legend>Comment gagnez-vous votre argent ?</legend>
+              <input type="hidden" name="rythme" value="${r}">
+              <div class="bu-choix2">
+                <button type="button" class="bu-gros" data-ob-rythme="jour" aria-pressed="${r === "jour"}"><span class="bu-tuile amb">${ico('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')}</span>Chaque jour<small>commerce, activité</small></button>
+                <button type="button" class="bu-gros" data-ob-rythme="mois" aria-pressed="${r === "mois"}"><span class="bu-tuile">${ico('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>')}</span>Chaque mois<small>un salaire</small></button>
+              </div></fieldset>
+            <label class="ob-gain"><span class="ob-gain-t">Combien, à peu près${r === "jour" ? " par jour" : r === "mois" ? " par mois" : ""} ? <span class="muted">(facultatif)</span></span>
+              <input name="ep_gain" inputmode="numeric" autocomplete="off" value="${rep.ep_gain ? esc(String(rep.ep_gain)) : ""}" placeholder="${r === "jour" ? "ex. 10 000" : "ex. 200 000"}"></label>
+            <div class="bu-puces ob-puces"${r ? "" : " hidden"}>${puces(r || "mois")}</div>
+            <button type="button" class="ob-invest" data-ob-invest><span class="bu-tuile amb">${ico('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}</span>
+              <span><b>J'investis déjà à la BRVM</b><small>Commencer par mon portefeuille</small></span><span aria-hidden="true">›</span></button>`;
+        }
         if (e.n === 1) return `<p class="small muted">Pour personnaliser votre espace.${S.user.email || p.email ? ` Votre adresse : <b>${esc(S.user.email || p.email)}</b>` : ""}</p>` + champsIdentite(p, lib);
         if (e.n === 6) return `<p class="small muted">Quatre questions pour vous proposer un rythme d'épargne à votre mesure. Vous pourrez tout changer.</p>`
           + QUESTIONS_EP.map((q) => `<fieldset class="fs"><legend>${q.q}</legend>${radios(q.id, Object.fromEntries(q.r.map(([k, t]) => [k, [t, ""]])), rep[q.id])}</fieldset>`).join("")
@@ -2641,6 +2715,22 @@
           <p class="small muted">Tout se modifie ensuite dans l'onglet Profil.</p>`;
       };
       const lire = async (e, f) => {
+        if (e.n === 7) {
+          const prenom = f.prenom.value.trim();
+          if (!prenom) return "Indiquez votre prénom.";
+          const rythme = f.rythme.value;
+          if (porte !== "investisseur" && !rythme) return "Choisissez comment vous gagnez votre argent.";
+          const gain = Math.min(1e10, +String(f.ep_gain.value || "").replace(/[^\d]/g, "") || 0);
+          if (rythme) { rep.ep_revenu = rythme; rep.ep_gain = gain || null; }
+          rep.porte = porte;                                          // gardé à chaque enregistrement du questionnaire
+          const upd = { prenom, pays: f.pays_choix?.value || f.pays.value || p.pays || null, questionnaire: { ...rep } };
+          // le budget démarre aussitôt (même façon de gagner, même montant) : pas de seconde série de questions
+          if (porte !== "investisseur" && rythme) try {
+            const ex = await api.budgetProfil();
+            if (!ex) await api.budgetSauverProfil({ mode: "simple", rythme, revenu: gain, profil: "equilibre" });
+          } catch (x) { /* budget pas encore installé : il se créera depuis l'écran Budget */ }
+          return upd;
+        }
         if (e.n === 1) {
           const upd = await lireIdentite(f, lib);
           if (typeof upd === "string") return upd;
@@ -2680,19 +2770,44 @@
         return upd;
       };
       const afficher = () => {
-        const e = etapes[i], dernier = i === etapes.length - 1;
-        v.innerHTML = `<h1 id="h-ob">${completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
-          ${!completer && i === 0 ? `<p class="small">Cinq petites étapes, deux minutes : vous, votre façon d'épargner, votre plan, votre profil d'investisseur. Puis votre portrait.</p>` : ""}
-          <div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
+        const e = etapes[i]; let dernier = i === etapes.length - 1;
+        v.innerHTML = `<h1 id="h-ob">${completer === "investisseur" ? "Je fais grandir" : completer ? "Affiner mon profil" : p.prenom ? `Bienvenue, ${esc(p.prenom)}` : "Bienvenue"}</h1>
+          ${etapes.length > 1 ? `<div class="ob-barre" role="progressbar" aria-label="Progression" aria-valuemin="1" aria-valuemax="${etapes.length}" aria-valuenow="${i + 1}">
             <span style="width:${((i + 1) / etapes.length) * 100}%"></span></div>
-          <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>
+          <p class="small muted">Étape ${i + 1} sur ${etapes.length}</p>` : ""}
           <form id="f-ob" class="card" novalidate><h2>${e.titre}</h2>${corps(e)}<p class="msg" role="status" aria-live="polite"></p>
             <div class="actions ob-actions">${i > 0 ? `<button class="btn" type="button" data-retour>Retour</button>` : ""}
               ${e.oblig ? "" : `<button class="btn" type="button" data-passer>Passer</button>`}
-              <button class="btn primary" type="submit">${dernier ? "Terminer" : "Continuer"}</button></div></form>
+              <button class="btn primary" type="submit">${e.n === 7 && porte === "budget" ? "C'est parti" : dernier ? "Terminer" : "Continuer"}</button></div></form>
           <p class="small center"><button class="btn link" type="button" data-plus-tard>Terminer plus tard et entrer dans mon espace</button></p>`;
         const f = $("#f-ob", v), msg = $(".msg", f);
         if (e.n === 1) brancherIdentite(f, lib);
+        if (e.n === 7) {
+          f.addEventListener("click", async (ev) => {
+            const r = ev.target.closest("[data-ob-rythme]"), pu = ev.target.closest("[data-ob-puce]");
+            if (r) {
+              const v2 = r.dataset.obRythme; f.rythme.value = v2;
+              f.querySelectorAll("[data-ob-rythme]").forEach((b) => b.setAttribute("aria-pressed", String(b === r)));
+              $(".ob-gain-t", f).firstChild.textContent = `Combien, à peu près ${v2 === "jour" ? "par jour" : "par mois"} ? `;
+              f.ep_gain.placeholder = v2 === "jour" ? "ex. 10 000" : "ex. 200 000";
+              const z = $(".ob-puces", f); z.hidden = false;
+              z.innerHTML = (v2 === "jour" ? [3000, 5000, 10000, 20000] : [100000, 200000, 400000])
+                .map((x) => `<button type="button" class="bu-puce" data-ob-puce="${x}">${F(x).replace(/\s?F$/, "")}</button>`).join("");
+              r.closest("fieldset")?.classList.remove("ob-manque");
+            } else if (pu) {
+              f.ep_gain.value = new Intl.NumberFormat("fr-FR").format(+pu.dataset.obPuce);
+              f.querySelectorAll("[data-ob-puce]").forEach((b) => b.setAttribute("aria-pressed", String(b === pu)));
+            } else if (ev.target.closest("[data-ob-invest]")) {
+              // porte « investisseur » : profil d'investisseur puis comptes, le budget viendra plus tard
+              porte = "investisseur";
+              const suite = toutes.filter((x) => x.n === 2 || x.n === 4);
+              etapes.splice(i + 1, etapes.length, ...suite);
+              dernier = i === etapes.length - 1;
+              f.requestSubmit();
+            }
+          });
+          f.pays_choix?.addEventListener("change", () => { f.pays.value = f.pays_choix.value; });
+        }
         if (e.n === 3) f.querySelector("[data-ob-prop]")?.addEventListener("click", (ev) => {
           const [m, r] = ev.currentTarget.dataset.obProp.split("|"); f.montant.value = m; f.rythme.value = r; ev.currentTarget.remove();
         });
@@ -2734,11 +2849,18 @@
               return;
             }
             if ("onboarding_etape" in p || DEMO) upd.onboarding_etape = Math.max(+p.onboarding_etape || 0, e.o);
+            if (dernier && !completer && e.n !== 5) {               // dernière étape du parcours court : l'espace s'ouvre
+              if (!p.profil && !upd.profil) upd.profil = "equilibre";        // profil par défaut, affiné dans « Je fais grandir »
+              if (!p.budget_mode && S.coffre) upd.budget_mode = "auto";
+              if (!p.onboarding_fini_le) upd.onboarding_fini_le = new Date().toISOString();
+            }
             await api.saveProfil(S.user.id, upd);
             const avant = p.profil;
             Object.assign(p, upd);
             if (upd.profil && upd.profil !== avant && S.seance) S.cibles = await ciblesLisibles(S.seance.date, upd.profil);
+            if (dernier && completer === "investisseur") return finir(`Votre profil d'investisseur : ${PROFILS[upd.profil || p.profil]?.t || "Équilibré"}.`);
             if (dernier && completer) return finir("Profil complété.");
+            if (dernier && porte === "budget") return finir("");          // la visite de bienvenue prend le relais
             if (dernier) {                                       // premier « waouh » : le portrait, avant d'entrer dans l'espace
               v.innerHTML = `<div class="portrait">${portraitHtml(true)}
                 <div class="actions ob-actions"><button class="btn primary" type="button" data-entrer>Découvrir mon espace</button></div></div>`;
@@ -3870,6 +3992,11 @@
                         // menu latéral (navigation.js) : épinglés, récents, documents légaux
                         epingles: () => epingles().map((c) => ({ code: c, nom: S.names?.get(c) || c })),
                         ongletPf: () => S.ui.pfOnglet || "placements", allerPf,
+                        // « Je fais grandir » : le profil d'investisseur est demandé au premier passage, pas à l'inscription
+                        profilInvestisseurFait: () => DEMO || !!S.profil?.questionnaire?.horizon,
+                        porteInvestisseur,
+                        profilInvestisseur: () => S.profil?.profil || "equilibre",
+                        faireProfilInvestisseur: (suite) => onboarding("investisseur", suite),
                         recents: () => S.ops.slice().sort((x, y) => String(y.date).localeCompare(String(x.date))).slice(0, 3)
                           .map((o) => ({ type: TYPES_OP[o.type] || o.type, nom: o.ticker ? (S.names?.get(o.ticker) || o.ticker) : "", date: o.date })),
                         documents: () => S.docs || {}, voirDocument: (d) => showCgu(d, false),
@@ -3905,7 +4032,7 @@
                         demanderAbonnement: (d) => api.demanderAbonnement(d), payer: (o) => api.payer(o), verifierPaiement: (t) => api.verifierPaiement(t),
                         profil: () => S.profil, email: () => S.user?.email || "",
                         budget: { profil: () => api.budgetProfil(), sauverProfil: (x) => api.budgetSauverProfil(x), mouvements: (d) => api.budgetMouvements(d),
-                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id),
+                                  ajouter: (m) => api.budgetAjouter(m), supprimer: (id) => api.budgetSupprimer(id), lireDepenses: (t, d) => api.lireDepenses(t, d),
                                   projets: () => api.budgetProjets(), ajouterProjet: (x) => api.budgetAjouterProjet(x), supprimerProjet: (id) => api.budgetSupprimerProjet(id),
                                   majProjet: (id, x) => api.budgetMajProjet(id, x) },
                         encouragerCercle: (id) => api.encouragerCercle(id), telephoneBudget: () => S.profil?.telephone || "",
