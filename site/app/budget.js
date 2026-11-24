@@ -15,6 +15,7 @@
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
   const auj = () => iso(new Date());
   const ilya = (j) => { const d = new Date(); d.setDate(d.getDate() - j); return iso(d); };
+  const ecoute = (k) => `<span class="ec-place" data-ecoute="${k}"></span>`;      // « Écouter · 1 min » si l'audio existe (ecoute.js)
   const ic = (d, c = "currentColor") => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 
   // ------------------------------------------------------------------ catégories (pictogrammes) et enveloppes
@@ -217,7 +218,7 @@
       <div class="bu-av-hyp"><span class="small muted" id="av-hyp-t">Rendement supposé${S.avenirHyp ? "" : ` · selon mon profil d'investisseur${app()?.profilInvestisseurFait?.() ? "" : " (par défaut)"}`}</span>
         <div class="bu-seg" role="radiogroup" aria-labelledby="av-hyp-t">${Object.entries(HYP).map(([k, [l, r]]) => `<button type="button" role="radio" aria-checked="${hyp === k}" data-bu="hyp" data-v="${k}">${l}<small>${Math.round(r * 100)} %</small></button>`).join("")}</div></div>
       <div id="av-res"></div>
-      <a class="btn primary bu-av-sim" href="#portefeuille" data-bu="investir">Je veux investir ›</a>
+      <a class="btn primary bu-av-sim" href="#portefeuille" data-bu="investir">Je veux investir ›</a>${ecoute("sgi")}
       <p class="small muted">Simulation, pas une promesse : rendement annuel supposé ${Math.round(HYP[hyp][1] * 100)} % (${HYP[hyp][0]}), inflation de ${(INFLATION * 100).toLocaleString("fr-FR")} % par an déduite ;
         on considère qu'on peut vivre de son patrimoine quand 4 % par an couvrent les dépenses. Les performances passées ne préjugent pas des performances futures.</p>`;
     const maj = () => {
@@ -374,7 +375,7 @@
       : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
         <a href="#budget" class="bu-phrase-l" data-bu="voir-budget">Mon budget ›</a>
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
-      ${troisBoutons()}${blocSoir(c)}${blocEtape3(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}
+      ${ecoute("jour")}${troisBoutons()}${blocSoir(c)}${blocEtape3(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}
       ${blocRecurrents()}</div>
       <div class="bu-col"><h2 class="bu-resume-t">Mon résumé</h2>
         <section class="card bu-resume">${ligneCoffre(c)}${blocPlacements()}${blocAvenir(c)}</section>
@@ -680,7 +681,7 @@
     const parJour = (x) => { if (!x.montant || !x.date_cible) return ""; const reste = Math.max(0, +x.montant - x.garde);
       const j = Math.max(1, Math.round((new Date(x.date_cible) - new Date()) / 864e5)); return reste ? `${F(reste / j)} par jour pour être prêt à temps` : "Prêt ✓"; };
     const ajout = S.projetsOk === false ? "" : !essentiel() && c.projets.length >= 2 ? "" : `<button type="button" class="btn link small" data-bu="ajout-projet">+ Ajouter</button>`;
-    return `<section class="card bu-garde-pr"><div class="bu-ligne"><h2 class="bu-h2">Mes projets</h2>${ajout}</div>
+    return `<section class="card bu-garde-pr"><div class="bu-ligne"><h2 class="bu-h2">Mes projets</h2>${ajout}</div>${ecoute("projet")}
       ${c.projets.length ? `<ul class="bu-ops">${c.projets.map((x) => `<li class="bu-proj"><span class="bu-tuile amb petit">${ic(P[x.icone] || P.coffre)}</span><div class="bu-op-l">
         <div class="bu-ligne"><b>${esc(x.nom)}</b><span class="small muted num bu-nw">${x.montant ? nf.format(x.garde) + " / " + F(x.montant) : F(x.garde)}</span></div>
         ${x.montant ? jauge(x.garde, x.montant, "amb") : ""}<small>${esc(parJour(x))}</small></div></li>`).join("")}</ul>`
@@ -781,6 +782,7 @@
     if (dlg) return dlg;
     document.body.insertAdjacentHTML("beforeend", `<dialog id="dlg-budget" class="bu-dlg" aria-labelledby="bu-dlg-t"><form method="dialog" class="bu-form" novalidate>
       <h2 id="bu-dlg-t" class="bu-dlg-t"><span class="bu-tuile petit" aria-hidden="true"></span><span class="bu-dlg-tt">J'ai dépensé</span></h2>
+      <div id="bu-ec"></div>
       <label class="bu-montant"><span class="sr-only">Montant</span><input id="bu-m" inputmode="numeric" autocomplete="off" placeholder="0"><span>F</span></label>
       <div class="bu-habitude" id="bu-hab"></div>
       <div class="bu-puces" id="bu-mp"></div>
@@ -828,6 +830,7 @@
     const complet = S.profil?.mode === "complet";
     const rev = saisie.type === "revenu", t = $(".bu-dlg-t", dlg);
     $(".bu-dlg-tt", t).textContent = rev ? "J'ai gagné" : "J'ai dépensé";
+    const ec = $("#bu-ec", dlg), k = rev ? "gagne" : "depense"; if (ec.dataset.k !== k) { ec.dataset.k = k; ec.innerHTML = ecoute(k); }
     const tu = $(".bu-tuile", t); tu.className = `bu-tuile petit${rev ? "" : " clair"}`; tu.innerHTML = ic(rev ? P.plus : P.moins, rev ? "#fff" : "currentColor");
     const prevus = Object.keys(prevu(S.profil).depenses);
     const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l])
@@ -975,7 +978,7 @@
       <p class="fx-tot"><span>Ce mois-ci, j'attends</span><b>${F(totalRev())}</b></p>
       <div class="bu-actions"><button type="button" class="btn" data-fx="fermer">Annuler</button><button type="button" class="btn primary" data-fx="suite">Suivant</button></div>`;
     else if (e === 2) c.innerHTML = `${enteteF(2)}<div class="fx-centre"><span class="bu-tuile amb fx-grand">${ic(P.coffre)}</span>
-        <h2 id="fx-t" class="bu-q">Je garde d'abord</h2><p class="small muted">Dès que l'argent rentre, une part va de côté. On dépense ensuite le reste.</p></div>
+        <h2 id="fx-t" class="bu-q">Je garde d'abord</h2><p class="small muted">Dès que l'argent rentre, une part va de côté. On dépense ensuite le reste.</p>${ecoute("garde")}</div>
       <fieldset class="fs fx-choix"><legend>Combien garder chaque mois ?</legend>${GARDE.map((k) => { const [nom, , , pct] = PROFILS[k];
         return `<button type="button" class="fx-opt" data-fx="garde" data-v="${k}" aria-pressed="${FX.garde === k}"><span><b>${pct} % de ce qui rentre</b>
           <small>${F(Math.round(totalRev() * pct / 100))} par mois · profil ${esc(nom)}</small></span>${k === "equilibre" ? `<span class="fx-conseil">Conseillé</span>` : ""}</button>`; }).join("")}</fieldset>
@@ -1044,7 +1047,7 @@
       <div class="bu-op-l"><b>Bravo${prenom ? " " + esc(prenom) : ""}, vous êtes prêt pour l'étape 3</b>
         <ol class="bu-e3"><li class="ok">Je note ✓</li><li class="ok">Je garde ✓</li><li class="on">Je fais grandir</li></ol>
         <p class="small">Votre sécurité est remplie et ${F(c.solde)} sont gardés. Votre épargne peut maintenant travailler pour vous.</p>
-        <div class="bu-e3-b"><button type="button" class="btn primary small" data-bu="investir">Commencer l'étape 3</button>
+        ${ecoute("sgi")}<div class="bu-e3-b"><button type="button" class="btn primary small" data-bu="investir">Commencer l'étape 3</button>
           <button type="button" class="btn link small" data-bu="etape3-plus-tard">Plus tard</button></div>
         <p class="small muted">Bafi Finance ne garde pas votre argent : c'est vous qui l'envoyez à votre SGI. Investir comporte un risque de perte.</p></div></section>`;
   }
