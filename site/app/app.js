@@ -1776,7 +1776,7 @@
       <div class="card argent pl-tete">
         <p class="pl-phrase">Vos placements valent <b class="num" data-count="${L.valeur}">${F(L.valeur)}</b>${ok(vj) && L.investi > 0
           ? (Math.abs(vj) < 0.0005 ? ", stables aujourd'hui." : `, <span class="${vj >= 0 ? "good" : "bad"}">${vj >= 0 ? "+" : ""}${(vj * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} % aujourd'hui</span>.`) : "."}</p>
-        ${aRegarder.length ? `<div class="pl-regarder"><b>À regarder</b><ul>${aRegarder.map((a) => `<li><a href="#pos-${esc(a.ticker)}">${esc(S.names.get(a.ticker) || a.ticker)}</a> · ${esc(motifAlerte(a.motif))}</li>`).join("")}</ul></div>`
+        ${aRegarder.length ? `<div class="pl-regarder"><b>À regarder</b><ul>${aRegarder.map((a) => `<li><a href="#marche" data-pos-voir="${esc(a.ticker)}" aria-label="${esc(S.names.get(a.ticker) || a.ticker)} : voir sa fiche au Marché">${esc(S.names.get(a.ticker) || a.ticker)}</a> · ${esc(motifAlerte(a.motif))}</li>`).join("")}</ul></div>`
           : `<p class="small muted pl-calme">Rien d'urgent à regarder ce soir.</p>`}
         <div class="bar3" aria-hidden="true">${seg(Math.max(0, L.cash), "var(--s3)")}${seg(L.investi, "var(--s1)")}</div>
         <ul class="legende">
@@ -3638,7 +3638,8 @@
     const t = tab(), o = S.ui.pfOnglet || "placements";
     // Sur l'accueil simple, « Je garde » est déjà l'un des trois gros boutons : pas de second bouton flottant
     const simple = t === "aujourdhui" && (window.BafiBudget?.accueilSimple?.() || window.BafiBudget?.accueilDetaille?.());
-    const fab = $("#fab-coffre"), showFab = !!S.coffre && !simple && (t === "aujourdhui" || (t === "portefeuille" && o === "cercles"));
+    // Retiré : la barre du bas porte déjà « Je garde » (retour utilisateur, nov. 2026)
+    const fab = $("#fab-coffre"), showFab = false && !!S.coffre && !simple && (t === "aujourdhui" || (t === "portefeuille" && o === "cercles"));
     fab.hidden = !showFab;
     document.body.classList.toggle("has-fab", showFab);
     const aFaire = !!epargne()?.aFaire;
