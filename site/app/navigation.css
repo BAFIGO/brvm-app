@@ -203,3 +203,7 @@ body.avec-barre #fab-coffre, body.avec-barre .fab { bottom: calc(84px + 14px + e
 body.avec-barre .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
 body.tiroir-visible .barre-bas { opacity: 0; pointer-events: none; }
 body.en-onboarding .barre-bas { display: none; }
+
+/* Boutons haut / bas : à DROITE, au-dessus de la barre du bas (ils étaient cachés dessous, à gauche) */
+body.avec-barre .defile, body.nav-tiroir.avec-barre .defile { left: auto !important; right: max(12px, env(safe-area-inset-right)) !important;
+  bottom: calc(84px + 12px + env(safe-area-inset-bottom)) !important; }

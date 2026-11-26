@@ -339,3 +339,7 @@ dialog.bu-flux { min-height: min(calc(100dvh - 16px), 780px); }
 .rl-l.en-cours .rl-minuteur { background: var(--surface-2); }
 .rl-minuteur i { display: block; height: 4px; width: 0; background: var(--accent); transition: width 1s linear; }
 @media (prefers-reduced-motion: reduce) { .rl-minuteur i { transition: none; } }
+
+/* Montant du jour : ce qui était prévu et ce qui est déjà parti */
+.bu-phrase .bu-jour-l { font-weight: 600; }
+.bu-phrase .bu-jour-l.depasse { color: #ffd1c7; }

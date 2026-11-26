@@ -57,6 +57,16 @@
     ["ceremonie", "Fête, cérémonie", "envies", 1], ["factures", "Eau, électricité", "besoins", 0], ["sorties", "Sorties", "envies", 0],
     ["habillement", "Habits", "envies", 0], ["abonnements", "Abonnements", "envies", 0], ["credit", "Crédit", "besoins", 0], ["autres", "Autres", "envies", 1],
   ];
+  // Catégories de dépense proposées partout (saisie, Bim Bim, import) : d'abord celles du budget, puis les autres.
+  // « Abonnements » n'est caché que s'il n'est pas dans le budget et que l'on est en mode Simple.
+  function catsDep(enTete) {
+    const prevus = S.profil ? Object.keys(prevu(S.profil).depenses || {}) : [], complet = S.profil?.mode === "complet";
+    const garde = (c) => prevus.includes(c[0]) || complet || c[0] !== "abonnements";
+    const liste = [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && garde(c))].map(([k, l]) => [k, l]);
+    if (!enTete) return liste;
+    const i = liste.findIndex((c) => c[0] === enTete), tete = i >= 0 ? liste[i] : (DEP.find((c) => c[0] === enTete) || []).slice(0, 2);
+    return tete.length ? [tete, ...liste.filter((c) => c[0] !== enTete)] : liste;
+  }
   const REV = [["salaire", "Salaire"], ["recette", "Recette du jour"], ["transfert", "Argent reçu"], ["autres", "Autres"]];
   const OBJ = [["ecole", "École"], ["tabaski", "Tabaski"], ["logement", "Maison"], ["commerce", "Commerce"], ["sante", "Santé"], ["securite", "Imprévus"], ["ceremonie", "Fête"]];
   const PROFILS = { equilibre: ["Équilibré", 50, 30, 20], batisseur: ["Bâtisseur", 50, 20, 30], fourmi: ["Fourmi", 40, 20, 40], serre: ["Serré", 60, 25, 15] };
@@ -106,7 +116,12 @@
     const revMensuelPrevu = jour ? (+p.revenu || 0) * 26 : Math.max(+p.revenu || 0, revMois);
     const part = (i) => parts[i] / 100;
     const reste = revRef * (1 - part(3)) - depMois;
-    const duJour = jour ? Math.max(0, Math.min(reste, (+p.revenu || 0) * (1 - part(3)))) : Math.max(0, reste) / Math.max(joursRest, 1);
+    // Montant du jour : fixé le matin (ce qui restait avant aujourd'hui ÷ jours restants), puis on retire ce qui est dépensé aujourd'hui.
+    // Le lendemain, le compteur repart : ce qui a été dépensé en plus ou en moins se répartit sur les jours suivants.
+    const depAuj = (S.decal || 0) ? 0 : mois.filter((m) => m.type === "depense" && m.date === auj()).reduce((a, m) => a + (+m.montant || 0), 0);
+    const resteMatin = reste + depAuj;
+    const allocJour = (S.decal || 0) ? 0 : jour ? Math.max(0, Math.min(resteMatin, (+p.revenu || 0) * (1 - part(3)))) : Math.max(0, resteMatin) / Math.max(joursRest, 1);
+    const duJour = Math.max(0, allocJour - depAuj), depasseJour = Math.max(0, depAuj - allocJour);
     const env = { besoins: 0, envies: 0 };
     for (const m of mois.filter((x) => x.type === "depense")) env[m.enveloppe || catDep(m.categorie)[2]] += +m.montant || 0;
     const ep = app().epargneResume?.() || null;
@@ -137,7 +152,7 @@
     const depParCat = {}; for (const m of mois) if (m.type === "depense") depParCat[m.categorie] = (depParCat[m.categorie] || 0) + (+m.montant || 0);
     const bourse = Math.max(0, resteP);                       // 3e poche : ce qui dépasse la sécurité et les projets attend d'aller à la SGI
     const envoyeSgi = ep?.envoye ?? (ep?.mv || []).filter((m) => m.type === "TRANSFERT").reduce((x, m) => x + (+m.montant || 0), 0);
-    return { p, pv, depParCat, projets, fixes, bourse, envoyeSgi, parts, jour, revMois, depMois, recAuj, planMensuel, plan: pl || null, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
+    return { p, pv, depParCat, projets, fixes, bourse, envoyeSgi, parts, jour, revMois, depMois, recAuj, planMensuel, plan: pl || null, basePrudente, abonnements, moisLib: dm.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), d0, d1, revRef, reste, duJour, allocJour, depAuj, depasseJour, env, garde, part, securiteObj, securite, projet, solde, serie, notéAujourdhui,
              derniere, joursRest, epargneCible: planMensuel || revRef * part(3), epargneBudget: revRef * part(3),
              semaine: { dep: somme(s1, "depense"), depAvant: somme(s0, "depense"), garde: gardeSem, jours: new Set(s1.map((m) => m.date)).size } };
   }
@@ -368,11 +383,15 @@
       <span class="bu-fl d" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
       <span class="bu-curseur${det ? " droite" : ""}" aria-hidden="true"></span></div>`; };
   // Accueil unique du mode simple (onglet Aujourd'hui) : l'essentiel, dans l'ordre du parcours
+  // Sous la grosse somme : ce qui était prévu pour la journée et ce qui est déjà parti
+  const ligneJour = (c) => !c.depAuj ? "" : c.depasseJour
+    ? `<span class="small bu-jour-l depasse">Dépassé de ${F(c.depasseJour)} aujourd'hui (prévu ${F(c.allocJour)}). Demain, le montant sera recalculé.</span>`
+    : `<span class="small bu-jour-l">Prévu aujourd'hui ${F(c.allocJour)} · déjà dépensé ${F(c.depAuj)}</span>`;
   function vueAccueil(c) {
     return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}
       ${c.jour && !c.revMois ? `<section class="bu-phrase"><span class="small">Bienvenue</span><b style="font-size:1.35rem">Notez votre recette du jour</b>
           <span class="small">Touchez « J'ai gagné » : vous verrez ce que vous pouvez dépenser.</span></section>`
-      : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
+      : `<section class="bu-phrase"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>${ligneJour(c)}
         <a href="#budget" class="bu-phrase-l" data-bu="voir-budget">Mon budget ›</a>
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>`}
       ${ecoute("jour")}${troisBoutons()}${blocSoir(c)}${blocEtape3(c)}${blocCreerBudget(c)}${blocPaie(c)}${blocRecette(c)}
@@ -384,7 +403,7 @@
   function vueAccueilDetaille(c) {
     const env = (nom, v, max, cls) => `<div class="bu-env mini"><div class="bu-ligne small"><span>${nom}</span><span>${F(v)} / ${F(max)}</span></div>${jauge(v, max, cls)}</div>`;
     return `<div class="bu-acc"><div class="bu-col">${bascule()}${blocRetour(c)}
-      <section class="bu-phrase large"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>
+      <section class="bu-phrase large"><span class="small">Aujourd'hui, vous pouvez dépenser</span><b data-count>${F(c.duJour)}</b>${ligneJour(c)}
         <span class="small">Reste à vivre du mois : ${F(Math.max(0, c.reste))} · gagné ${F(c.revMois)} · dépensé ${F(c.depMois)}</span>
         ${c.serie ? `<span class="small bu-serie">${ic(P.flamme)} ${c.serie} jour${c.serie > 1 ? "s" : ""} d'affilée</span>` : ""}</section>
       <section class="card"><div class="bu-ligne"><h2 class="bu-h2">Mes enveloppes</h2><a href="#budget" class="small">Mon budget</a></div>
@@ -834,9 +853,7 @@
     $(".bu-dlg-tt", t).textContent = rev ? "J'ai gagné" : "J'ai dépensé";
     const ec = $("#bu-ec", dlg), k = rev ? "gagne" : "depense"; if (ec.dataset.k !== k) { ec.dataset.k = k; ec.innerHTML = ecoute(k); }
     const tu = $(".bu-tuile", t); tu.className = `bu-tuile petit${rev ? "" : " clair"}`; tu.innerHTML = ic(rev ? P.plus : P.moins, rev ? "#fff" : "currentColor");
-    const prevus = Object.keys(prevu(S.profil).depenses);
-    const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l])
-      : [...DEP.filter((c) => prevus.includes(c[0])), ...DEP.filter((c) => !prevus.includes(c[0]) && (complet || c[0] !== "abonnements"))].map(([k, l]) => [k, l]);
+    const cats = saisie.type === "revenu" ? REV.map(([k, l]) => [k, l]) : catsDep();
     $("#bu-cats", dlg).innerHTML = cats.map(([k, l]) => `<button type="button" class="bu-cat" data-cat="${k}" aria-pressed="${saisie.cat === k}">
       <span class="bu-tuile ${saisie.cat === k ? "" : "clair"}">${ic(P[k] || P.autres, saisie.cat === k ? "#fff" : "currentColor")}</span>${l}</button>`).join("");
     const puces = saisie.type === "revenu" ? (S.profil?.rythme === "jour" ? [2000, 5000, 10000, 20000] : [50000, 100000, 200000, 400000]) : [500, 1000, 2500, 5000];
@@ -861,7 +878,9 @@
   const MOTS = { transport: /taxi|\bbus\b|\bcar\b|moto|essence|carburant|transport|clando|wôrô|woro/i, nourriture: /march|\briz\b|\bpain|nourrit|manger|repas|cuisine|poisson|viande/i,
     logement: /loyer|maison|chambre|logement/i, famille: /famille|maman|papa|enfant|frère|soeur|sœur|parent/i, sante: /santé|sante|médic|medic|pharma|hôpital|hopital|docteur/i,
     ecole: /école|ecole|scolar|fourniture|cahier/i, ceremonie: /baptême|bapteme|mariage|funéraille|funeraille|cérémon|ceremon|fête|fete/i,
-    factures: /facture|électric|electric|\beau\b|courant|crédit téléphone/i };
+    factures: /facture|électric|electric|\beau\b|courant|crédit téléphone|senelec|sde\b/i,
+    abonnements: /abonnement|canal|netflix|internet|wifi|wi-fi|forfait|spotify/i, sorties: /sortie|restau|maquis|cinéma|cinema|\bbar\b/i,
+    habillement: /habit|vêtement|vetement|chaussure|tailleur|tissu|pagne/i, credit: /\bcrédit\b(?! téléphone)|remboursement|échéance|echeance|\bprêt\b|\bpret\b/i };
   function dicter() {
     const R = window.SpeechRecognition || window.webkitSpeechRecognition, out = $(".bu-voix-r", dlg);
     if (!R) { out.textContent = "La dictée n'est pas disponible ici : utilisez le micro de votre clavier."; return; }
@@ -1187,7 +1206,7 @@
     majR();
   }
   function ligneR(l, i) {
-    const rev = l.type === "revenu", cats = rev ? REV : DEP.filter((c) => c[0] !== "abonnements");
+    const rev = l.type === "revenu", cats = rev ? REV : catsDep();
     const etat = l.etat === "ok" ? `<span class="rl-ok">✓ ${l.auto ? "Enregistrée" : "Validée"}</span>` : l.etat === "ignoree" ? `<span class="muted small">Ignorée</span>`
       : l.etat === "envoi" ? `<span class="muted small">…</span>`
       : `<button type="button" class="btn small" data-rl="ignorer" data-i="${i}" aria-label="Ignorer cette ligne">Ignorer</button>
@@ -1447,8 +1466,7 @@
     if (type === "depense") {
       const cat = Object.keys(MOTS).find((k) => MOTS[k].test(s)) || null;
       const doute = /(donn[ée]|envoy[ée]|prêt[ée]|pret[ée])/i.test(s);       // donner, envoyer, prêter : on demande toujours
-      const choix = [...new Set([cat, "famille", "ceremonie", "nourriture", "transport"].filter(Boolean))].slice(0, 4).concat("autres")
-        .map((k) => [k, catDep(k)[1]]);
+      const choix = catsDep(cat);                                            // toutes les catégories, celles du budget d'abord
       return { type, montant, cat: cat || "autres", sur: !!cat && !doute, choix };
     }
     const cat = /salaire|paie|paye/i.test(s) ? "salaire" : /recette|vendu|vente|client/i.test(s) ? "recette"

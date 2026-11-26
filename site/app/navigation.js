@@ -60,8 +60,7 @@
       </div>
       <div class="ti-defile">
         <ul class="ti-liste">${RUBRIQUES.map((r, i) => (r.esp !== RUBRIQUES[i - 1]?.esp ? `<li class="ti-esp">${ESPACES[r.esp].replace(/^(\d) · /, '<b class="ti-num" aria-hidden="true">$1</b><span class="sr-only">$1 · </span>')}</li>` : "")
-            + `<li${r.simple ? "" : " data-complet"}><a href="${r.href || "#portefeuille"}" class="ti-item" data-ti="${r.id}">${r.ic}<span>${r.nom}</span></a></li>`).join("")}
-          <li class="ti-plus" hidden><button type="button" class="ti-item ti-plus-b">${ic('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')}<span>Je fais grandir</span></button></li></ul>
+            + `<li${r.simple ? "" : " data-complet"}><a href="${r.href || "#portefeuille"}" class="ti-item" data-ti="${r.id}">${r.ic}<span>${r.nom}</span></a></li>`).join("")}</ul>
         <div class="ti-bloc" data-bloc="epingles"><p class="ti-sous">Épinglés</p><ul class="ti-liste petite"></ul>
           <p class="ti-astuce small" hidden>Touchez « Épingler » sur une ligne de Mes placements pour la retrouver ici.</p></div>
         <div class="ti-bloc" data-bloc="recents" hidden><p class="ti-sous">Récents</p><ul class="ti-recents"></ul></div>
@@ -270,9 +269,7 @@
   function modeMenu() {
     const simple = window.BafiBudget?.mode?.() === "simple" && !toutVoir && !window.BRVM_APP?.placements?.();
     tiroir.querySelectorAll("[data-complet]").forEach((li) => (li.hidden = simple && !li.querySelector('[aria-current="page"]')));
-    const plus = tiroir.querySelector(".ti-plus"); if (plus) plus.hidden = !simple;
   }
-  tiroir.addEventListener("click", (ev) => { if (ev.target.closest(".ti-plus-b")) { toutVoir = true; modeMenu(); } });
   window.addEventListener("brvm:budget", () => { toutVoir = false; modeMenu(); });
   async function remplir() {
     if (!app) return;
